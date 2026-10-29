@@ -31,9 +31,6 @@ full plan, research tables and open design decisions.)*
 | Optional | Iron's Spells 'n Spellbooks | Spells and the equipped-spellbook hotbar appear when installed |
 | Optional | Tensura Battlewills | Battlewills appear in the bar when installed |
 
-When the first alpha ships, drop the jar in `mods/` alongside its required
-dependencies.
-
 ## Credits
 - Built on [NeoForge](https://neoforged.net/).
 
