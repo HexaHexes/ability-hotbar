@@ -1,23 +1,40 @@
-# Repo rules — <repo name>
+# Repo rules - tensura-ability-hotbar
 
 Repo-specific rules and notes. The org-wide `AGENTS.md` beside this file is
 maintained in [`neoforge-mod-template`](https://github.com/HexaHexes/neoforge-mod-template)
-and pulled in verbatim — **never hand-edit it.** Everything in this file is this
+and pulled in verbatim - **never hand-edit it.** Everything in this file is this
 repo's own and is edited freely; keep it aligned with the org rules rather than
 restating them.
 
-**Repo:** `HexaHexes/<repo-name>` · **Mod ID:** `<mod_id>` · **Branch:** `main`
-**Platform:** Minecraft 1.21.1 / NeoForge 21.1.259 / JDK 21 · **Jar:** `build/libs/<mod_id>-<version>.jar`
+**Repo:** `HexaHexes/tensura-ability-hotbar` - **Mod ID:** `tensura_ability_hotbar` - **Branch:** `main`
+**Platform:** Minecraft 1.21.1 / NeoForge 21.1.259 / JDK 21 - **Jar:** `build/libs/tensura_ability_hotbar-<version>.jar`
 
-One-paragraph description of what this mod is and what it changes in the game.
+A configurable nine-slot ability hotbar for the Tensura RPG pack: vanilla-style
+slots and textures with dynamic icons, cooldown and resource overlays, direct
+and selected-slot activation, an ability management menu with search and
+filters, per-player assignment persistence, provider support for Tensura
+skills/magic, ISS spells and battlewills, plus an optional independently
+toggleable equipped-spellbook hotbar (ISS only).
 
 **Dependencies**
-- Required: Minecraft, NeoForge.
-- Optional: list any dependency the mod works without, and how the code gates it.
+- Required: Minecraft, NeoForge, and `tensura-ability-core` (consumed from
+  GitHub Packages with the org secret `PACKAGE_READ_TOKEN`, scoped to the
+  Gradle step only - see AGENTS.md).
+- Optional: `tensura` (skill/magic provider), `irons_spellbooks` (spell provider
+  and the spellbook hotbar - that feature must gate off entirely without ISS),
+  `tensura_battlewills` (battlewill provider). Optional providers gate behind
+  `ModList.isLoaded`; a missing provider disables only its own features.
 
-**Test:** `./gradlew runGameTestServer` — `<ClassName>` (1 test). `expectedTests = 1`
+**Test:** `./gradlew runGameTestServer` - `TensuraAbilityHotbarGameTests` (1 test). `expectedTests = 1`
 in `build.gradle` must match the `@GameTest` count.
 
 **Gotchas**
-- Note anything a future edit could break: mixin targets, version-file coupling,
-  tag overrides, or a dependency that is optional in the toml but hard in the code.
+- **Vanilla input is sacred.** Modifier-gated controls (Ctrl+wheel, Ctrl+number)
+  must never intercept the plain wheel, hotbar keys, chat or other GUI contexts.
+  Regression-test every input path in-game - GameTests cannot prove this.
+- Client HUD work cannot be proven headless: the honest gate is build green plus
+  the maintainer's in-game check (see AGENTS.md).
+- A saved assignment referencing a missing ability must be preserved, not
+  silently replaced or dropped.
+- The equipped-spellbook hotbar is independent of the general hotbar and of the
+  stretch goal for multiple cyclable hotbars - do not entangle the three.
