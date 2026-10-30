@@ -1,6 +1,6 @@
-# Tensura Ability Hotbar
+# Ability Hotbar
 
-Tensura Ability Hotbar gives the Tensura RPG pack one bar for every combat
+Ability Hotbar gives the Tensura RPG pack one bar for every combat
 ability: Tensura skills and magic, Iron's Spells spells and battlewills, all
 assigned, selected and triggered from a single configurable hotbar that sits
 alongside the vanilla one, never on top of it.

@@ -1,4 +1,4 @@
-# Repo rules - tensura-ability-hotbar
+# Repo rules - ability-hotbar
 
 Repo-specific rules and notes. The org-wide `AGENTS.md` beside this file is
 maintained in [`neoforge-mod-template`](https://github.com/HexaHexes/neoforge-mod-template)
@@ -6,8 +6,8 @@ and pulled in verbatim - **never hand-edit it.** Everything in this file is this
 repo's own and is edited freely; keep it aligned with the org rules rather than
 restating them.
 
-**Repo:** `HexaHexes/tensura-ability-hotbar` - **Mod ID:** `tensura_ability_hotbar` - **Branch:** `main`
-**Platform:** Minecraft 1.21.1 / NeoForge 21.1.259 / JDK 21 - **Jar:** `build/libs/tensura_ability_hotbar-<version>.jar`
+**Repo:** `HexaHexes/ability-hotbar` - **Mod ID:** `ability_hotbar` - **Branch:** `main`
+**Platform:** Minecraft 1.21.1 / NeoForge 21.1.259 / JDK 21 - **Jar:** `build/libs/ability_hotbar-<version>.jar`
 
 A configurable nine-slot ability hotbar for the Tensura RPG pack: vanilla-style
 slots and textures with dynamic icons, cooldown and resource overlays, direct
@@ -25,7 +25,7 @@ toggleable equipped-spellbook hotbar (ISS only).
   `tensura_battlewills` (battlewill provider). Optional providers gate behind
   `ModList.isLoaded`; a missing provider disables only its own features.
 
-**Test:** `./gradlew runGameTestServer` - `TensuraAbilityHotbarGameTests` (1 test). `expectedTests = 1`
+**Test:** `./gradlew runGameTestServer` - `AbilityHotbarGameTests` (1 test). `expectedTests = 1`
 in `build.gradle` must match the `@GameTest` count.
 
 **Gotchas**
