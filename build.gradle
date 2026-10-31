@@ -28,6 +28,13 @@ sourceSets {
         compileClasspath += sourceSets.main.output + configurations.compileClasspath
         runtimeClasspath += output + sourceSets.main.output + configurations.runtimeClasspath
     }
+    // JUnit tests exercise the state model and its NBT serializer, which use
+    // Minecraft types (ResourceLocation, CompoundTag) - so the test source set
+    // needs the same classpath the main source set compiles against.
+    test {
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += output + sourceSets.main.output + configurations.runtimeClasspath
+    }
 }
 
 neoForge {
@@ -126,7 +133,7 @@ test {
 // "All N required tests passed :)" when every required test succeeds. Keep
 // expectedTests in sync with the @GameTest methods in src/gametest.
 tasks.matching { it.name == 'runGameTestServer' }.configureEach {
-    def expectedTests = 1
+    def expectedTests = 2
     doLast {
         def log = file('run/logs/latest.log')
         if (!log.exists()) {
