@@ -115,7 +115,12 @@ repositories {
 }
 
 dependencies {
-    // Shared ability contracts from the core repo (GitHub Packages)
+    // Shared ability contracts from the core repo (GitHub Packages). compileOnly
+    // for main (the mod is resolved at runtime by NeoForge as a separate mod,
+    // never bundled); the JUnit suite additionally needs it at test runtime.
+    def abilityCore = 'org.bitwisemadness.abilitycore:ability_core:1.0.0-alpha.9'
+    compileOnly abilityCore
+    testImplementation abilityCore
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
