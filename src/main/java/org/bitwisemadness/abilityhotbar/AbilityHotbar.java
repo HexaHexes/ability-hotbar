@@ -7,6 +7,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarServerConfig;
+import org.bitwisemadness.abilityhotbar.state.BarStateAttachments;
 import org.slf4j.Logger;
 
 /**
@@ -23,6 +24,8 @@ public final class AbilityHotbar {
         modContainer.registerConfig(ModConfig.Type.SERVER, HotbarServerConfig.SPEC, "ability_hotbar-server.toml");
         // CLIENT config: display preferences only, never synced, never policy
         modContainer.registerConfig(ModConfig.Type.CLIENT, HotbarClientConfig.SPEC, "ability_hotbar-client.toml");
+        // Per-player bar state attachment (REQ-HOT-14, ADR-004)
+        BarStateAttachments.register(modBus);
         LOGGER.info("Ability Hotbar initialized");
     }
 }
