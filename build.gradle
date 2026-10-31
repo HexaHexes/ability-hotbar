@@ -95,10 +95,22 @@ tasks.withType(JavaCompile).configureEach {
 // JUnit suite: the CI junit check grades it and refuses to pass on an empty
 // run, so this configuration must stay wired in every derived repo.
 repositories {
+    mavenLocal()
+    maven {
+        name = 'AbilityCorePackages'
+        url = uri('https://maven.pkg.github.com/HexaHexes/ability-core')
+        credentials {
+            username = System.getenv('GITHUB_ACTOR') ?: project.findProperty('gpr.user')
+            password = System.getenv('GITHUB_TOKEN') ?: project.findProperty('gpr.key')
+        }
+    }
     mavenCentral()
 }
 
 dependencies {
+    // Shared ability contracts from the core repo (GitHub Packages)
+    implementation 'org.bitwisemadness.abilitycore:ability_core:1.0.0-alpha.9'
+
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
