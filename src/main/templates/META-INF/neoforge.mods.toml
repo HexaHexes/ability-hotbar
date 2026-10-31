@@ -38,7 +38,7 @@ side = "BOTH"
 
 [[dependencies.${mod_id}]]
 modId = "ability_core"
-type = "required"
+type = "optional"
 versionRange = "[1.0.0-alpha.9,)"
 ordering = "AFTER"
 side = "BOTH"

@@ -109,7 +109,6 @@ repositories {
 
 dependencies {
     // Shared ability contracts from the core repo (GitHub Packages)
-    implementation 'org.bitwisemadness.abilitycore:ability_core:1.0.0-alpha.9'
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
