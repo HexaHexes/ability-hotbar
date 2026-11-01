@@ -57,6 +57,28 @@ class BarSelectionTest {
     }
 
     @Test
+    void scrollDirectionMatchesVanillaHotbar() {
+        // Scroll up (positive delta) moves selection LEFT (toward slot 1);
+        // scroll down moves it RIGHT. This is the vanilla convention - an
+        // earlier build inverted it.
+        assertEquals(-1, BarSelection.scrollDirection(1.0));
+        assertEquals(-1, BarSelection.scrollDirection(0.1));
+        assertEquals(1, BarSelection.scrollDirection(-1.0));
+        assertEquals(1, BarSelection.scrollDirection(-0.1));
+        assertEquals(0, BarSelection.scrollDirection(0.0));
+    }
+
+    @Test
+    void scrollUpDecrementsAndDownIncrementsThroughVanillaMapping() {
+        // End-to-end: scroll up from slot 0 wraps to the last slot (left), scroll
+        // down advances one (right) - the vanilla hotbar behaviour.
+        int up = BarSelection.slotAfterScroll(0, BarSelection.scrollDirection(1.0), 3);
+        int down = BarSelection.slotAfterScroll(0, BarSelection.scrollDirection(-1.0), 3);
+        assertEquals(2, up, "scroll up from slot 0 wraps left to the last slot");
+        assertEquals(1, down, "scroll down from slot 0 advances right");
+    }
+
+    @Test
     void scrollOnSingleSlotBarStaysPut() {
         assertEquals(0, BarSelection.slotAfterScroll(0, 1, 1));
         assertEquals(0, BarSelection.slotAfterScroll(0, -1, 1));
