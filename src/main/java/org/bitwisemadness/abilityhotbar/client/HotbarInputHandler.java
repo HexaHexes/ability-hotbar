@@ -47,7 +47,11 @@ public final class HotbarInputHandler {
         if (state == null || event.getScrollDeltaY() == 0.0) {
             return;
         }
-        int direction = event.getScrollDeltaY() > 0 ? 1 : -1;
+        // Vanilla parity (tested in BarSelectionTest): scroll up -> left, down -> right.
+        int direction = BarSelection.scrollDirection(event.getScrollDeltaY());
+        if (direction == 0) {
+            return;
+        }
         int next = BarSelection.slotAfterScroll(state.selectedSlot(), direction, state.assignments().length);
         PacketDistributor.sendToServer(new SelectSlotPayload(next));
         event.setCanceled(true);

@@ -15,6 +15,7 @@ import org.bitwisemadness.abilitycore.api.AvailabilityProviders;
 import org.bitwisemadness.abilitycore.discovery.AbilityDiscovery;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
+import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 
 /**
@@ -23,9 +24,11 @@ import org.bitwisemadness.abilityhotbar.state.BarState;
  * <p>A vanilla-language {@link LayeredDraw.Layer} that reads the synced bar
  * state ({@link ClientBarState}), resolves each slot's pure {@link SlotRender}
  * decision (icons, selection, cooldown/availability overlay, inert
- * diagnostics), and blits it using {@link BarLayout}'s rectangles. Every display
- * branch lives in {@link SlotRender} (unit-tested); this layer only performs
- * the GPU draws.</p>
+ * diagnostics), and blits it using {@link BarLayout}'s rectangles. The bar
+ * background reuses the vanilla {@code hud/hotbar} sprite and the selection
+ * reuses {@code hud/hotbar_selection}, so it reads in the vanilla texture
+ * language. Every display branch lives in {@link SlotRender} (unit-tested);
+ * this layer only performs the GPU draws.</p>
  *
  * <p>Client-only, registered on the GUI-layer bus. When no snapshot has synced
  * yet it draws nothing. The actual on-screen appearance is validated by the
@@ -34,10 +37,13 @@ import org.bitwisemadness.abilityhotbar.state.BarState;
 @EventBusSubscriber(modid = AbilityHotbar.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class AbilityBarLayer implements LayeredDraw.Layer {
 
-    /** Placeholder marker: a resolved-but-null icon draws this neutral slot. */
-    private static final int EMPTY_COLOR = 0x88000000;
-    private static final int SLOT_BORDER = 0xFF3C3C3C;
-    private static final int SELECTED_BORDER = 0xFFFFD700;
+    /** Vanilla 9-slot hotbar background sprite (182x22). */
+    private static final ResourceLocation VANILLA_HOTBAR =
+            ResourceLocation.withDefaultNamespace("hud/hotbar");
+    /** Vanilla per-slot selection frame sprite (24x23). */
+    private static final ResourceLocation VANILLA_SELECTION =
+            ResourceLocation.withDefaultNamespace("hud/hotbar_selection");
+
     private static final int INERT_COLOR = 0x66FF2222;
     private static final int UNAVAILABLE_TINT = 0x66FF0000;
     private static final int COOLDOWN_COLOR = 0xAA000000;
@@ -64,10 +70,18 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             return; // no snapshot yet: render nothing, never a guess
         }
 
+        // The attachment is sized to the server ceiling, but the client renders only
+        // the first effectiveSlotsPerBar() entries (server maxSlots clamps the client
+        // preference, REQ-CFG-02). Saved state may exceed the ceiling, so clamp here.
+        int renderCount = Math.min(HotbarConfig.effectiveSlotsPerBar(), state.assignments().length);
+        if (renderCount < 1) {
+            return;
+        }
+
         BarLayout layout = new BarLayout(
-                state.assignments().length,
+                renderCount,
                 20,
-                2,
+                0,
                 HotbarClientConfig.HORIZONTAL.get(),
                 HotbarClientConfig.OFFSET_X.get(),
                 HotbarClientConfig.OFFSET_Y.get(),
@@ -80,23 +94,40 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
 
         int screenW = gui.guiWidth();
         int screenH = gui.guiHeight();
-        for (int i = 0; i < slots.size(); i++) {
+        drawBarBackground(gui, layout, screenW, screenH);
+        for (int i = 0; i < renderCount && i < slots.size(); i++) {
             SlotRender slot = slots.get(i);
             int[] rect = layout.slotRect(i, screenW, screenH);
             drawSlot(gui, slot, rect);
         }
     }
 
-    /** Draws one slot: background, icon/placeholder, overlays, selection. */
+    /**
+     * Blits the vanilla hotbar sprite as the bar's background so the bar reads in
+     * the vanilla texture language (REQ-HOT-01) instead of flat fills. The sprite
+     * is stretched to the layout's bounding box, which is native for the default
+     * 9-slot horizontal bar.
+     */
+    private static void drawBarBackground(GuiGraphics gui, BarLayout layout, int screenW, int screenH) {
+        boolean horizontal = layout.horizontal();
+        int x = layout.originX(screenW);
+        int y = layout.originY(screenH);
+        int w = horizontal ? layout.extent() : layout.scaledSlotSize();
+        int h = horizontal ? layout.scaledSlotSize() : layout.extent();
+        gui.blitSprite(VANILLA_HOTBAR, x, y, w, h);
+    }
+
+    /** Draws one slot: icon/placeholder, overlays, and the vanilla selection frame. */
     private static void drawSlot(GuiGraphics gui, SlotRender slot, int[] rect) {
         int x = rect[0];
         int y = rect[1];
         int w = rect[2];
         int h = rect[3];
 
-        // Background: empty/placeholder neutral, inert tinted red.
-        int bg = slot.inert() ? INERT_COLOR : EMPTY_COLOR;
-        gui.fill(x, y, x + w, y + h, bg);
+        // Inert slots keep a diagnostic red tint over the vanilla frame.
+        if (slot.inert()) {
+            gui.fill(x, y, x + w, y + h, INERT_COLOR);
+        }
 
         // Icon (only when assigned, not inert, and one resolves), else placeholder.
         if (slot.assigned() && !slot.inert() && HotbarClientConfig.SHOW_ICONS.get()) {
@@ -105,9 +136,10 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
 
         drawOverlays(gui, slot, x, y, w, h);
 
-        // Border: gold for the selected slot, neutral otherwise.
-        int border = slot.selected() ? SELECTED_BORDER : SLOT_BORDER;
-        drawBorder(gui, x, y, w, h, border);
+        // Vanilla selection frame around the selected slot.
+        if (slot.selected()) {
+            gui.blitSprite(VANILLA_SELECTION, x - 1, y - 1, w + 2, h + 2);
+        }
     }
 
     /** Draws the state overlays: cooldown, unavailable tint, cost badge. */
@@ -144,12 +176,5 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         if (covered > 0) {
             gui.fill(x, y, x + w, y + covered, COOLDOWN_COLOR);
         }
-    }
-
-    private static void drawBorder(GuiGraphics gui, int x, int y, int w, int h, int color) {
-        gui.fill(x, y, x + w, y + 1, color);
-        gui.fill(x, y + h - 1, x + w, y + h, color);
-        gui.fill(x, y, x + 1, y + h, color);
-        gui.fill(x + w - 1, y, x + w, y + h, color);
     }
 }

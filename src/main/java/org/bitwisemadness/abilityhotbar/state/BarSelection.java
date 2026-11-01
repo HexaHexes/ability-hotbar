@@ -30,11 +30,15 @@ public final class BarSelection {
 
     /**
      * Pure scroll-to-selection math for the client's Ctrl+wheel routing: wraps
-     * one step in the scroll direction within {@code [0, slotCount)}. The server
-     * re-validates the resulting index, so this never widens authority.
+     * one step within {@code [0, slotCount)}. The server re-validates the
+     * resulting index, so this never widens authority.
+     *
+     * <p>Vanilla parity: the caller maps scroll-up to a negative direction
+     * (move left toward slot 1) and scroll-down to positive (move right toward
+     * the last slot) - see {@link #scrollDirection(double)}.</p>
      *
      * @param current   the currently selected slot
-     * @param direction scroll direction, positive for up / next, negative for down / previous
+     * @param direction step direction: negative = left (lower index), positive = right (higher index)
      * @param slotCount the number of slots in the bar
      * @return the slot one step away, wrapping at the ends
      */
@@ -44,5 +48,20 @@ public final class BarSelection {
         }
         int step = direction > 0 ? 1 : -1;
         return Math.floorMod(current + step, slotCount);
+    }
+
+    /**
+     * Maps a wheel scroll delta to a selection step, matching the vanilla
+     * hotbar: scrolling up moves the selection left (toward slot 1), scrolling
+     * down moves it right. A zero delta maps to zero (no movement).
+     *
+     * @param scrollDeltaY the scroll wheel's vertical delta (positive = scroll up)
+     * @return -1 for scroll up (left), +1 for scroll down (right), 0 for none
+     */
+    public static int scrollDirection(double scrollDeltaY) {
+        if (scrollDeltaY == 0.0) {
+            return 0;
+        }
+        return scrollDeltaY > 0 ? -1 : 1;
     }
 }
