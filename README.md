@@ -44,6 +44,24 @@ inventory, a mod GUI) nothing is intercepted, and without the modifier held the
 plain wheel and 1-9 behave exactly as if the mod were absent. The in-game
 verification matrix is in `docs/input-gating-matrix.md`.
 
+## Configuration
+
+The bar's look is a **CLIENT** config (`display.*`) — display-only, never
+policy; it is never synced to the server and cannot widen server rules. The
+slot *count* is two-tier: the client's preference is clamped to the server's
+ceiling (see Persistence).
+
+| Key | Default | Meaning |
+|---|---|---|
+| `display.slotsPerBar` | `9` | Preferred slots (clamped to the server's `hotbar.maxSlots`, hard cap 10). |
+| `display.horizontal` | `true` | Bar orientation: `true` = left-to-right, `false` = top-to-bottom. |
+| `display.opacity` | `1.0` | Bar opacity (0.0–1.0). |
+| `display.showCooldowns` | `true` | Draw the cooldown overlay on slots. |
+| `display.showCosts` | `true` | Draw the resource-cost badge on slots. |
+| `display.offsetX` / `display.offsetY` | `0` | Pixel offset from the bar's anchor. |
+| `display.scale` | `1.0` | Uniform render scale (0.5–2.0). |
+| `display.showIcons` | `true` | Draw ability icons (falls back to a placeholder when none resolves). |
+
 ## Persistence
 
 Your assignments are per-player data, stored in a server-authoritative attachment

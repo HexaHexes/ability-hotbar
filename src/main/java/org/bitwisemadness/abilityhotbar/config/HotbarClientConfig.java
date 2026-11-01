@@ -41,6 +41,26 @@ public final class HotbarClientConfig {
             BUILDER.comment("Show resource cost indicators on slots")
                     .define("display.showCosts", true);
 
+    /** Horizontal pixel offset from the anchor point. */
+    public static final ModConfigSpec.IntValue OFFSET_X =
+            BUILDER.comment("Horizontal offset (pixels) from the bar's anchor")
+                    .defineInRange("display.offsetX", 0, -500, 500);
+
+    /** Vertical pixel offset from the anchor point. */
+    public static final ModConfigSpec.IntValue OFFSET_Y =
+            BUILDER.comment("Vertical offset (pixels) from the bar's anchor")
+                    .defineInRange("display.offsetY", 0, -500, 500);
+
+    /** Render scale applied to the whole bar (1.0 = native size). */
+    public static final ModConfigSpec.DoubleValue SCALE =
+            BUILDER.comment("Bar render scale (0.5 to 2.0)")
+                    .defineInRange("display.scale", 1.0, 0.5, 2.0);
+
+    /** Draw ability icons in assigned slots (falls back to a placeholder when absent). */
+    public static final ModConfigSpec.BooleanValue SHOW_ICONS =
+            BUILDER.comment("Draw ability icons in assigned slots")
+                    .define("display.showIcons", true);
+
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private HotbarClientConfig() {
