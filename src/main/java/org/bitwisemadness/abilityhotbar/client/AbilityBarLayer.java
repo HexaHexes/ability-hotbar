@@ -37,12 +37,16 @@ import org.bitwisemadness.abilityhotbar.state.BarState;
 @EventBusSubscriber(modid = AbilityHotbar.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class AbilityBarLayer implements LayeredDraw.Layer {
 
-    /** Vanilla 9-slot hotbar background sprite (182x22). */
+    /** Vanilla 9-slot hotbar background sprite, native 182x22 (Gui.renderItemHotbar hardcodes these). */
     private static final ResourceLocation VANILLA_HOTBAR =
             ResourceLocation.withDefaultNamespace("hud/hotbar");
-    /** Vanilla per-slot selection frame sprite (24x23). */
+    private static final int VANILLA_HOTBAR_WIDTH = 182;
+    private static final int VANILLA_HOTBAR_HEIGHT = 22;
+    /** Vanilla per-slot selection frame sprite, native 24x23. */
     private static final ResourceLocation VANILLA_SELECTION =
             ResourceLocation.withDefaultNamespace("hud/hotbar_selection");
+    private static final int VANILLA_SELECTION_WIDTH = 24;
+    private static final int VANILLA_SELECTION_HEIGHT = 23;
 
     private static final int INERT_COLOR = 0x66FF2222;
     private static final int UNAVAILABLE_TINT = 0x66FF0000;
@@ -98,27 +102,36 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         for (int i = 0; i < renderCount && i < slots.size(); i++) {
             SlotRender slot = slots.get(i);
             int[] rect = layout.slotRect(i, screenW, screenH);
-            drawSlot(gui, slot, rect);
+            drawSlot(gui, slot, rect, layout.scale());
         }
     }
 
     /**
      * Blits the vanilla hotbar sprite as the bar's background so the bar reads in
-     * the vanilla texture language (REQ-HOT-01) instead of flat fills. The sprite
-     * is stretched to the layout's bounding box, which is native for the default
-     * 9-slot horizontal bar.
+     * the vanilla texture language (REQ-HOT-01). The sprite is drawn at its native
+     * 182x22 (x scale) proportions - never stretched to the layout's slot box -
+     * because vanilla hardcodes that size and resource packs design for it;
+     * stretching distorted the art and shifted our slots off the texture's frames.
      */
     private static void drawBarBackground(GuiGraphics gui, BarLayout layout, int screenW, int screenH) {
         boolean horizontal = layout.horizontal();
         int x = layout.originX(screenW);
         int y = layout.originY(screenH);
-        int w = horizontal ? layout.extent() : layout.scaledSlotSize();
-        int h = horizontal ? layout.scaledSlotSize() : layout.extent();
-        gui.blitSprite(VANILLA_HOTBAR, x, y, w, h);
+        if (horizontal) {
+            // Offset by the sprite's 1px frame so its slot cells align with our grid.
+            int border = Math.max(1, (int) Math.round(layout.scale()));
+            int w = (int) Math.round(VANILLA_HOTBAR_WIDTH * layout.scale());
+            int h = (int) Math.round(VANILLA_HOTBAR_HEIGHT * layout.scale());
+            gui.blitSprite(VANILLA_HOTBAR, x - border, y - border, w, h);
+        } else {
+            // The strip is a fixed horizontal 9-slot asset; it cannot represent a
+            // vertical bar without distortion (known REQ-HOT-01 limitation).
+            gui.blitSprite(VANILLA_HOTBAR, x, y, layout.scaledSlotSize(), layout.extent());
+        }
     }
 
     /** Draws one slot: icon/placeholder, overlays, and the vanilla selection frame. */
-    private static void drawSlot(GuiGraphics gui, SlotRender slot, int[] rect) {
+    private static void drawSlot(GuiGraphics gui, SlotRender slot, int[] rect, double scale) {
         int x = rect[0];
         int y = rect[1];
         int w = rect[2];
@@ -136,9 +149,13 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
 
         drawOverlays(gui, slot, x, y, w, h);
 
-        // Vanilla selection frame around the selected slot.
+        // Vanilla selection frame at its native 24x23 (x scale), offset to frame the
+        // cell exactly as vanilla does (2px up-left) - not stretched to cell + 2.
         if (slot.selected()) {
-            gui.blitSprite(VANILLA_SELECTION, x - 1, y - 1, w + 2, h + 2);
+            int offset = (int) Math.round(2 * scale);
+            int selW = (int) Math.round(VANILLA_SELECTION_WIDTH * scale);
+            int selH = (int) Math.round(VANILLA_SELECTION_HEIGHT * scale);
+            gui.blitSprite(VANILLA_SELECTION, x - offset, y - offset, selW, selH);
         }
     }
 
