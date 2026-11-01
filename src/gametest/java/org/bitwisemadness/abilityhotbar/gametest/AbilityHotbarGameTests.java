@@ -8,6 +8,7 @@ import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
+import org.bitwisemadness.abilityhotbar.state.BarAssignments;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.bitwisemadness.abilityhotbar.state.BarStateAttachments;
 
@@ -53,6 +54,27 @@ public final class AbilityHotbarGameTests {
                 "slot 0 should be assigned after setData");
         helper.assertTrue(abilityId.equals(updated.assignment(0).abilityId()),
                 "slot 0 should hold the assigned raw id");
+        helper.succeed();
+    }
+
+    /**
+     * The server-side assignment resolution path mutates the attachment for a
+     * valid request and leaves it untouched for an invalid one (REQ-HOT-14/21).
+     */
+    @GameTest(template = "empty")
+    public static void assignment_request_resolves_server_side(GameTestHelper helper) {
+        Player player = helper.makeMockPlayer(GameType.CREATIVE);
+        BarState initial = player.getData(BarStateAttachments.BAR_STATE);
+
+        BarState next = BarAssignments.assign(initial, 0, "tensura:fireball").orElse(null);
+        helper.assertTrue(next != null, "a valid assignment must resolve");
+        player.setData(BarStateAttachments.BAR_STATE, next);
+        helper.assertTrue(player.getData(BarStateAttachments.BAR_STATE).assignment(0).isAssigned(),
+                "slot 0 must be assigned after a valid request");
+        helper.assertTrue(BarAssignments.assign(initial, initial.assignments().length, "tensura:fireball").isEmpty(),
+                "an out-of-range slot must be rejected");
+        helper.assertTrue(BarAssignments.assign(initial, 0, "not a valid id").isEmpty(),
+                "a malformed id must be rejected");
         helper.succeed();
     }
 }
