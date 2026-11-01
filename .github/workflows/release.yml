@@ -28,6 +28,10 @@ permissions:
   # Dispatching the publishing workflows below needs actions: write - an
   # explicit permissions block zeroes every scope it does not name.
   actions: write
+  # Read the ability_core artifact from GitHub Packages so the jar build can
+  # resolve it (same scope ci.yml declares; needed for the github.token
+  # fallback below - the build has depended on ability_core since #48).
+  packages: read
 
 concurrency:
   group: release
@@ -81,6 +85,10 @@ jobs:
 
       - name: Build the jar
         if: steps.resolve.outputs.skip == 'false'
+        env:
+          PACKAGE_READ_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN || github.token }}
+          GITHUB_ACTOR: ${{ github.actor }}
         run: ./gradlew build --no-daemon --stacktrace
 
       - name: Publish the release
