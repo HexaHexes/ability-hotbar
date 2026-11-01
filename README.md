@@ -39,6 +39,29 @@ Selecting a slot never fires an ability. Activating uses the selected slot and
 leaves the selection where it was. Empty, restricted, unaffordable or on-cooldown
 slots fail with no resource consumed.
 
+## Persistence
+
+Your assignments are per-player data, stored in a server-authoritative attachment
+and **kept on death**. The format is versioned so a pack update never destroys a
+bar. Stored NBT keys:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `schema_version` | int | Format version (currently `1`). A *newer* version than the mod supports loads as a valid empty bar instead of crashing. |
+| `slot_count` | int | Number of slots. Written explicitly, so lowering the config later never truncates stored slots. |
+| `selected_slot` | int | The selected-slot index (clamped into range on load). |
+| `slot_N` | string | The ability id in slot `N`. Absent = empty slot. |
+
+Upgrade and preservation rules:
+
+- A compound written before `schema_version` / `slot_count` existed upgrades
+  forward with its values retained; the slot count is inferred from the highest
+  `slot_N` key present.
+- A stored id whose provider is missing is **preserved raw**, so the slot renders
+  as diagnosed-inert rather than being dropped (REQ-HOT-21).
+- An id that cannot even be parsed is logged and left empty, never crashing the
+  load (REQ-HOT-15).
+
 ## Dependencies
 | | Mod | Why |
 |---|---|---|
