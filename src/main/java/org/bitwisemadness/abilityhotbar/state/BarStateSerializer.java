@@ -93,7 +93,10 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
                 // not a slot index key
             }
         }
-        return highest + 1;
+        // Clamp to at least one slot: a fully empty legacy compound must load as a
+        // valid single-slot empty state, not a zero-length bar that the BarState
+        // invariant rejects (ADR-004: corrupt/empty data fails closed, never crashes).
+        return Math.max(1, highest + 1);
     }
 
     @Override
