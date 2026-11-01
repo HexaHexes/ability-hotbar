@@ -2,8 +2,11 @@ package org.bitwisemadness.abilityhotbar.state;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import io.netty.buffer.ByteBuf;
 import java.util.Arrays;
 import java.util.List;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -26,6 +29,14 @@ public record BarState(SlotAssignment[] assignments, int selectedSlot, int schem
             Codec.INT.fieldOf("selected_slot").forGetter(BarState::selectedSlot),
             Codec.INT.optionalFieldOf("schema_version", CURRENT_SCHEMA_VERSION).forGetter(BarState::schemaVersion)
     ).apply(instance, BarState::fromList));
+
+    /** Network codec for snapshot/delta sync (ADR-003). */
+    public static final StreamCodec<ByteBuf, BarState> STREAM_CODEC = StreamCodec.composite(
+            SlotAssignment.STREAM_CODEC.apply(ByteBufCodecs.list()), BarState::toList,
+            ByteBufCodecs.VAR_INT, BarState::selectedSlot,
+            ByteBufCodecs.VAR_INT, BarState::schemaVersion,
+            BarState::fromList
+    );
 
     /** Codec adapter: List -> array. */
     private static List<SlotAssignment> toList(BarState state) {

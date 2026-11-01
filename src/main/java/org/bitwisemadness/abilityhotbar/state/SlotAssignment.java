@@ -1,6 +1,8 @@
 package org.bitwisemadness.abilityhotbar.state;
 
 import com.mojang.serialization.Codec;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
@@ -17,6 +19,19 @@ public record SlotAssignment(@Nullable ResourceLocation abilityId) {
     public static final Codec<SlotAssignment> CODEC = Codec.STRING.xmap(
             s -> s.isBlank() ? empty() : new SlotAssignment(ResourceLocation.parse(s)),
             a -> a.abilityId() != null ? a.abilityId().toString() : ""
+    );
+
+    /** Network codec: a presence flag, then the id when assigned. */
+    public static final StreamCodec<ByteBuf, SlotAssignment> STREAM_CODEC = StreamCodec.of(
+            (buf, assignment) -> {
+                buf.writeBoolean(assignment.isAssigned());
+                if (assignment.isAssigned()) {
+                    ResourceLocation.STREAM_CODEC.encode(buf, assignment.abilityId());
+                }
+            },
+            buf -> buf.readBoolean()
+                    ? new SlotAssignment(ResourceLocation.STREAM_CODEC.decode(buf))
+                    : empty()
     );
 
     /** Sentinel for an empty slot (no ability assigned). */

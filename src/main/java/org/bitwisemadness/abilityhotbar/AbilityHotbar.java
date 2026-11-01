@@ -3,8 +3,10 @@ package org.bitwisemadness.abilityhotbar;
 import com.mojang.logging.LogUtils;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import org.bitwisemadness.abilityhotbar.compat.CoreSyncCompat;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarServerConfig;
 import org.bitwisemadness.abilityhotbar.state.BarStateAttachments;
@@ -26,6 +28,12 @@ public final class AbilityHotbar {
         modContainer.registerConfig(ModConfig.Type.CLIENT, HotbarClientConfig.SPEC, "ability_hotbar-client.toml");
         // Per-player bar state attachment (REQ-HOT-14, ADR-004)
         BarStateAttachments.register(modBus);
+        // Bar snapshot on core's sync boundaries, only when core is present:
+        // CoreSyncCompat is not loaded otherwise, so its core reference never
+        // resolves and the optional-runtime invariant holds.
+        if (ModList.get().isLoaded("ability_core")) {
+            CoreSyncCompat.register();
+        }
         LOGGER.info("Ability Hotbar initialized");
     }
 }
