@@ -1,0 +1,15 @@
+{
+  "key.categories.abilityhotbar": "Ability Hotbar",
+  "key.abilityhotbar.activate_slot_1": "Activate ability slot 1",
+  "key.abilityhotbar.activate_slot_2": "Activate ability slot 2",
+  "key.abilityhotbar.activate_slot_3": "Activate ability slot 3",
+  "key.abilityhotbar.activate_slot_4": "Activate ability slot 4",
+  "key.abilityhotbar.activate_slot_5": "Activate ability slot 5",
+  "key.abilityhotbar.activate_slot_6": "Activate ability slot 6",
+  "key.abilityhotbar.activate_slot_7": "Activate ability slot 7",
+  "key.abilityhotbar.activate_slot_8": "Activate ability slot 8",
+  "key.abilityhotbar.activate_slot_9": "Activate ability slot 9",
+  "key.abilityhotbar.activate_selected": "Activate selected ability slot",
+  "key.abilityhotbar.open_menu": "Open ability menu",
+  "key.abilityhotbar.ability_mode": "Toggle ability mode"
+}

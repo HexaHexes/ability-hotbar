@@ -36,5 +36,10 @@ public final class HotbarNetwork {
                 AssignAbilityPayload.STREAM_CODEC,
                 AssignAbilityPayload::handle
         );
+        registrar.playToServer(
+                SelectSlotPayload.TYPE,
+                SelectSlotPayload.STREAM_CODEC,
+                SelectSlotPayload::handle
+        );
     }
 }
