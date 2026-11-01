@@ -119,7 +119,7 @@ dependencies {
     // Shared ability contracts from the core repo (GitHub Packages). compileOnly
     // for main (the mod is resolved at runtime by NeoForge as a separate mod,
     // never bundled); the JUnit suite additionally needs it at test runtime.
-    def abilityCore = 'org.bitwisemadness.abilitycore:ability_core:1.0.0-alpha.9'
+    def abilityCore = 'org.bitwisemadness.abilitycore:ability_core:1.0.0-alpha.10'
     compileOnly abilityCore
     testImplementation abilityCore
 
