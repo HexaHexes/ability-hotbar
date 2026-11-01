@@ -39,6 +39,11 @@ Selecting a slot never fires an ability. Activating uses the selected slot and
 leaves the selection where it was. Empty, restricted, unaffordable or on-cooldown
 slots fail with no resource consumed.
 
+Our controls never steal vanilla or chat input: with any screen open (chat,
+inventory, a mod GUI) nothing is intercepted, and without the modifier held the
+plain wheel and 1-9 behave exactly as if the mod were absent. The in-game
+verification matrix is in `docs/input-gating-matrix.md`.
+
 ## Persistence
 
 Your assignments are per-player data, stored in a server-authoritative attachment

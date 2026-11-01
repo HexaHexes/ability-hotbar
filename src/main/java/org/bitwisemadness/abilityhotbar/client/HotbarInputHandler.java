@@ -37,7 +37,10 @@ public final class HotbarInputHandler {
     /** Ctrl+wheel: claim the scroll for slot selection; leave plain wheel to vanilla. */
     @SubscribeEvent
     public static void onMouseScroll(InputEvent.MouseScrollingEvent event) {
-        if (!Screen.hasControlDown()) {
+        // REQ-HOT-18: never act over a screen, and only while Ctrl is held. NeoForge
+        // already gates this event behind "no screen + player", but the invariant is
+        // ours to state explicitly rather than lean on - see InputGate.
+        if (!InputGate.isInputCapturable(Screen.hasControlDown())) {
             return;
         }
         BarState state = localState();
@@ -53,6 +56,12 @@ public final class HotbarInputHandler {
     /** Rising-edge key dispatch: one consumeClick() per tap. */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        // REQ-HOT-18: keys only act with no screen open (chat/inventory/GUI). Vanilla
+        // normally suppresses in-game keybinds while a screen is up, but the invariant
+        // is ours to state explicitly - a screen must never see an intercepted key.
+        if (!InputGate.isInputCapturable()) {
+            return;
+        }
         BarState state = localState();
         if (state == null) {
             return;
