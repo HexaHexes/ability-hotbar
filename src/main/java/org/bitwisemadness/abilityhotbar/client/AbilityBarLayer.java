@@ -52,6 +52,10 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     private static final int UNAVAILABLE_TINT = 0x66FF0000;
     private static final int COOLDOWN_COLOR = 0xAA000000;
     private static final int COST_BG = 0xCC000000;
+    /** Opaque backing matching the sprite's slot-fill color (39,37,5) - the
+     *  vanilla slot fills are ~73% opaque, so without this the world shows
+     *  through and the bar reads translucent instead of solid. */
+    private static final int BAR_BACKING = 0xFF272505;
 
     private AbilityBarLayer() {
     }
@@ -75,9 +79,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         }
 
         // The attachment is sized to the server ceiling, but the client renders only
-        // the first effectiveSlotsPerBar() entries (server maxSlots clamps the client
+        // the first effectiveRenderCount() entries (server maxSlots clamps the client
         // preference, REQ-CFG-02). Saved state may exceed the ceiling, so clamp here.
-        int renderCount = Math.min(HotbarConfig.effectiveSlotsPerBar(), state.assignments().length);
+        int renderCount = HotbarConfig.effectiveRenderCount(state.assignments().length);
         if (renderCount < 1) {
             return;
         }
@@ -122,11 +126,17 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             int border = Math.max(1, (int) Math.round(layout.scale()));
             int w = (int) Math.round(VANILLA_HOTBAR_WIDTH * layout.scale());
             int h = (int) Math.round(VANILLA_HOTBAR_HEIGHT * layout.scale());
+            // Opaque backing first: the sprite's slot fills are ~73% opaque, so
+            // without it the world bleeds through and the bar reads translucent.
+            gui.fill(x - border, y - border, x - border + w, y - border + h, BAR_BACKING);
             gui.blitSprite(VANILLA_HOTBAR, x - border, y - border, w, h);
         } else {
             // The strip is a fixed horizontal 9-slot asset; it cannot represent a
             // vertical bar without distortion (known REQ-HOT-01 limitation).
-            gui.blitSprite(VANILLA_HOTBAR, x, y, layout.scaledSlotSize(), layout.extent());
+            int w = layout.scaledSlotSize();
+            int h = layout.extent();
+            gui.fill(x, y, x + w, y + h, BAR_BACKING);
+            gui.blitSprite(VANILLA_HOTBAR, x, y, w, h);
         }
     }
 
@@ -142,21 +152,22 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             gui.fill(x, y, x + w, y + h, INERT_COLOR);
         }
 
-        // Icon (only when assigned, not inert, and one resolves), else placeholder.
-        if (slot.assigned() && !slot.inert() && HotbarClientConfig.SHOW_ICONS.get()) {
-            drawIcon(gui, slot.iconId(), x, y, w, h);
-        }
-
-        drawOverlays(gui, slot, x, y, w, h);
-
-        // Vanilla selection frame at its native 24x23 (x scale), offset to frame the
-        // cell exactly as vanilla does (2px up-left) - not stretched to cell + 2.
+        // Vanilla draws the selection frame BEFORE the item (Gui.renderItemHotbar
+        // blits HOTBAR_SELECTION, then the item loop), so a pack-replaced frame
+        // cannot cover the slot content. Match that order here.
         if (slot.selected()) {
             int offset = (int) Math.round(2 * scale);
             int selW = (int) Math.round(VANILLA_SELECTION_WIDTH * scale);
             int selH = (int) Math.round(VANILLA_SELECTION_HEIGHT * scale);
             gui.blitSprite(VANILLA_SELECTION, x - offset, y - offset, selW, selH);
         }
+
+        // Icon on top of the selection frame (as vanilla layers items over it).
+        if (slot.assigned() && !slot.inert() && HotbarClientConfig.SHOW_ICONS.get()) {
+            drawIcon(gui, slot.iconId(), x, y, w, h);
+        }
+
+        drawOverlays(gui, slot, x, y, w, h);
     }
 
     /** Draws the state overlays: cooldown, unavailable tint, cost badge. */

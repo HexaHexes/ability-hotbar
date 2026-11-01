@@ -30,6 +30,21 @@ public final class HotbarConfig {
         return Math.min(clientPref, serverMax);
     }
 
+    /**
+     * The number of slots the bar actually draws for a given synced state:
+     * {@link #effectiveSlotsPerBar()} clamped to the state's own length (saved
+     * state may be shorter than the current config).
+     *
+     * <p>This is the single source of truth for both the renderer and the
+     * Ctrl+wheel selection, so the scroll can never reach a slot the bar does
+     * not draw (REQ-CFG-02 + REQ-HOT-10).</p>
+     *
+     * <p>Physical client only.</p>
+     */
+    public static int effectiveRenderCount(int stateLength) {
+        return Math.min(effectiveSlotsPerBar(), stateLength);
+    }
+
     /** The effective number of cyclable hotbars (client preference clamped by server ceiling). */
     public static int effectiveHotbarCount() {
         // client has no count preference yet; the server ceiling is the only constraint

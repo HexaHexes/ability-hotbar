@@ -11,6 +11,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.bitwisemadness.abilitycore.api.ActivationSource;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
 import org.bitwisemadness.abilityhotbar.compat.CoreActivationCompat;
+import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
 import org.bitwisemadness.abilityhotbar.network.SelectSlotPayload;
 import org.bitwisemadness.abilityhotbar.state.ActivationResolver;
 import org.bitwisemadness.abilityhotbar.state.BarSelection;
@@ -47,12 +48,19 @@ public final class HotbarInputHandler {
         if (state == null || event.getScrollDeltaY() == 0.0) {
             return;
         }
+        // The attachment may hold up to the server ceiling, but only the first
+        // effectiveRenderCount() slots are drawn - scrolling must never reach an
+        // undrawn slot (the renderer uses the same clamp).
+        int slotCount = HotbarConfig.effectiveRenderCount(state.assignments().length);
+        if (slotCount < 1) {
+            return;
+        }
         // Vanilla parity (tested in BarSelectionTest): scroll up -> left, down -> right.
         int direction = BarSelection.scrollDirection(event.getScrollDeltaY());
         if (direction == 0) {
             return;
         }
-        int next = BarSelection.slotAfterScroll(state.selectedSlot(), direction, state.assignments().length);
+        int next = BarSelection.slotAfterScroll(state.selectedSlot(), direction, slotCount);
         PacketDistributor.sendToServer(new SelectSlotPayload(next));
         event.setCanceled(true);
     }
