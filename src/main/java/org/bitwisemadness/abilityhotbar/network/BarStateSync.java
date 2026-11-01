@@ -27,4 +27,10 @@ public final class BarStateSync {
         player.setData(BarStateAttachments.BAR_STATE, next);
         PacketDistributor.sendToPlayer(player, new BarStateSnapshotPayload(next));
     }
+
+    /** Persists an accepted selection and echoes the authoritative state back. */
+    public static void acceptSelection(ServerPlayer player, BarState next) {
+        player.setData(BarStateAttachments.BAR_STATE, next);
+        PacketDistributor.sendToPlayer(player, new BarStateSnapshotPayload(next));
+    }
 }

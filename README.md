@@ -22,6 +22,23 @@ full plan, research tables and open design decisions.)*
 - The vanilla controls are untouched: the modifier keys only claim the wheel
   and the number keys while they are held.
 
+## Controls
+
+All keys are rebindable in vanilla's Controls screen under the **Ability Hotbar**
+category. Defaults (from SPIKE-hot-3):
+
+| Action | Default | Notes |
+|---|---|---|
+| Select slot | **Ctrl + wheel** | Moves the selected-slot cursor only; plain wheel still drives the vanilla hotbar, and the wheel is only claimed while Ctrl is held. |
+| Activate slot 1..9 | **Ctrl + 1..9** | Activates that slot directly. Plain 1..9 still switches the vanilla hotbar. |
+| Activate selected slot | **G** | Fires the ability in the selected slot. |
+| Open ability menu | **K** | Menu flow lands with the management menu. |
+| Toggle ability mode | **Right Ctrl** | Aligned with Tensura's native mode key. |
+
+Selecting a slot never fires an ability. Activating uses the selected slot and
+leaves the selection where it was. Empty, restricted, unaffordable or on-cooldown
+slots fail with no resource consumed.
+
 ## Dependencies
 | | Mod | Why |
 |---|---|---|
