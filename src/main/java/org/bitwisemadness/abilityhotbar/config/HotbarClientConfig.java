@@ -61,6 +61,25 @@ public final class HotbarClientConfig {
             BUILDER.comment("Draw ability icons in assigned slots")
                     .define("display.showIcons", true);
 
+    /**
+     * Where the bar is placed on screen. Every anchor is a complete 2D rule, so
+     * it is valid with either {@link #HORIZONTAL} value.
+     */
+    public static final ModConfigSpec.EnumValue<BarAnchor> ANCHOR =
+            BUILDER.comment("Bar anchor: aboveHotbar, aboveXp, aboveStatus, leftEdge or rightEdge "
+                            + "(valid with either orientation)")
+                    .defineEnum("display.anchor", BarAnchor.ABOVE_HOTBAR);
+
+    /**
+     * How {@link BarAnchor#ABOVE_STATUS} resolves the status-cluster height.
+     * Only read when {@link #ANCHOR} is {@code aboveStatus}.
+     */
+    public static final ModConfigSpec.EnumValue<StatusAnchorMode> STATUS_ANCHOR_MODE =
+            BUILDER.comment("aboveStatus height: DYNAMIC tracks the player's hearts, armor and "
+                            + "oxygen; FIXED uses the vanilla baseline (only read when "
+                            + "display.anchor = aboveStatus)")
+                    .defineEnum("display.statusAnchorMode", StatusAnchorMode.DYNAMIC);
+
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private HotbarClientConfig() {

@@ -33,6 +33,21 @@ run before merge. Tick each item in a dev client with `ability_core` +
 - [ ] All values apply **live** (no restart) and the bar stays on-screen at
       both orientations.
 
+## Anchor points (REQ-HOT-07, #60)
+
+- [ ] `display.anchor = aboveHotbar` reproduces the previous placement exactly
+      (bar resting on the vanilla hotbar, horizontally centred).
+- [ ] `aboveXp` rests the bar on the vanilla experience bar.
+- [ ] `aboveStatus` clears the armor, health, hunger and oxygen rows with
+      `display.statusAnchorMode = DYNAMIC` - check with armor equipped, with
+      more than one row of hearts, and while diving (oxygen row visible).
+- [ ] `aboveStatus` with `FIXED` holds a constant position.
+- [ ] `leftEdge` / `rightEdge` dock the bar against that border, vertically
+      centred, with the selection frame fully visible - repeat at `display.scale`
+      `0.5`, `1.0` and `2.0`.
+- [ ] Every anchor is reachable at **both** `display.horizontal` values, stays
+      on-screen, and still honours `display.offsetX` / `display.offsetY`.
+
 ## Selection (REQ-HOT-09/20, #20 state machine)
 
 - [ ] The gold selection border tracks Ctrl+wheel / the selected slot.

@@ -55,6 +55,8 @@ ceiling (see Persistence).
 |---|---|---|
 | `display.slotsPerBar` | `9` | Preferred slots (clamped to the server's `hotbar.maxSlots`, hard cap 10). |
 | `display.horizontal` | `true` | Bar orientation: `true` = left-to-right, `false` = top-to-bottom. |
+| `display.anchor` | `ABOVE_HOTBAR` | Named position: `aboveHotbar`, `aboveXp`, `aboveStatus`, `leftEdge` or `rightEdge`. Each is a full 2D placement rule, so every value works with either orientation. |
+| `display.statusAnchorMode` | `DYNAMIC` | Height used by `aboveStatus`: `DYNAMIC` tracks the player's hearts, armor and oxygen; `FIXED` uses the vanilla baseline and never moves. Read only for `aboveStatus`. |
 | `display.opacity` | `1.0` | Bar opacity (0.0–1.0). |
 | `display.showCooldowns` | `true` | Draw the cooldown overlay on slots. |
 | `display.showCosts` | `true` | Draw the resource-cost badge on slots. |
