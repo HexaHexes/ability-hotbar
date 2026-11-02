@@ -25,7 +25,7 @@ toggleable equipped-spellbook hotbar (ISS only).
   `ability_battlewills` (battlewill provider). Optional providers gate behind
   `ModList.isLoaded`; a missing provider disables only its own features.
 
-**Test:** `./gradlew runGameTestServer` - `AbilityHotbarGameTests` (1 test). `expectedTests = 1`
+**Test:** `./gradlew runGameTestServer` - `AbilityHotbarGameTests` (3 tests). `expectedTests = 3`
 in `build.gradle` must match the `@GameTest` count.
 
 **Gotchas**
