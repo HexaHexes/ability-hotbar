@@ -241,7 +241,10 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     private static void drawOverlays(GuiGraphics gui, SlotRender slot, int x, int y, int w, int h) {
         // Cooldown overlay (known progress only; unknown draws nothing).
         if (slot.hasCooldownOverlay() && HotbarClientConfig.SHOW_COOLDOWNS.get()) {
-            drawCooldown(gui, slot.cooldownFraction(), x, y, w, h);
+            Double cooldown = slot.cooldownFraction();
+            if (cooldown != null) {
+                drawCooldown(gui, cooldown, x, y, w, h);
+            }
         }
 
         // Unavailable verdict tint (never applied to unknown - no wrong value).

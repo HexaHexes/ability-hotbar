@@ -31,8 +31,11 @@ public final class HotbarKeybinds {
     /** Own keybinding category - shown as its own group in the Controls screen. */
     public static final String CATEGORY = "key.categories.abilityhotbar";
 
-    /** Ctrl+1..9: activate the corresponding slot directly (REQ-HOT-11). */
-    public static final KeyMapping[] ACTIVATE_SLOT = new KeyMapping[9];
+    /**
+     * Ctrl+1..9: activate the corresponding slot directly (REQ-HOT-11).
+     * Package-private: a public mutable array would let any class rewrite it.
+     */
+    static final KeyMapping[] ACTIVATE_SLOT = new KeyMapping[9];
 
     /** G: activate the currently selected slot (REQ-HOT-11). */
     public static final KeyMapping ACTIVATE_SELECTED;

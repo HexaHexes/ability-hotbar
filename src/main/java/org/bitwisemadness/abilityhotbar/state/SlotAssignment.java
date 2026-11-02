@@ -18,15 +18,19 @@ public record SlotAssignment(@Nullable ResourceLocation abilityId) {
     /** String-based codec: blank string = empty slot (handles null cleanly). */
     public static final Codec<SlotAssignment> CODEC = Codec.STRING.xmap(
             s -> s.isBlank() ? empty() : new SlotAssignment(ResourceLocation.parse(s)),
-            a -> a.abilityId() != null ? a.abilityId().toString() : ""
+            a -> {
+                ResourceLocation id = a.abilityId();
+                return id != null ? id.toString() : "";
+            }
     );
 
     /** Network codec: a presence flag, then the id when assigned. */
     public static final StreamCodec<ByteBuf, SlotAssignment> STREAM_CODEC = StreamCodec.of(
             (buf, assignment) -> {
-                buf.writeBoolean(assignment.isAssigned());
-                if (assignment.isAssigned()) {
-                    ResourceLocation.STREAM_CODEC.encode(buf, assignment.abilityId());
+                ResourceLocation id = assignment.abilityId();
+                buf.writeBoolean(id != null);
+                if (id != null) {
+                    ResourceLocation.STREAM_CODEC.encode(buf, id);
                 }
             },
             buf -> buf.readBoolean()
