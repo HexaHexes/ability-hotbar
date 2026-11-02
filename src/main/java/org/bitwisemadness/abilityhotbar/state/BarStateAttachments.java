@@ -1,13 +1,12 @@
 package org.bitwisemadness.abilityhotbar.state;
 
+import java.util.function.Supplier;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
 import org.bitwisemadness.abilityhotbar.config.HotbarServerConfig;
-
-import java.util.function.Supplier;
 
 /**
  * Registers the bar state attachment type on the NeoForge attachment registry

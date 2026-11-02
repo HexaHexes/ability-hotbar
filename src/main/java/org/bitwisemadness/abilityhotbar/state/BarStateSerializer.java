@@ -107,8 +107,9 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
         tag.putInt(KEY_SELECTED, state.selectedSlot());
         for (int i = 0; i < state.assignments().length; i++) {
             SlotAssignment assignment = state.assignments()[i];
-            if (assignment.isAssigned()) {
-                tag.putString(KEY_SLOT_PREFIX + i, assignment.abilityId().toString());
+            ResourceLocation id = assignment.abilityId();
+            if (id != null) {
+                tag.putString(KEY_SLOT_PREFIX + i, id.toString());
             }
         }
         return tag;

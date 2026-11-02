@@ -62,6 +62,15 @@ public record BarState(SlotAssignment[] assignments, int selectedSlot, int schem
         assignments = assignments.clone();
     }
 
+    /**
+     * Defensive copy on every access: the array is mutable, so the record must
+     * not hand out its internal one.
+     */
+    @Override
+    public SlotAssignment[] assignments() {
+        return assignments.clone();
+    }
+
     public static BarState empty(int slotCount) {
         SlotAssignment[] slots = new SlotAssignment[slotCount];
         for (int i = 0; i < slotCount; i++) {
