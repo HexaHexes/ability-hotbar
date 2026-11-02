@@ -1,5 +1,6 @@
 package org.bitwisemadness.abilityhotbar.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import java.util.List;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -52,10 +53,6 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     private static final int UNAVAILABLE_TINT = 0x66FF0000;
     private static final int COOLDOWN_COLOR = 0xAA000000;
     private static final int COST_BG = 0xCC000000;
-    /** Opaque backing matching the sprite's slot-fill color (39,37,5) - the
-     *  vanilla slot fills are ~73% opaque, so without this the world shows
-     *  through and the bar reads translucent instead of solid. */
-    private static final int BAR_BACKING = 0xFF272505;
 
     private AbilityBarLayer() {
     }
@@ -102,11 +99,20 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
 
         int screenW = gui.guiWidth();
         int screenH = gui.guiHeight();
-        drawBarBackground(gui, layout, screenW, screenH);
-        for (int i = 0; i < renderCount && i < slots.size(); i++) {
-            SlotRender slot = slots.get(i);
-            int[] rect = layout.slotRect(i, screenW, screenH);
-            drawSlot(gui, slot, rect, layout.scale());
+        // Vanilla wraps its hotbar draw in enableBlend/disableBlend. Blend matters:
+        // a pack-replaced hud/hotbar_selection centre is semi-transparent white and
+        // renders opaque without it; never leak blend into the next frame's draw.
+        RenderSystem.enableBlend();
+        try {
+            drawBarBackground(gui, layout, screenW, screenH);
+            for (int i = 0; i < renderCount && i < slots.size(); i++) {
+                SlotRender slot = slots.get(i);
+                int[] rect = layout.slotRect(i, screenW, screenH);
+                drawSlot(gui, slot, rect, layout.scale());
+            }
+        } finally {
+            // Never leak blend state into the next frame's vanilla hotbar draw.
+            RenderSystem.disableBlend();
         }
     }
 
@@ -126,16 +132,12 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             int border = Math.max(1, (int) Math.round(layout.scale()));
             int w = (int) Math.round(VANILLA_HOTBAR_WIDTH * layout.scale());
             int h = (int) Math.round(VANILLA_HOTBAR_HEIGHT * layout.scale());
-            // Opaque backing first: the sprite's slot fills are ~73% opaque, so
-            // without it the world bleeds through and the bar reads translucent.
-            gui.fill(x - border, y - border, x - border + w, y - border + h, BAR_BACKING);
             gui.blitSprite(VANILLA_HOTBAR, x - border, y - border, w, h);
         } else {
             // The strip is a fixed horizontal 9-slot asset; it cannot represent a
             // vertical bar without distortion (known REQ-HOT-01 limitation).
             int w = layout.scaledSlotSize();
             int h = layout.extent();
-            gui.fill(x, y, x + w, y + h, BAR_BACKING);
             gui.blitSprite(VANILLA_HOTBAR, x, y, w, h);
         }
     }
