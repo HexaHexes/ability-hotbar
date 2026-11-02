@@ -1,6 +1,8 @@
 package org.bitwisemadness.abilityhotbar.client;
 
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import java.util.List;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -115,7 +117,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             for (int i = 0; i < renderCount && i < slots.size(); i++) {
                 SlotRender slot = slots.get(i);
                 int[] rect = layout.slotRect(i, screenW, screenH);
-                drawSlot(gui, slot, rect, layout.scale());
+                drawSlot(gui, slot, rect, layout);
             }
         } finally {
             // Never leak blend state into the next frame's vanilla hotbar draw.
@@ -149,35 +151,64 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     /**
      * Blits the vanilla hotbar sprite as the bar's background so the bar reads in
      * the vanilla texture language (REQ-HOT-01). The sprite is drawn at its native
-     * 182x22 (x scale) proportions - never stretched to the layout's slot box -
+     * 182x22 (x scale) proportions - never squashed to the layout's slot box -
      * because vanilla hardcodes that size and resource packs design for it;
      * stretching distorted the art and shifted our slots off the texture's frames.
+     *
+     * <p>A horizontal strip cannot fill a vertical box at all, so the vertical
+     * path turns it a quarter turn instead of scaling it into the box.</p>
      */
     private static void drawBarBackground(GuiGraphics gui, BarLayout layout, int screenW, int screenH) {
-        boolean horizontal = layout.horizontal();
         int x = layout.originX(screenW);
         int y = layout.originY(screenH);
-        if (horizontal) {
-            // Offset by the sprite's 1px frame so its slot cells align with our grid.
-            int border = Math.max(1, (int) Math.round(layout.scale()));
-            int w = (int) Math.round(VANILLA_HOTBAR_WIDTH * layout.scale());
-            int h = (int) Math.round(VANILLA_HOTBAR_HEIGHT * layout.scale());
+        // Offset by the sprite's 1px frame so its slot cells align with our grid.
+        int border = Math.max(1, (int) Math.round(layout.scale()));
+        int w = (int) Math.round(VANILLA_HOTBAR_WIDTH * layout.scale());
+        int h = (int) Math.round(VANILLA_HOTBAR_HEIGHT * layout.scale());
+        if (layout.horizontal()) {
             gui.blitSprite(VANILLA_HOTBAR, x - border, y - border, w, h);
         } else {
-            // The strip is a fixed horizontal 9-slot asset; it cannot represent a
-            // vertical bar without distortion (known REQ-HOT-01 limitation).
-            int w = layout.scaledSlotSize();
-            int h = layout.extent();
-            gui.blitSprite(VANILLA_HOTBAR, x, y, w, h);
+            blitTurned90(gui, VANILLA_HOTBAR, x - border, y - border, w, h);
+        }
+    }
+
+    /**
+     * Blits a landscape sprite turned a quarter turn clockwise, so it keeps its
+     * native proportions instead of being squashed into a portrait box.
+     *
+     * <p>The sprite is drawn at {@code (nativeW, nativeH)} and turned about its
+     * centre, so it occupies {@code (nativeH, nativeW)} starting at
+     * {@code (dx, dy)} - the target's width comes from the sprite's height and
+     * its height from the sprite's width.</p>
+     *
+     * <p>A quarter turn maps +X to +Y, and GUI +Y points down, so the sprite's
+     * left cap lands at the top. That puts cell 1 under slot 0, which sits at the
+     * top of a vertical bar just as it sits at the left of a horizontal one.</p>
+     */
+    private static void blitTurned90(
+            GuiGraphics gui, ResourceLocation sprite, int dx, int dy, int nativeW, int nativeH) {
+        PoseStack pose = gui.pose();
+        pose.pushPose();
+        try {
+            // Centre of the box the sprite fills once turned: a quarter turn
+            // swaps its width and height, so anchor on the swapped half-extents.
+            pose.translate(dx + nativeH / 2.0, dy + nativeW / 2.0, 0.0);
+            pose.mulPose(Axis.ZP.rotationDegrees(90));
+            pose.translate(-nativeW / 2.0, -nativeH / 2.0, 0.0);
+            gui.blitSprite(sprite, 0, 0, nativeW, nativeH);
+        } finally {
+            // Never leak the transform into the next sprite's draw.
+            pose.popPose();
         }
     }
 
     /** Draws one slot: icon/placeholder, overlays, and the vanilla selection frame. */
-    private static void drawSlot(GuiGraphics gui, SlotRender slot, int[] rect, double scale) {
+    private static void drawSlot(GuiGraphics gui, SlotRender slot, int[] rect, BarLayout layout) {
         int x = rect[0];
         int y = rect[1];
         int w = rect[2];
         int h = rect[3];
+        double scale = layout.scale();
 
         // Inert slots keep a diagnostic red tint over the vanilla frame.
         if (slot.inert()) {
@@ -191,7 +222,11 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             int offset = (int) Math.round(2 * scale);
             int selW = (int) Math.round(VANILLA_SELECTION_WIDTH * scale);
             int selH = (int) Math.round(VANILLA_SELECTION_HEIGHT * scale);
-            gui.blitSprite(VANILLA_SELECTION, x - offset, y - offset, selW, selH);
+            if (layout.horizontal()) {
+                gui.blitSprite(VANILLA_SELECTION, x - offset, y - offset, selW, selH);
+            } else {
+                blitTurned90(gui, VANILLA_SELECTION, x - offset, y - offset, selW, selH);
+            }
         }
 
         // Icon on top of the selection frame (as vanilla layers items over it).

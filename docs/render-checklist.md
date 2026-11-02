@@ -25,6 +25,10 @@ run before merge. Tick each item in a dev client with `ability_core` +
 
 - [ ] `display.horizontal` flips the bar between left-to-right and
       top-to-bottom.
+- [ ] In top-to-bottom mode the background shows the hotbar strip **turned** -
+      cells stacked vertically, frame intact, sitting on the slot grid - and
+      **not** stretched into vertical stripes; the selection frame turns with
+      it (#64).
 - [ ] `display.offsetX` / `display.offsetY` shift the bar.
 - [ ] `display.scale` grows/shrinks the whole bar (0.5–2.0).
 - [ ] `display.opacity` changes transparency.
