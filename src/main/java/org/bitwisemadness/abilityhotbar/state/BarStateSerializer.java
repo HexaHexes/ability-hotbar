@@ -23,6 +23,9 @@ import org.slf4j.Logger;
  *       than crashing the load; valid-but-unresolvable ids are preserved raw so
  *       the slot renders as diagnosed inert (REQ-HOT-21).</li>
  *   <li>A future schema version loads a valid empty state instead of throwing.</li>
+ *   <li>An older schema version upgrades in memory on load and the upgrade is
+ *       logged with its from/to versions; the file is rewritten at the current
+ *       version on the next natural save (REQ-HOT-15).</li>
  * </ul>
  *
  * <p>This class deliberately does not read config: it must be usable from the
@@ -40,7 +43,9 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
 
     @Override
     public BarState read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
-        int version = tag.contains(KEY_SCHEMA) ? tag.getInt(KEY_SCHEMA) : 1;
+        // Absent schema_version = data written before versioning existed = schema 0,
+        // so the load below counts as an upgrade and is logged as one (REQ-HOT-15).
+        int version = tag.contains(KEY_SCHEMA) ? tag.getInt(KEY_SCHEMA) : 0;
         if (version > BarState.CURRENT_SCHEMA_VERSION) {
             LOGGER.warn("BarState schema version {} is newer than supported {} - loading as empty",
                     version, BarState.CURRENT_SCHEMA_VERSION);
@@ -67,6 +72,11 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
         int selectedSlot = tag.contains(KEY_SELECTED) ? tag.getInt(KEY_SELECTED) : 0;
         if (selectedSlot < 0 || selectedSlot >= slotCount) {
             selectedSlot = 0;
+        }
+
+        if (version < BarState.CURRENT_SCHEMA_VERSION) {
+            LOGGER.info("BarState schema upgraded from {} to {} - values retained",
+                    version, BarState.CURRENT_SCHEMA_VERSION);
         }
 
         return new BarState(assignmentList.toArray(new SlotAssignment[0]), selectedSlot,
