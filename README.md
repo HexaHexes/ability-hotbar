@@ -46,8 +46,10 @@ verification matrix is in `docs/input-gating-matrix.md`.
 
 ## Configuration
 
-The bar's look is a **CLIENT** config (`display.*`) — display-only, never
-policy; it is never synced to the server and cannot widen server rules. The
+The bar's look is a **CLIENT** config (`display.*`) - display-only, never
+policy; it is never synced to the server and cannot widen server rules. It
+opens in NeoForge's own configuration screen (config UI mods are bypassed for
+this mod so their editor cannot reset values you did not edit). The
 slot *count* is two-tier: the client's preference is clamped to the server's
 ceiling (see Persistence).
 
