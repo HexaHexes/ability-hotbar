@@ -1,5 +1,9 @@
 package org.bitwisemadness.abilityhotbar.config;
 
+import java.util.Locale;
+import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.common.TranslatableEnum;
+
 /**
  * Named screen positions for the ability bar (REQ-HOT-07).
  *
@@ -12,7 +16,7 @@ package org.bitwisemadness.abilityhotbar.config;
  * {@code net.minecraft.client.gui.Gui}: the hotbar occupies the bottom 22 px
  * and the experience bar tops out 29 px above the bottom of the screen.</p>
  */
-public enum BarAnchor {
+public enum BarAnchor implements TranslatableEnum {
     /**
      * Centred horizontally, slot-grid bottom resting on the vanilla hotbar's
      * top edge. This is the historical placement and the default.
@@ -36,5 +40,19 @@ public enum BarAnchor {
     LEFT_EDGE,
 
     /** Inset from the right screen border, vertically centred. */
-    RIGHT_EDGE
+    RIGHT_EDGE;
+
+    /**
+     * Shows this anchor's translated name on the config screen's cycle button
+     * instead of the raw enum constant (e.g. {@code RIGHT_EDGE}).
+     */
+    @Override
+    public Component getTranslatedName() {
+        return Component.translatable(translationKey());
+    }
+
+    /** {@return the language key naming this anchor, e.g. {@code ability_hotbar.anchor.right_edge}} */
+    public String translationKey() {
+        return "ability_hotbar.anchor." + name().toLowerCase(Locale.ROOT);
+    }
 }
