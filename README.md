@@ -89,6 +89,16 @@ Upgrade and preservation rules:
 - An id that cannot even be parsed is logged and left empty, never crashing the
   load (REQ-HOT-15).
 
+Migration ladders (which saved versions upgrade on load):
+
+| From | To | Ladder |
+|---|---|---|
+| Pre-versioned (no `schema_version` - read as `0`) | `1` | Yes - values retained, upgrade logged |
+| `1` (current) | - | Current version, no ladder needed |
+
+Each future schema version adds its row here; upgrades are logged with their
+from/to versions so a pack update is visible in `latest.log`.
+
 ## Dependencies
 | | Mod | Why |
 |---|---|---|

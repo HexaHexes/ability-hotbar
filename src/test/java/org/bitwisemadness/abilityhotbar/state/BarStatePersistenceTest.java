@@ -37,14 +37,37 @@ class BarStatePersistenceTest {
         legacy.putString("slot_0", FIREBALL.toString());
         legacy.putString("slot_2", HEAL.toString());
 
-        BarState upgraded = serializer.read(null, legacy, null);
+        BarState upgraded;
+        try (LogCapture logs = LogCapture.forLogger(BarStateSerializer.class)) {
+            upgraded = serializer.read(null, legacy, null);
 
-        assertEquals(BarState.CURRENT_SCHEMA_VERSION, upgraded.schemaVersion());
-        assertEquals(3, upgraded.assignments().length, "slot count inferred from the highest key");
-        assertEquals(FIREBALL, upgraded.assignment(0).abilityId());
-        assertTrue(upgraded.assignment(1).isEmpty());
-        assertEquals(HEAL, upgraded.assignment(2).abilityId());
-        assertEquals(0, upgraded.selectedSlot());
+            assertEquals(BarState.CURRENT_SCHEMA_VERSION, upgraded.schemaVersion());
+            assertEquals(3, upgraded.assignments().length, "slot count inferred from the highest key");
+            assertEquals(FIREBALL, upgraded.assignment(0).abilityId());
+            assertTrue(upgraded.assignment(1).isEmpty());
+            assertEquals(HEAL, upgraded.assignment(2).abilityId());
+            assertEquals(0, upgraded.selectedSlot());
+
+            // REQ-HOT-15 AC 1: the upgrade is logged with its from/to versions.
+            assertTrue(logs.messages().stream()
+                            .anyMatch(m -> m.contains("schema upgraded from 0 to "
+                                    + BarState.CURRENT_SCHEMA_VERSION)),
+                    "upgrade must be logged, got: " + logs.messages());
+        }
+    }
+
+    @Test
+    void currentVersionCompoundDoesNotLogAnUpgrade() {
+        // The upgrade line must fire only on a real version step - a normal
+        // relog of current-version data stays quiet (no log spam per login).
+        CompoundTag tag = serializer.write(BarState.empty(3), null);
+
+        try (LogCapture logs = LogCapture.forLogger(BarStateSerializer.class)) {
+            serializer.read(null, tag, null);
+
+            assertTrue(logs.messages().stream().noneMatch(m -> m.contains("schema upgraded")),
+                    "current-version data must not log an upgrade, got: " + logs.messages());
+        }
     }
 
     @Test
@@ -70,7 +93,17 @@ class BarStatePersistenceTest {
         tag.putString("slot_0", "###not-a-valid-id###");
         tag.putString("slot_1", HEAL.toString());
 
-        BarState loaded = assertDoesNotThrow(() -> serializer.read(null, tag, null));
+        BarState loaded;
+        try (LogCapture logs = LogCapture.forLogger(BarStateSerializer.class)) {
+            loaded = assertDoesNotThrow(() -> serializer.read(null, tag, null));
+
+            // REQ-HOT-15 AC 2: the bad key is named in a log line, per key.
+            assertTrue(logs.messages().stream()
+                            .anyMatch(m -> m.contains("slot 0")
+                                    && m.contains("###not-a-valid-id###")),
+                    "corrupt slot must be logged with its key and raw value, got: "
+                            + logs.messages());
+        }
 
         assertTrue(loaded.assignment(0).isEmpty(), "corrupt id leaves the slot empty, not crashing");
         assertEquals(HEAL, loaded.assignment(1).abilityId(), "valid neighbours still load");
