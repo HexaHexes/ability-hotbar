@@ -1,5 +1,7 @@
 package org.bitwisemadness.abilityhotbar.client;
 
+import org.bitwisemadness.abilityhotbar.config.BarAnchor;
+
 /**
  * Pure layout math for the nine-slot bar (REQ-HOT-01/07).
  *
@@ -10,12 +12,17 @@ package org.bitwisemadness.abilityhotbar.client;
  * isolation. The render layer only reads the resulting rectangles and blits.</p>
  *
  * <p>Sizing follows the vanilla hotbar language: a fixed slot size and gap,
- * scaled uniformly, laid out horizontally (default) or vertically.</p>
+ * scaled uniformly, laid out horizontally (default) or vertically. Placement is
+ * driven by a {@link BarAnchor}, which resolves both axes so no anchor plus
+ * orientation combination is invalid.</p>
  *
  * @param slotCount number of slots (1..10, already clamped by config)
  * @param slotSize  unscaled slot edge length in pixels
  * @param gap       unscaled gap between slots in pixels
  * @param horizontal true for a left-to-right bar, false for top-to-bottom
+ * @param anchor    where the bar is placed on screen
+ * @param statusDepth pixels from the bottom of the screen to the top of the
+ *                    status cluster; only read for {@link BarAnchor#ABOVE_STATUS}
  * @param offsetX   horizontal pixel offset from the anchor
  * @param offsetY   vertical pixel offset from the anchor
  * @param scale     uniform render scale (0.5..2.0)
@@ -25,9 +32,24 @@ public record BarLayout(
         int slotSize,
         int gap,
         boolean horizontal,
+        BarAnchor anchor,
+        int statusDepth,
         int offsetX,
         int offsetY,
         double scale) {
+
+    /**
+     * Inset from a screen edge, in pixels. Covers the vanilla selection frame's
+     * 2 px-per-side overhang and the background sprite's border at every
+     * supported scale (0.5..2.0), so neither is clipped.
+     */
+    private static final int EDGE_INSET = 4;
+
+    /** Vanilla hotbar height: its top edge sits this far above the screen bottom. */
+    private static final int HOTBAR_DEPTH = 22;
+
+    /** Distance from the screen bottom to the vanilla experience bar's top edge. */
+    private static final int XP_DEPTH = 29;
 
     public BarLayout {
         if (slotCount < 1) {
@@ -38,6 +60,13 @@ public record BarLayout(
         }
         if (gap < 0) {
             throw new IllegalArgumentException("gap must be >= 0, got " + gap);
+        }
+        if (anchor == null) {
+            throw new IllegalArgumentException("anchor must not be null");
+        }
+        if (anchor == BarAnchor.ABOVE_STATUS && statusDepth < 1) {
+            throw new IllegalArgumentException(
+                    "statusDepth must be >= 1 for ABOVE_STATUS, got " + statusDepth);
         }
         if (!Double.isFinite(scale) || scale <= 0.0) {
             throw new IllegalArgumentException("scale must be finite and > 0, got " + scale);
@@ -64,16 +93,35 @@ public record BarLayout(
         return slotCount * scaledSlotSize() + (slotCount - 1) * scaledGap();
     }
 
+    /** Width of the slot grid along X. */
+    private int barWidth() {
+        return horizontal ? extent() : scaledSlotSize();
+    }
+
+    /** Height of the slot grid along Y. */
+    private int barHeight() {
+        return horizontal ? scaledSlotSize() : extent();
+    }
+
     /** The bar's origin (top-left of slot 0) for a given screen size and anchor. */
     public int originX(int screenWidth) {
-        // Center the bar horizontally, then apply the configured offset.
-        return (screenWidth - (horizontal ? extent() : scaledSlotSize())) / 2 + offsetX;
+        int base = switch (anchor) {
+            case LEFT_EDGE -> EDGE_INSET;
+            case RIGHT_EDGE -> screenWidth - barWidth() - EDGE_INSET;
+            case ABOVE_HOTBAR, ABOVE_XP, ABOVE_STATUS -> (screenWidth - barWidth()) / 2;
+        };
+        return base + offsetX;
     }
 
     /** @return the bar's origin Y (top-left of slot 0) for a screen size. */
     public int originY(int screenHeight) {
-        // Sit just above the vanilla hotbar region by default; offset refines it.
-        return screenHeight - (horizontal ? scaledSlotSize() : extent()) - 22 + offsetY;
+        int base = switch (anchor) {
+            case ABOVE_HOTBAR -> screenHeight - barHeight() - HOTBAR_DEPTH;
+            case ABOVE_XP -> screenHeight - barHeight() - XP_DEPTH;
+            case ABOVE_STATUS -> screenHeight - barHeight() - statusDepth;
+            case LEFT_EDGE, RIGHT_EDGE -> (screenHeight - barHeight()) / 2;
+        };
+        return base + offsetY;
     }
 
     /**

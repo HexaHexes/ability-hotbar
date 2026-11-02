@@ -7,6 +7,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.LayeredDraw;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.world.entity.player.Player;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -15,8 +17,10 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import org.bitwisemadness.abilitycore.api.AvailabilityProviders;
 import org.bitwisemadness.abilitycore.discovery.AbilityDiscovery;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
+import org.bitwisemadness.abilityhotbar.config.BarAnchor;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
+import org.bitwisemadness.abilityhotbar.config.StatusAnchorMode;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 
 /**
@@ -83,11 +87,14 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             return;
         }
 
+        BarAnchor anchor = HotbarClientConfig.ANCHOR.get();
         BarLayout layout = new BarLayout(
                 renderCount,
                 20,
                 0,
                 HotbarClientConfig.HORIZONTAL.get(),
+                anchor,
+                statusDepth(anchor, mc.player),
                 HotbarClientConfig.OFFSET_X.get(),
                 HotbarClientConfig.OFFSET_Y.get(),
                 HotbarClientConfig.SCALE.get());
@@ -114,6 +121,29 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             // Never leak blend state into the next frame's vanilla hotbar draw.
             RenderSystem.disableBlend();
         }
+    }
+
+    /**
+     * Resolves the status-cluster depth the {@code aboveStatus} anchor rests on.
+     *
+     * <p>Anchors other than {@code aboveStatus} never read it, and {@code FIXED}
+     * never moves, so neither touches the player. {@code DYNAMIC} mirrors
+     * vanilla's row bookkeeping in {@link StatusCluster} so the bar clears the
+     * armor, health, hunger and oxygen rows for any heart count.</p>
+     */
+    private static int statusDepth(BarAnchor anchor, Player player) {
+        if (anchor != BarAnchor.ABOVE_STATUS) {
+            return StatusCluster.BASELINE_DEPTH;
+        }
+        if (HotbarClientConfig.STATUS_ANCHOR_MODE.get() == StatusAnchorMode.FIXED) {
+            return StatusCluster.BASELINE_DEPTH;
+        }
+        int rows = StatusCluster.heartRows(
+                player.getMaxHealth(), player.getHealth(), player.getAbsorptionAmount());
+        boolean armor = player.getArmorValue() > 0;
+        boolean oxygen = player.getAirSupply() < player.getMaxAirSupply()
+                || player.isEyeInFluid(FluidTags.WATER);
+        return StatusCluster.depth(rows, armor, oxygen);
     }
 
     /**
