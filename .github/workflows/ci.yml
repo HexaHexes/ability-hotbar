@@ -239,8 +239,7 @@ jobs:
           java-version: '21'
           cache: gradle
 
-      # ignoreFailures in build.gradle: SpotBugs findings never fail this
-      # step during the grace period - the job exists to surface volume.
+      # Enforced since #68: findings fail this step (ignoreFailures dropped       # from build.gradle). The report still uploads below via if: always().
       - name: SpotBugs
         env:
           PACKAGE_READ_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
@@ -248,10 +247,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
         run: ./gradlew spotbugsMain --no-daemon --stacktrace
 
-      # Report-only during the grace period: violations print in the log
-      # and the step annotates, but the job - and thus the check - stays
-      # green. Remove continue-on-error to gate.
-      # Structural rules: comment-block length and import hygiene.
+      # Enforced since #68: violations fail this step and so the static       # check. Spotless stays out of Gradle `check` (enforceCheck false),       # so junit's `./gradlew build` remains style-agnostic - this job is       # the style gate.       # Structural rules, not formatting: comment-block length, star/redundant/       # unused imports, cyclomatic complexity. Ruleset: config/checkstyle.
       - name: Checkstyle
         env:
           PACKAGE_READ_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN }}
@@ -266,7 +262,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PACKAGE_READ_TOKEN || github.token }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: ./gradlew spotlessCheck --no-daemon --stacktrace
-        continue-on-error: true
 
       - name: Upload the SpotBugs report
         if: always()
@@ -274,6 +269,13 @@ jobs:
         with:
           name: spotbugs-report
           path: build/reports/spotbugs/
+          if-no-files-found: ignore
+      - name: Upload the Checkstyle report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: checkstyle-report
+          path: build/reports/checkstyle/
           if-no-files-found: ignore
 
   version-bump:
@@ -427,3 +429,4 @@ jobs:
           echo "::error::A breaking change cannot ship in a patch release."
           echo "::error::Bump $OLD_BASE to a higher major or minor version, not $NEW_VERSION."
           exit 1
+
