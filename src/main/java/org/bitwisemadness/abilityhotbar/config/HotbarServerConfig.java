@@ -23,8 +23,10 @@ public final class HotbarServerConfig {
                     .defineInRange("hotbar.maxSlots", 10, 1, 10);
 
     /**
-     * The maximum number of cyclable hotbars. The brief's stretch goal
-     * (REQ-HOT-22) defaults to 3 with a configurable max of 10.
+     * The server ceiling for cyclable hotbars (REQ-HOT-22): how many bars a
+     * state may allocate and a client's {@code display.hotbarCount} preference
+     * may never exceed. The client preference defaults lower (3); this ceiling
+     * defaults to the configured maximum of 10 (ADR-011).
      */
     public static final ModConfigSpec.IntValue MAX_HOTBAR_COUNT =
             BUILDER.comment("Maximum number of cyclable hotbars (server ceiling)")
