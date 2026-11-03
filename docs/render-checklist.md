@@ -58,6 +58,17 @@ run before merge. Tick each item in a dev client with `ability_core` +
 - [ ] Selection survives activation (activating does not move the highlight).
 - [ ] The cursor can sit on an empty slot (highlight shows, no icon).
 
+## Active bar (REQ-HOT-22, #28)
+
+- [ ] Only the **active** bar's slots are drawn - its assignments and *its own*
+      selected slot; no second bar's contents ever appear beside or under it.
+- [ ] After a switch (Alt+wheel / Alt+N, #28 controls - needs the switch slice)
+      the bar redraws with the newly active bar's assignments and *its* selection
+      highlight, with no flash of the previous bar's slots.
+- [ ] With a non-assignable bar active (no stored state, e.g. a curios bar from
+      `pseudocore-curios`) the ability bar draws **nothing** - never another
+      bar's slots standing in for it.
+
 ## Availability overlay (REQ-HOT-08, #19 contract)
 
 - [ ] A **known** cooldown darkens the slot proportionally (0 = covered,
