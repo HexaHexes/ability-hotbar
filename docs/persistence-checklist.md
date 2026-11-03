@@ -23,12 +23,15 @@ against a world with `ability_core` + `ability-hotbar` installed.
 - [ ] The slot renders as diagnosed-**inert** with the raw id preserved - not
       dropped, not substituted, and no load crash.
 
-## Schema forward-migration (REQ-HOT-15, ADR-004)
+## Schema forward-migration (REQ-HOT-15, ADR-004, ADR-011)
 
-- [ ] Edit the saved player NBT: lower `schema_version`/remove it and remove
-      `slot_count`, leaving the `slot_N` keys. Relog.
-- [ ] Values are retained, the bar loads at the current schema version, and the
-      slot count is inferred from the highest `slot_N` key.
+- [ ] Edit the saved player NBT: replace the `bar_state` compound with the flat
+      pre-v2 shape - no `active_bar`/`bar_count`/`bar_0`, just `schema_version`
+      `1` (or absent) with `slot_count`, `selected_slot` and `slot_N` keys at
+      the top level. Relog.
+- [ ] Values are retained as **bar 0** with `active_bar = 0`, the save rewrites
+      at the current schema version (`bar_0` nested), and `latest.log` shows the
+      upgrade line with its from/to versions.
 
 ## Snapshot flows (REQ-HOT-14, with core#18)
 
