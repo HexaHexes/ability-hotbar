@@ -30,7 +30,9 @@ category. Defaults (from SPIKE-hot-3):
 | Action | Default | Notes |
 |---|---|---|
 | Select slot | **Ctrl + wheel** | Moves the selected-slot cursor only; plain wheel still drives the vanilla hotbar, and the wheel is only claimed while Ctrl is held. |
+| Switch bar prev/next | **Alt + wheel** | Cycles hotbars, skipping bars with no assigned abilities by default (`display.skipEmptyBars`). Claimed only while Alt is held; Ctrl+wheel wins when both are held. |
 | Activate slot 1..9 | **Ctrl + 1..9** | Activates that slot directly. Plain 1..9 still switches the vanilla hotbar. |
+| Switch to bar 1..10 | **Alt + 1..9, Alt + 0** | Selects a bar directly (never skips). Plain digits still drive the vanilla hotbar; a digit beyond the cycle set does nothing. |
 | Activate selected slot | **G** | Fires the ability in the selected slot. |
 | Open ability menu | **K** | Menu flow lands with the management menu. |
 | Toggle ability mode | **Right Ctrl** | Aligned with Tensura's native mode key. |
@@ -56,6 +58,8 @@ ceiling (see Persistence).
 | Key | Default | Meaning |
 |---|---|---|
 | `display.slotsPerBar` | `9` | Preferred slots (clamped to the server's `hotbar.maxSlots`, hard cap 10). |
+| `display.hotbarCount` | `3` | Built-in hotbars in the cycle set (clamped to the server's `hotbar.maxBars`). Registered hotbars are always included and never clipped by this window. |
+| `display.skipEmptyBars` | `true` | Alt+wheel cycling skips bars where every slot is unassigned (inert ids count as assigned). Direct selection (Alt+digit) always lands where pressed. |
 | `display.horizontal` | `true` | Bar orientation: `true` = left-to-right, `false` = top-to-bottom. |
 | `display.anchor` | `ABOVE_HOTBAR` | Named position: `aboveHotbar`, `aboveXp`, `aboveStatus`, `leftEdge` or `rightEdge`. Each is a full 2D placement rule, so every value works with either orientation. |
 | `display.statusAnchorMode` | `DYNAMIC` | Height used by `aboveStatus`: `DYNAMIC` tracks the player's hearts, armor and oxygen; `FIXED` uses the vanilla baseline and never moves. Read only for `aboveStatus`. |
