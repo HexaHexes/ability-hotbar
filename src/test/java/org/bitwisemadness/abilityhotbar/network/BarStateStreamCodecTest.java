@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.junit.jupiter.api.Test;
 
@@ -56,20 +57,25 @@ class BarStateStreamCodecTest {
 
     @Test
     void multiBarStateRoundTripsBarsActiveBarAndSchema() {
-        // Schema v2 snapshot: every bar, its own selection, and the active bar
-        // must all survive the wire (ADR-011; both sides ship together).
+        // Schema v3 snapshot: every bar with its identity, its own selection,
+        // and the active bar id must all survive the wire (ADR-011/012; both
+        // sides ship together).
         BarState original = BarState.empty(3, 3)
                 .withAssignment(0, ResourceLocation.fromNamespaceAndPath("tensura", "fireball"))
                 .withSelectedSlot(2)
-                .withActiveBar(1)
+                .withActiveBar(HotbarRegistry.builtinBarId(1))
                 .withAssignment(2, ResourceLocation.fromNamespaceAndPath("iss", "magic_missile"))
                 .withSelectedSlot(1);
 
         BarState decoded = roundTrip(original);
 
         assertEquals(3, decoded.bars().length);
-        assertEquals(1, decoded.activeBar());
+        assertEquals(HotbarRegistry.builtinBarId(1), decoded.activeBarId());
         assertEquals(original.schemaVersion(), decoded.schemaVersion());
+        // Bar identities round-trip - the wire carries them, not just positions.
+        assertEquals(HotbarRegistry.builtinBarId(0), decoded.bars()[0].id());
+        assertEquals(HotbarRegistry.builtinBarId(1), decoded.bars()[1].id());
+        assertEquals(HotbarRegistry.builtinBarId(2), decoded.bars()[2].id());
         // Active-bar view targets bar 1.
         assertEquals(1, decoded.selectedSlot());
         assertEquals(ResourceLocation.fromNamespaceAndPath("iss", "magic_missile"),

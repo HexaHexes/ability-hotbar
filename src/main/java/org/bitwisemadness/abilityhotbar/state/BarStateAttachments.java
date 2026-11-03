@@ -7,6 +7,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
 import org.bitwisemadness.abilityhotbar.config.HotbarServerConfig;
+import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 
 /**
  * Registers the bar state attachment type on the NeoForge attachment registry
@@ -28,11 +29,16 @@ public final class BarStateAttachments {
      * the active bar's first {@code effectiveSlotsPerBar()} entries. A saved
      * state may hold a different bar count (migration lands older data at one
      * bar); the serializer never truncates what was stored.</p>
+     *
+     * <p>Fresh states are reconciled with the live registry so registered
+     * assignable bars exist from the first save (ADR-012); loads reconcile the
+     * same way inside {@link BarStateSerializer#read}.</p>
      */
     public static final Supplier<AttachmentType<BarState>> BAR_STATE =
             ATTACHMENT_TYPES.register("bar_state", () -> AttachmentType.builder(
                             () -> BarState.empty(HotbarServerConfig.MAX_HOTBAR_SLOTS.get(),
-                                    HotbarServerConfig.MAX_HOTBAR_COUNT.get()))
+                                    HotbarServerConfig.MAX_HOTBAR_COUNT.get())
+                                    .reconciledWith(HotbarRegistry.all()))
                     .serialize(new BarStateSerializer())
                     .copyOnDeath()
                     .build());
