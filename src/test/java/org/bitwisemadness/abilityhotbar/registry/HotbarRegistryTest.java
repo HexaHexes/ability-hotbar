@@ -108,6 +108,25 @@ class HotbarRegistryTest {
     }
 
     @Test
+    void builtinIndexInvertsBuiltinBarIdAndFailsClosed() {
+        assertEquals(0, HotbarRegistry.builtinIndex(HotbarRegistry.builtinBarId(0)));
+        assertEquals(42, HotbarRegistry.builtinIndex(HotbarRegistry.builtinBarId(42)));
+        // fail-closed for anything that is not a built-in id
+        assertEquals(-1, HotbarRegistry.builtinIndex(HotbarRegistry.unidentifiedBarId(0)));
+        assertEquals(-1, HotbarRegistry.builtinIndex(EXTRA));
+        assertEquals(-1, HotbarRegistry.builtinIndex(
+                ResourceLocation.fromNamespaceAndPath("ability_hotbar", "bar_x")));
+        assertEquals(-1, HotbarRegistry.builtinIndex(
+                ResourceLocation.fromNamespaceAndPath("ability_hotbar", "bar_")));
+        assertEquals(-1, HotbarRegistry.builtinIndex(
+                ResourceLocation.fromNamespaceAndPath("otherpack", "bar_1")));
+        assertEquals(-1, HotbarRegistry.builtinIndex(null));
+        // all digits, but out of int range: not a usable index either
+        assertEquals(-1, HotbarRegistry.builtinIndex(
+                ResourceLocation.fromNamespaceAndPath("ability_hotbar", "bar_99999999999999999999")));
+    }
+
+    @Test
     void builtinAndUnidentifiedIdsAreFormattedAndBoundsChecked() {
         assertEquals("ability_hotbar:bar_3", HotbarRegistry.builtinBarId(3).toString());
         assertEquals("ability_hotbar:unidentified_3",
