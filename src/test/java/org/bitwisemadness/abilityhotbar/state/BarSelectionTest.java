@@ -6,12 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.junit.jupiter.api.Test;
 
 /**
  * Server-authoritative slot selection (REQ-HOT-09/10): valid selections move the
  * cursor, out-of-range requests are dropped fail-closed, and the Ctrl+wheel scroll
  * math wraps within the bar.
+ *
+ * <p>Multi-bar (REQ-HOT-22): a selection always lands on the <b>active</b> bar
+ * and leaves every other bar's own selection untouched; an active id that is
+ * not stored fails closed instead of selecting on a stranger's bar.</p>
  */
 class BarSelectionTest {
 
@@ -46,6 +51,33 @@ class BarSelectionTest {
         assertEquals(1, moved.selectedSlot());
         assertEquals(FIREBALL, moved.assignment(1).abilityId());
         assertTrue(moved.assignment(0).isEmpty());
+    }
+
+    @Test
+    void selectTargetsTheActiveBarAndLeavesOtherBarsSelectionsAlone() {
+        // #28: each bar owns its selected slot - a selection moves the active
+        // bar's cursor only, never bar 0's by position.
+        BarState state = BarState.empty(3, 3)
+                .withSelectedSlot(1)
+                .withActiveBar(HotbarRegistry.builtinBarId(1));
+
+        BarState moved = BarSelection.select(state, 2).orElseThrow();
+
+        assertEquals(HotbarRegistry.builtinBarId(1), moved.activeBarId());
+        assertEquals(2, moved.selectedSlot(), "the active bar's cursor moves");
+        assertEquals(2, moved.bars()[1].selectedSlot(), "the active bar itself moved");
+        assertEquals(1, moved.bars()[0].selectedSlot(), "bar 0 keeps its own selection");
+    }
+
+    @Test
+    void selectFailsClosedWhenTheActiveBarIsNotStored() {
+        // A non-assignable bar active with no stored state: every request is
+        // rejected rather than selecting on some other bar's slots.
+        BarState state = BarState.empty(3)
+                .withActiveBar(ResourceLocation.fromNamespaceAndPath("pseudocore", "curios"));
+
+        assertTrue(BarSelection.select(state, 0).isEmpty());
+        assertTrue(BarSelection.select(state, 2).isEmpty());
     }
 
     @Test

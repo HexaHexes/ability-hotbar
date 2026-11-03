@@ -16,6 +16,7 @@ import org.bitwisemadness.abilitycore.api.ActivationType;
 import org.bitwisemadness.abilitycore.api.AvailabilityState;
 import org.bitwisemadness.abilitycore.api.Metric;
 import org.bitwisemadness.abilitycore.api.ResourceCost;
+import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +25,10 @@ import org.junit.jupiter.api.Test;
  * than render an icon, unknown overlay metrics produce no overlay (never a
  * wrong value), selection tracks the synced slot, and an assigned slot falls
  * back to a placeholder when no icon resolves.
+ *
+ * <p>Multi-bar (REQ-HOT-22): every decision is resolved from the <b>active</b>
+ * bar's view, and that view fails closed when the active id is not stored -
+ * so the layer can only ever draw the active bar's slots.</p>
  */
 class SlotRenderTest {
 
@@ -212,5 +217,45 @@ class SlotRenderTest {
         assertFalse(slot.availability().isAvailable(), "unavailable verdict surfaces");
         assertNotNull(slot.cooldownFraction());
         assertEquals(0.5, slot.cooldownFraction());
+    }
+
+    @Test
+    void resolveAllTargetsTheActiveBarNotTheFirstBar() {
+        // #28 AC "only active bar renders": decisions come from the active bar's
+        // view, never from bar 0 by position - bar 0's assignment and selection
+        // must not leak into what the layer draws.
+        BarState state = BarState.empty(3, 3)
+                .withAssignment(0, FIREBALL)
+                .withSelectedSlot(1)
+                .withActiveBar(HotbarRegistry.builtinBarId(1))
+                .withAssignment(2, GHOST)
+                .withSelectedSlot(2);
+
+        List<SlotRender> slots = SlotRender.resolveAll(state,
+                id -> Optional.empty(), id -> Optional.empty());
+
+        assertEquals(3, slots.size());
+        // The active bar's own content: slot 2 assigned (inert - no provider in
+        // this fixture) with the cursor on it.
+        assertTrue(slots.get(2).assigned());
+        assertTrue(slots.get(2).inert());
+        assertTrue(slots.get(2).selected());
+        // Bar 0's slot 0 assignment and bar 0's selection are nowhere in view.
+        assertFalse(slots.get(0).assigned(), "bar 0's assignment must not render");
+        assertFalse(slots.get(0).selected(), "bar 0's selection must not render");
+        assertFalse(slots.get(1).selected());
+    }
+
+    @Test
+    void resolveAllFailsClosedWhenTheActiveBarIsNotStored() {
+        // A live non-assignable bar can be active while this state stores no
+        // bar for it: the view is empty, so the layer's renderCount guard draws
+        // nothing rather than falling back to another bar's slots.
+        BarState state = BarState.empty(3)
+                .withActiveBar(ResourceLocation.fromNamespaceAndPath("pseudocore", "curios"));
+
+        assertTrue(SlotRender.resolveAll(state,
+                        id -> Optional.empty(), id -> Optional.empty()).isEmpty(),
+                "an unstored active bar renders no slots at all");
     }
 }
