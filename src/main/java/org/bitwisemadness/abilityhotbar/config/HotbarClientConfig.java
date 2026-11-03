@@ -41,6 +41,14 @@ public final class HotbarClientConfig {
                             + "(direct selection always lands where pressed)")
                     .define("display.skipEmptyBars", true);
 
+    /**
+     * Whether switching bars shows the newly active bar's name briefly above
+     * the bar (REQ-HOT-22's CLIENT-preference notification).
+     */
+    public static final ModConfigSpec.BooleanValue SWITCH_TOAST =
+            BUILDER.comment("Show the bar's name briefly after switching hotbars")
+                    .define("display.switchToast", true);
+
     /** Show the bar horizontally (true) or vertically (false). */
     public static final ModConfigSpec.BooleanValue HORIZONTAL =
             BUILDER.comment("Bar orientation: true = horizontal, false = vertical")

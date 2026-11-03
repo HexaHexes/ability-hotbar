@@ -60,6 +60,7 @@ ceiling (see Persistence).
 | `display.slotsPerBar` | `9` | Preferred slots (clamped to the server's `hotbar.maxSlots`, hard cap 10). |
 | `display.hotbarCount` | `3` | Built-in hotbars in the cycle set (clamped to the server's `hotbar.maxBars`). Registered hotbars are always included and never clipped by this window. |
 | `display.skipEmptyBars` | `true` | Alt+wheel cycling skips bars where every slot is unassigned (inert ids count as assigned). Direct selection (Alt+digit) always lands where pressed. |
+| `display.switchToast` | `true` | Show the newly active bar's name briefly above the bar after a switch. |
 | `display.horizontal` | `true` | Bar orientation: `true` = left-to-right, `false` = top-to-bottom. |
 | `display.anchor` | `ABOVE_HOTBAR` | Named position: `aboveHotbar`, `aboveXp`, `aboveStatus`, `leftEdge` or `rightEdge`. Each is a full 2D placement rule, so every value works with either orientation. |
 | `display.statusAnchorMode` | `DYNAMIC` | Height used by `aboveStatus`: `DYNAMIC` tracks the player's hearts, armor and oxygen; `FIXED` uses the vanilla baseline and never moves. Read only for `aboveStatus`. |
@@ -69,6 +70,29 @@ ceiling (see Persistence).
 | `display.offsetX` / `display.offsetY` | `0` | Pixel offset from the bar's anchor. |
 | `display.scale` | `1.0` | Uniform render scale (0.5–2.0). |
 | `display.showIcons` | `true` | Draw ability icons (falls back to a placeholder when none resolves). |
+
+## Multi-hotbar (stretch)
+
+Beyond the first bar you can cycle additional hotbars, each with its own
+assignments and its own selected slot (REQ-HOT-22):
+
+- **Switching** - Alt+wheel cycles prev/next, Alt+1..9 and Alt+0 jump
+  directly (see Controls). Only the active bar renders, and switching never
+  casts an ability, never moves the selection and never resets the ability
+  mode.
+- **Cycle set** - the built-in window (`display.hotbarCount`, clamped by the
+  server's `hotbar.maxBars`), then every mod-registered bar in registration
+  order. Registrations are never clipped by the window, and a digit beyond
+  the set does nothing (fail-closed).
+- **Skip-empty** - with `display.skipEmptyBars` (default on) the wheel steps
+  over bars whose slots are all unassigned; direct selection never skips, and
+  when every bar is empty the wheel still steps normally.
+- **Registered hotbars** - other mods declare their own bars through the
+  registration API (ADR-012 in `ability-core`). Assignable registrations get
+  their own state; non-assignable bars (their content belongs to the
+  registering mod) are still switchable.
+- **Notification** - after a switch the new bar's name appears briefly above
+  the bar, governed by `display.switchToast`.
 
 ## Persistence
 

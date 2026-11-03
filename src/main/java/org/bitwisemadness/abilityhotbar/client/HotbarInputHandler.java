@@ -164,12 +164,16 @@ public final class HotbarInputHandler {
      * rule the server applies (registry + ceiling, reconcile + growth), so it
      * can only land where the server would accept; the server's echo -
      * persisting on accept, current state on reject - reconciles the view
-     * within one round trip if it disagreed.
+     * within one round trip if it disagreed. The switch toast is recorded
+     * here, at the intent, so a rejection never double-toasts on the way back.
      */
     private static void switchBar(BarState state, ResourceLocation target) {
         BarSwitching.switchTo(state, target, HotbarConfig.effectiveHotbarCount())
                 .ifPresent(optimistic -> {
                     ClientBarState.set(optimistic);
+                    if (HotbarClientConfig.SWITCH_TOAST.get()) {
+                        SwitchToast.show(target);
+                    }
                     PacketDistributor.sendToServer(new SwitchBarPayload(target));
                 });
     }

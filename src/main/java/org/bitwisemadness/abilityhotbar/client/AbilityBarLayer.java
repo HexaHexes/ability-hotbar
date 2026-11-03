@@ -123,6 +123,14 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             // Never leak blend state into the next frame's vanilla hotbar draw.
             RenderSystem.disableBlend();
         }
+
+        // The switch toast is text, not a sprite: it rides after the bar's
+        // blend-managed draw, one line above the origin, and only while its
+        // self-expiring window is open (display.switchToast gates recording).
+        if (SwitchToast.isVisible(System.currentTimeMillis())) {
+            gui.drawString(mc.font, SwitchToast.message(),
+                    layout.originX(screenW), layout.originY(screenH) - 12, 0xFFFFFF);
+        }
     }
 
     /**

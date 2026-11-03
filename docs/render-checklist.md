@@ -69,6 +69,21 @@ run before merge. Tick each item in a dev client with `ability_core` +
       `pseudocore-curios`) the ability bar draws **nothing** - never another
       bar's slots standing in for it.
 
+## Switch notification (REQ-HOT-22, #28 AC 4)
+
+- [ ] After a switch the new bar's **name** appears briefly above the bar -
+      built-ins read "Hotbar 1".."Hotbar 10", a registered bar reads its
+      registered display name, and an unknown id shows the raw id (diagnosed,
+      never an invented name).
+- [ ] The name clears itself after ~2.5 s; switching again replaces it.
+- [ ] `display.switchToast = false` suppresses it live (no restart) while
+      switching keeps working.
+- [ ] The text stays clear of the bar at `display.scale` `0.5` and `2.0`, in
+      both orientations, at every `display.anchor`.
+- [ ] (interim, expected) the toast lives in the bar's render pass, so while
+      a non-assignable bar is active - and the bar draws nothing - no toast
+      draws either; revisit with the content-provider rendering slice.
+
 ## Availability overlay (REQ-HOT-08, #19 contract)
 
 - [ ] A **known** cooldown darkens the slot proportionally (0 = covered,

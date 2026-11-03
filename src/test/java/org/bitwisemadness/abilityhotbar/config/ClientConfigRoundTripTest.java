@@ -48,6 +48,8 @@ class ClientConfigRoundTripTest {
             hotbarCount = 3
             #Mouse-wheel bar cycling skips bars with no assigned abilities (direct selection always lands where pressed)
             skipEmptyBars = true
+            #Show the bar's name briefly after switching hotbars
+            switchToast = true
             #Bar opacity (0.0 to 1.0)
             # Default: 1.0
             # Range: 0.0 ~ 1.0
