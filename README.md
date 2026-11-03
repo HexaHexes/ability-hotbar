@@ -75,24 +75,34 @@ NBT keys:
 
 | Key | Type | Meaning |
 |---|---|---|
-| `schema_version` | int | Format version (currently `2`). A *newer* version than the mod supports loads as a valid empty bar instead of crashing. |
-| `active_bar` | int | Which bar is active (server-owned; clamped back into range on load). |
+| `schema_version` | int | Format version (currently `3`). A *newer* version than the mod supports loads as a valid empty bar instead of crashing. |
+| `active_bar` | string | The **id** of the active bar (e.g. `ability_hotbar:bar_0` or a registered id), server-owned. An id that names nothing known re-anchors to the first stored bar on load (logged). |
 | `bar_count` | int | Number of bars. Written explicitly, so a lowered `hotbar.maxBars` ceiling never truncates stored bars. |
-| `bar_N` | compound | Bar `N`'s own keys: `slot_count`, `selected_slot` and `slot_M` (below). |
+| `bar_N` | compound | Bar `N`'s own keys: `bar_id`, `slot_count`, `selected_slot` and `slot_M` (below). |
 
 Inside each `bar_N`:
 
 | Key | Type | Meaning |
 |---|---|---|
+| `bar_id` | string | This bar's stable identity: `ability_hotbar:bar_N` for built-ins, the registration id for mod-added bars. |
 | `slot_count` | int | Number of slots in this bar. Written explicitly, so lowering the config later never truncates stored slots. |
 | `selected_slot` | int | This bar's selected-slot index (clamped into range on load). |
 | `slot_M` | string | The ability id in slot `M` of this bar. Absent = empty slot. |
 
 Upgrade and preservation rules:
 
-- A save written before the multi-bar format (flat keys at the top level)
-  upgrades forward with its values retained **as bar 0** and `active_bar = 0`;
-  the slot count is inferred from the highest `slot_M` key present.
+- A save written before the current format (flat keys at the top level, or the
+  nested format with an integer `active_bar`) upgrades forward with its values
+  retained **as built-in bar 0** and the active bar set to its id; the slot
+  count is inferred from the highest `slot_M` key present.
+- **Identity is inert**: a stored `bar_id` whose registration is gone is kept,
+  never remapped onto a later registrant, and re-adopted if the same mod
+  registers again. A `bar_id` that is missing or corrupt keeps its data under
+  an `unidentified` id - preserved, never wrongly claimed (ADR-012).
+- On every load the save is reconciled with the live registry: a newly
+  registered assignable bar is appended with fresh state, and an active id that
+  is neither stored nor registered re-anchors to the first stored bar (both
+  logged).
 - Bars are never dropped to satisfy a lowered ceiling: a state saved with more
   bars than the current `hotbar.maxBars` keeps them all (ADR-011).
 - A stored id whose provider is missing is **preserved raw**, so the slot renders
@@ -104,9 +114,10 @@ Migration ladders (which saved versions upgrade on load):
 
 | From | To | Ladder |
 |---|---|---|
-| Pre-versioned (no `schema_version` - read as `0`) | `2` | Yes - values retained as bar 0, upgrade logged |
-| `1` (flat single-bar format) | `2` | Yes - values retained as bar 0, upgrade logged |
-| `2` (current) | - | Current version, no ladder needed |
+| Pre-versioned (no `schema_version` - read as `0`) | `3` | Yes - values retained as built-in bar 0, upgrade logged |
+| `1` (flat single-bar format) | `3` | Yes - values retained as built-in bar 0, upgrade logged |
+| `2` (nested bars, integer `active_bar`, no `bar_id`) | `3` | Yes - built-in ids assigned by position, active integer converted to its id, upgrade logged |
+| `3` (current) | - | Current version, no ladder needed |
 
 Each future schema version adds its row here; upgrades are logged with their
 from/to versions so a pack update is visible in `latest.log`.

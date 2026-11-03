@@ -8,19 +8,25 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.attachment.IAttachmentHolder;
 import net.neoforged.neoforge.attachment.IAttachmentSerializer;
+import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.slf4j.Logger;
 
 /**
  * Serialises {@link BarState} to/from player NBT with a forward-only
- * schema-version upgrade ladder (ADR-004, ADR-011).
+ * schema-version upgrade ladder (ADR-004, ADR-011/012).
  *
- * <p>Schema v2 layout: {@code schema_version}, {@code active_bar} and
- * {@code bar_count} at the root, with each bar in its own {@code bar_N}
- * compound holding that bar's {@code slot_count}, {@code selected_slot} and
- * {@code slot_M} keys.</p>
+ * <p>Schema v3 layout: {@code schema_version}, {@code active_bar} (the active
+ * bar's <b>id</b>, not an index) and {@code bar_count} at the root, with each
+ * bar in its own {@code bar_N} compound carrying that bar's {@code bar_id},
+ * {@code slot_count}, {@code selected_slot} and {@code slot_M} keys.</p>
  *
  * <p>Data-preservation rules:</p>
  * <ul>
+ *   <li>Identity is inert: a stored {@code bar_id} whose registration is gone
+ *       is kept, never remapped onto a later registrant. A v3 compound with a
+ *       missing or unparseable {@code bar_id} keeps its data under
+ *       {@link HotbarRegistry#unidentifiedBarId(int)} - preserved but never
+ *       wrongly adopted (ADR-012).</li>
  *   <li>The saved slot count is written explicitly per bar and read back, so a
  *       temporary config change never truncates stored data. When the count is
  *       absent (pre-v1 data) it is inferred from the highest slot key present.
@@ -31,17 +37,24 @@ import org.slf4j.Logger;
  *       slot) and left empty rather than crashing the load; valid-but-unresolvable
  *       ids are preserved raw so the slot renders as diagnosed inert (REQ-HOT-21).</li>
  *   <li>A future schema version loads a valid empty state instead of throwing;
- *       an out-of-range {@code active_bar} falls back to bar 0 with a log line.</li>
+ *       an unparseable {@code active_bar} falls back to the first stored bar
+ *       with a log line.</li>
  *   <li>An older schema version upgrades in memory on load - v0/v1 flat data
- *       becomes bar 0 with {@code active_bar = 0} - and the upgrade is logged
- *       with its from/to versions; the file is rewritten at the current version
- *       on the next natural save (REQ-HOT-15).</li>
+ *       becomes built-in bar 0, v2's positional bars gain built-in ids and its
+ *       integer active bar becomes an id - and the upgrade is logged with its
+ *       from/to versions; the file is rewritten at the current version on the
+ *       next natural save (REQ-HOT-15).</li>
+ *   <li>Every load reconciles the result with the live registry
+ *       ({@link BarState#reconciledWith}): missing registered-assignable bars
+ *       are appended, an active id that is neither stored nor registered
+ *       re-anchors to the first stored bar (ADR-012).</li>
  * </ul>
  *
  * <p>This class deliberately does not read config: it must be usable from the
  * attachment plumbing before/without a loaded config, and the attachment
  * default supplier already applies the server ceilings (slots per bar, bar
- * count).</p>
+ * count). It does read the hotbar registry - registrations are code, fixed
+ * before any world loads, not configuration.</p>
  */
 public final class BarStateSerializer implements IAttachmentSerializer<CompoundTag, BarState> {
 
@@ -51,6 +64,7 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
     private static final String KEY_ACTIVE_BAR = "active_bar";
     private static final String KEY_BAR_COUNT = "bar_count";
     private static final String KEY_BAR_PREFIX = "bar_";
+    private static final String KEY_BAR_ID = "bar_id";
     private static final String KEY_SLOT_COUNT = "slot_count";
     private static final String KEY_SELECTED = "selected_slot";
     private static final String KEY_SLOT_PREFIX = "slot_";
@@ -63,17 +77,21 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
         if (version > BarState.CURRENT_SCHEMA_VERSION) {
             LOGGER.warn("BarState schema version {} is newer than supported {} - loading as empty",
                     version, BarState.CURRENT_SCHEMA_VERSION);
-            return BarState.empty(1);
+            return BarState.empty(1).reconciledWith(HotbarRegistry.all());
         }
 
         BarState state;
         if (version <= 1) {
             // v0 and v1 share the flat single-bar layout (v1 only added the
-            // explicit count keys) -> migrate it to bar 0 of the v2 shape.
-            state = new BarState(new Bar[]{readBar(tag, 0)}, 0,
-                    BarState.CURRENT_SCHEMA_VERSION);
+            // explicit count keys). Registration did not exist then, so the
+            // single bar is built-in bar 0.
+            state = readFlat(tag);
+        } else if (version == 2) {
+            // v2 had nested bars but an integer active bar and no bar_id keys;
+            // every v2 bar was a built-in, so positional ids are correct.
+            state = readVersion2(tag);
         } else {
-            state = readVersionedBars(tag);
+            state = readVersion3(tag);
         }
 
         if (version < BarState.CURRENT_SCHEMA_VERSION) {
@@ -81,38 +99,102 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
                     version, BarState.CURRENT_SCHEMA_VERSION);
         }
 
-        return state;
+        return state.reconciledWith(HotbarRegistry.all());
     }
 
-    /** Reads the schema-v2 layout: root bar keys plus one compound per bar. */
-    private static BarState readVersionedBars(CompoundTag tag) {
+    /** Reads the pre-v2 flat layout as built-in bar 0. */
+    private static BarState readFlat(CompoundTag tag) {
+        Bar bar = readBar(tag, HotbarRegistry.builtinBarId(0));
+        return new BarState(new Bar[]{bar}, bar.id(), BarState.CURRENT_SCHEMA_VERSION);
+    }
+
+    /** Reads the schema-v2 layout: nested bars, integer active bar, no bar_id. */
+    private static BarState readVersion2(CompoundTag tag) {
         int barCount = resolveBarCount(tag);
         Bar[] bars = new Bar[barCount];
         for (int i = 0; i < barCount; i++) {
+            // v2 bars were all built-ins, so position i is ability_hotbar:bar_i.
             // A missing bar_N reads as an empty compound -> an empty single-slot
             // bar: corrupt/partial data fails closed, never crashes (ADR-004).
-            bars[i] = readBar(tag.getCompound(KEY_BAR_PREFIX + i), i);
+            bars[i] = readBar(tag.getCompound(KEY_BAR_PREFIX + i),
+                    HotbarRegistry.builtinBarId(i));
         }
 
-        int activeBar = tag.contains(KEY_ACTIVE_BAR) ? tag.getInt(KEY_ACTIVE_BAR) : 0;
-        if (activeBar < 0 || activeBar >= barCount) {
+        int activeIndex = tag.contains(KEY_ACTIVE_BAR) ? tag.getInt(KEY_ACTIVE_BAR) : 0;
+        if (activeIndex < 0 || activeIndex >= barCount) {
             LOGGER.warn("BarState active bar {} out of range for {} bars - using bar 0",
-                    activeBar, barCount);
-            activeBar = 0;
+                    activeIndex, barCount);
+            activeIndex = 0;
         }
 
-        return new BarState(bars, activeBar, BarState.CURRENT_SCHEMA_VERSION);
+        return new BarState(bars, bars[activeIndex].id(), BarState.CURRENT_SCHEMA_VERSION);
+    }
+
+    /** Reads the schema-v3 layout: per-bar {@code bar_id} and an id active bar. */
+    private static BarState readVersion3(CompoundTag tag) {
+        int barCount = resolveBarCount(tag);
+        Bar[] bars = new Bar[barCount];
+        for (int i = 0; i < barCount; i++) {
+            CompoundTag barTag = tag.getCompound(KEY_BAR_PREFIX + i);
+            bars[i] = readBar(barTag, readBarId(barTag, i));
+        }
+        return new BarState(bars, readActiveId(tag, bars), BarState.CURRENT_SCHEMA_VERSION);
     }
 
     /**
-     * Reads one bar's keys from the given compound. The pre-v2 flat root is
-     * itself such a compound, so v0/v1 data flows through the same reader as a
-     * v2 {@code bar_N}.
+     * Resolves one bar's identity from its {@code bar_id}: parsed when valid,
+     * otherwise {@link HotbarRegistry#unidentifiedBarId(int)} so the data is
+     * preserved under an identity that can collide with neither a built-in nor
+     * a registration (ADR-012 inert-by-identity).
      *
      * @param barTag   the compound holding this bar's keys
-     * @param barIndex the bar number, for diagnostic messages
+     * @param barIndex the bar's storage position, for the unidentified fallback
      */
-    private static Bar readBar(CompoundTag barTag, int barIndex) {
+    private static ResourceLocation readBarId(CompoundTag barTag, int barIndex) {
+        String raw = barTag.getString(KEY_BAR_ID);
+        if (raw.isBlank()) {
+            LOGGER.warn("BarState bar {} has no bar_id - keeping its data as unidentified",
+                    barIndex);
+            return HotbarRegistry.unidentifiedBarId(barIndex);
+        }
+        try {
+            return ResourceLocation.parse(raw);
+        } catch (Exception e) {
+            LOGGER.warn("BarState bar {} has an unparseable bar_id '{}' - keeping its data as unidentified",
+                    barIndex, raw);
+            return HotbarRegistry.unidentifiedBarId(barIndex);
+        }
+    }
+
+    /**
+     * Resolves the active bar id from a v3 tag. An id that parses but names
+     * nothing this state knows is left alone here - {@link BarState#reconciledWith}
+     * re-anchors it (with its own log line) once the registry is consulted.
+     */
+    private static ResourceLocation readActiveId(CompoundTag tag, Bar[] bars) {
+        String raw = tag.getString(KEY_ACTIVE_BAR);
+        if (raw.isBlank()) {
+            LOGGER.warn("BarState active bar id is missing - using the first stored bar");
+            return bars[0].id();
+        }
+        try {
+            return ResourceLocation.parse(raw);
+        } catch (Exception e) {
+            LOGGER.warn("BarState active bar id '{}' is not valid - using the first stored bar",
+                    raw);
+            return bars[0].id();
+        }
+    }
+
+    /**
+     * Reads one bar's slot keys from the given compound. The pre-v2 flat root
+     * is itself such a compound, so v0/v1 data flows through the same reader as
+     * a v2/v3 {@code bar_N}.
+     *
+     * @param barTag the compound holding this bar's keys
+     * @param barId  the bar's resolved identity
+     */
+    private static Bar readBar(CompoundTag barTag, ResourceLocation barId) {
         int slotCount = resolveSlotCount(barTag);
 
         List<SlotAssignment> assignmentList = new ArrayList<>(slotCount);
@@ -126,7 +208,7 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
                 assignmentList.add(new SlotAssignment(ResourceLocation.parse(raw)));
             } catch (Exception e) {
                 LOGGER.warn("BarState bar {} slot {}: unparseable ability id '{}' - leaving slot empty",
-                        barIndex, i, raw);
+                        barId, i, raw);
                 assignmentList.add(SlotAssignment.empty());
             }
         }
@@ -136,7 +218,7 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
             selectedSlot = 0;
         }
 
-        return new Bar(assignmentList.toArray(new SlotAssignment[0]), selectedSlot);
+        return new Bar(barId, assignmentList.toArray(new SlotAssignment[0]), selectedSlot);
     }
 
     /**
@@ -192,15 +274,17 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
     public CompoundTag write(BarState state, HolderLookup.Provider provider) {
         CompoundTag tag = new CompoundTag();
         tag.putInt(KEY_SCHEMA, BarState.CURRENT_SCHEMA_VERSION);
-        tag.putInt(KEY_ACTIVE_BAR, state.activeBar());
+        tag.putString(KEY_ACTIVE_BAR, state.activeBarId().toString());
 
         Bar[] bars = state.bars();
         tag.putInt(KEY_BAR_COUNT, bars.length);
         for (int i = 0; i < bars.length; i++) {
+            Bar bar = bars[i];
             CompoundTag barTag = new CompoundTag();
-            SlotAssignment[] slots = bars[i].assignments();
+            barTag.putString(KEY_BAR_ID, bar.id().toString());
+            SlotAssignment[] slots = bar.assignments();
             barTag.putInt(KEY_SLOT_COUNT, slots.length);
-            barTag.putInt(KEY_SELECTED, bars[i].selectedSlot());
+            barTag.putInt(KEY_SELECTED, bar.selectedSlot());
             for (int s = 0; s < slots.length; s++) {
                 ResourceLocation id = slots[s].abilityId();
                 if (id != null) {
