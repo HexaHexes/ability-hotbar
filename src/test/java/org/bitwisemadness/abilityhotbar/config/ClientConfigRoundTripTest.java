@@ -42,6 +42,12 @@ class ClientConfigRoundTripTest {
             # Default: 9
             # Range: 1 ~ 10
             slotsPerBar = 9
+            #Built-in hotbars in the cycle set (clamped to the server's maxBars)
+            # Default: 3
+            # Range: 1 ~ 10
+            hotbarCount = 3
+            #Mouse-wheel bar cycling skips bars with no assigned abilities (direct selection always lands where pressed)
+            skipEmptyBars = true
             #Bar opacity (0.0 to 1.0)
             # Default: 1.0
             # Range: 0.0 ~ 1.0

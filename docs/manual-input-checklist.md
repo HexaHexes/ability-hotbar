@@ -10,10 +10,10 @@ each item against a world with `ability_core` installed.
 - [ ] Assign at least one ability to a bar slot (so activation has a target).
 - [ ] Open **Options → Controls** and confirm an **Ability Hotbar** group exists.
 
-## Defaults and rebinding (REQ-HOT-10)
+## Defaults and rebinding (REQ-HOT-10, REQ-HOT-22)
 
-- [ ] All five defaults are present in the Ability Hotbar group: Ctrl+1..9,
-      G, K, Right Ctrl.
+- [ ] All fifteen defaults are present in the Ability Hotbar group: Ctrl+1..9,
+      Alt+1..9 and Alt+0, G, K, Right Ctrl.
 - [ ] Each is rebindable via the Controls screen (no collisions with the
       verified landscape; note any conflict found).
 - [ ] Vanilla **G** and **K** are unbound or confirmed non-conflicting, and the
@@ -25,6 +25,22 @@ each item against a world with `ability_core` installed.
 - [ ] Ctrl+wheel does **not** move the vanilla hotbar selection.
 - [ ] Plain wheel (Ctrl released) behaves 100% vanilla - hotbar scrolls as usual.
 - [ ] Holding Ctrl and scrolling produces **no double-scroll** (one step per notch).
+
+## Bar switching (REQ-HOT-22)
+
+- [ ] **Alt + wheel up/down** cycles bars prev/next (one bar per notch), the
+      vanilla hotbar selection does *not* also move, and holding Ctrl+Alt scrolls
+      slots (Ctrl wins).
+- [ ] With **`display.skipEmptyBars` on** (default) the wheel skips bars whose
+      slots are all unassigned and lands on one with content; with it off every
+      bar is visited. With *all* bars empty the wheel still steps normally.
+- [ ] **Alt + 1..9 and Alt + 0** select bars 1..10 directly; a digit beyond
+      `display.hotbarCount` (plus registered bars) does nothing at all.
+- [ ] Switching **never casts** an ability, never moves the selected-slot
+      cursor, and never resets the ability mode (server-side: see the GameTest;
+      confirm in-game here).
+- [ ] After a switch the bar shows the newly active bar's assignments and its
+      own selection (cross-check the render checklist's Active bar section).
 
 ## Activation (REQ-HOT-11/20)
 

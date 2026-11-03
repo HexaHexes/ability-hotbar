@@ -21,6 +21,26 @@ public final class HotbarClientConfig {
             BUILDER.comment("Preferred slots per hotbar bar (clamped to the server's maxSlots)")
                     .defineInRange("display.slotsPerBar", 9, 1, 10);
 
+    /**
+     * How many <b>built-in</b> hotbars the client's cycle set includes. The
+     * effective value is {@code min(this, HotbarServerConfig.maxBars)};
+     * registered bars are appended after this window and are never clipped
+     * by it (ADR-012).
+     */
+    public static final ModConfigSpec.IntValue HOTBAR_COUNT =
+            BUILDER.comment("Built-in hotbars in the cycle set (clamped to the server's maxBars)")
+                    .defineInRange("display.hotbarCount", 3, 1, 10);
+
+    /**
+     * Whether wheel cycling skips bars where every slot is unassigned
+     * (default on). Direct selection (Alt+digit) never skips - it always
+     * lands where pressed.
+     */
+    public static final ModConfigSpec.BooleanValue SKIP_EMPTY_BARS =
+            BUILDER.comment("Mouse-wheel bar cycling skips bars with no assigned abilities "
+                            + "(direct selection always lands where pressed)")
+                    .define("display.skipEmptyBars", true);
+
     /** Show the bar horizontally (true) or vertically (false). */
     public static final ModConfigSpec.BooleanValue HORIZONTAL =
             BUILDER.comment("Bar orientation: true = horizontal, false = vertical")

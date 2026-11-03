@@ -45,11 +45,17 @@ public final class HotbarConfig {
         return Math.min(effectiveSlotsPerBar(), stateLength);
     }
 
-    /** The effective number of cyclable hotbars (client preference clamped by server ceiling). */
+    /**
+     * The effective number of built-in bars in the client's cycle set: the
+     * player's {@code display.hotbarCount} preference clamped by the server's
+     * {@code hotbar.maxBars} ceiling (REQ-CFG-02 precedence). Registered bars
+     * sit after this window and are never clipped by it (ADR-012).
+     *
+     * <p>Physical client only (reads the CLIENT config).</p>
+     */
     public static int effectiveHotbarCount() {
-        // client has no count preference yet; the server ceiling is the only constraint
-        // until REQ-HOT-22 (multi-hotbar stretch) adds a client preference
-        return HotbarServerConfig.MAX_HOTBAR_COUNT.get();
+        return Math.min(HotbarClientConfig.HOTBAR_COUNT.get(),
+                HotbarServerConfig.MAX_HOTBAR_COUNT.get());
     }
 
     /** The server's hard ceiling for slots (non-bypassable). */
