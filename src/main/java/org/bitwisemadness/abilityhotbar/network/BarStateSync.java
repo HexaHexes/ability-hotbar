@@ -33,4 +33,10 @@ public final class BarStateSync {
         player.setData(BarStateAttachments.BAR_STATE, next);
         PacketDistributor.sendToPlayer(player, new BarStateSnapshotPayload(next));
     }
+
+    /** Persists an accepted bar switch and echoes the authoritative state back. */
+    public static void acceptSwitch(ServerPlayer player, BarState next) {
+        player.setData(BarStateAttachments.BAR_STATE, next);
+        PacketDistributor.sendToPlayer(player, new BarStateSnapshotPayload(next));
+    }
 }

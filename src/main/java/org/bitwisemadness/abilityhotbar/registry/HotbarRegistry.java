@@ -139,6 +139,28 @@ public final class HotbarRegistry {
     }
 
     /**
+     * The positional index of a built-in id - the inverse of
+     * {@link #builtinBarId(int)}. The server uses it to range-check a switch
+     * target against its bar ceiling (ADR-012); a {@code bar_N} whose digits
+     * do not parse into an int is not a usable index and answers {@code -1}
+     * (fail-closed), as does any non-built-in id.
+     *
+     * @param id the id to parse
+     * @return the index {@code N}, or {@code -1} when the id is not a built-in bar id
+     */
+    public static int builtinIndex(ResourceLocation id) {
+        if (!isBuiltin(id)) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(id.getPath().substring(BUILTIN_PREFIX.length()));
+        } catch (NumberFormatException e) {
+            // All digits but out of int range: not a usable index (fail-closed).
+            return -1;
+        }
+    }
+
+    /**
      * The id given to a stored bar whose {@code bar_id} is missing or corrupt
      * (schema v3): preserved under an identity that can never collide with a
      * built-in ({@code bar_N}) or a registration (the namespace is reserved),
