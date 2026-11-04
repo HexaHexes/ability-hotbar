@@ -178,12 +178,19 @@ public final class HotbarInputHandler {
                 });
     }
 
-    /** Resolves the slot and sends the intent through core; empty slots send nothing. */
+    /**
+     * Resolves the slot and sends the intent through core; empty slots send
+     * nothing. The crosshair hint rides along only for {@code targeted}
+     * abilities (hotbar#94) - {@link TargetHints} reads the client's crosshair
+     * and fails closed to no-hint for anything else.
+     */
     private static void activate(BarState state, int slot, ActivationSource source) {
         if (!CoreActivationCompat.isPresent()) {
             return;
         }
         ActivationResolver.resolve(state, slot, source)
-                .ifPresent(a -> CoreActivationCompat.activate(a.abilityId(), a.source(), a.slot()));
+                .ifPresent(a -> CoreActivationCompat.activate(
+                        a.abilityId(), a.source(), a.slot(),
+                        TargetHints.forActivation(a.abilityId())));
     }
 }
