@@ -11,6 +11,7 @@ import net.minecraft.client.gui.LayeredDraw;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -23,10 +24,14 @@ import org.bitwisemadness.abilityhotbar.config.BarAnchor;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
 import org.bitwisemadness.abilityhotbar.config.StatusAnchorMode;
+import org.bitwisemadness.abilityhotbar.content.ContentPlan;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.state.BarState;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * The nine-slot ability bar's render layer (REQ-HOT-01/02/07).
+ * The nine-slot ability bar's render layer (REQ-HOT-01/02/07, hotbar#83).
  *
  * <p>A vanilla-language {@link LayeredDraw.Layer} that reads the synced bar
  * state ({@link ClientBarState}), resolves each slot's pure {@link SlotRender}
@@ -36,6 +41,14 @@ import org.bitwisemadness.abilityhotbar.state.BarState;
  * reuses {@code hud/hotbar_selection}, so it reads in the vanilla texture
  * language. Every display branch lives in {@link SlotRender} (unit-tested);
  * this layer only performs the GPU draws.</p>
+ *
+ * <p>When the <b>active</b> bar is content-owned (non-assignable with a
+ * registered {@link HotbarContentProvider}) the layer draws that provider's
+ * cells instead - vanilla item rendering per cell, the provider's own empty
+ * chrome, the bar's selection frame on {@code activeSlot()} - and no
+ * nine-slot background behind them. A failing provider draws nothing for
+ * that frame ({@link ContentPlan} logs once); both paths report the origin
+ * they drew at so the switch toast follows the same fail-closed decision.</p>
  *
  * <p>Client-only, registered on the GUI-layer bus. When no snapshot has synced
  * yet it draws nothing. The actual on-screen appearance is validated by the
@@ -80,13 +93,43 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         if (state == null) {
             return; // no snapshot yet: render nothing, never a guess
         }
+        int screenW = gui.guiWidth();
+        int screenH = gui.guiHeight();
 
+        // A content-owned bar (provider-backed) draws its own cells; anything
+        // else draws the stored bar. Both paths return the origin they drew
+        // at, or null when they drew nothing, so the toast follows that.
+        ResourceLocation activeId = state.activeBarId();
+        HotbarContentProvider provider = HotbarContentProviders.get(activeId).orElse(null);
+        int[] origin = provider != null
+                ? renderProviderBar(gui, mc, activeId, provider, screenW, screenH)
+                : renderStoredBar(gui, mc, state, screenW, screenH);
+        if (origin == null) {
+            return;
+        }
+
+        // The switch toast is text, not a sprite: it rides after the bar's
+        // blend-managed draw, one line above the origin, and only while its
+        // self-expiring window is open (display.switchToast gates recording).
+        if (SwitchToast.isVisible(System.currentTimeMillis())) {
+            gui.drawString(mc.font, SwitchToast.message(), origin[0], origin[1] - 12, 0xFFFFFF);
+        }
+    }
+
+    /**
+     * Draws the stored bar's slots from the synced state.
+     *
+     * @return the origin the bar was drawn at, or null when nothing drew
+     */
+    @Nullable
+    private static int[] renderStoredBar(GuiGraphics gui, Minecraft mc, BarState state,
+            int screenW, int screenH) {
         // The attachment is sized to the server ceiling, but the client renders only
         // the first effectiveRenderCount() entries (server maxSlots clamps the client
         // preference, REQ-CFG-02). Saved state may exceed the ceiling, so clamp here.
         int renderCount = HotbarConfig.effectiveRenderCount(state.assignments().length);
         if (renderCount < 1) {
-            return;
+            return null;
         }
 
         BarAnchor anchor = HotbarClientConfig.ANCHOR.get();
@@ -106,8 +149,6 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
                 id -> AvailabilityProviders.availabilityFor(mc.player, id),
                 AbilityDiscovery::get);
 
-        int screenW = gui.guiWidth();
-        int screenH = gui.guiHeight();
         // Vanilla wraps its hotbar draw in enableBlend/disableBlend. Blend matters:
         // a pack-replaced hud/hotbar_selection centre is semi-transparent white and
         // renders opaque without it; never leak blend into the next frame's draw.
@@ -123,13 +164,117 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             // Never leak blend state into the next frame's vanilla hotbar draw.
             RenderSystem.disableBlend();
         }
+        return new int[] {layout.originX(screenW), layout.originY(screenH)};
+    }
 
-        // The switch toast is text, not a sprite: it rides after the bar's
-        // blend-managed draw, one line above the origin, and only while its
-        // self-expiring window is open (display.switchToast gates recording).
-        if (SwitchToast.isVisible(System.currentTimeMillis())) {
-            gui.drawString(mc.font, SwitchToast.message(),
-                    layout.originX(screenW), layout.originY(screenH) - 12, 0xFFFFFF);
+    /**
+     * Draws a content-provider bar: one row of the provider's cells at the
+     * built-in cell size on the shared anchor, items through vanilla item
+     * rendering, the provider's empty chrome (or the hotbar's own, clipped
+     * to these cells so no ghost frames show), and the selection frame on
+     * {@code activeSlot()}. No nine-slot background sits behind it.
+     *
+     * @return the origin the bar was drawn at, or null when the plan failed
+     */
+    @Nullable
+    private static int[] renderProviderBar(GuiGraphics gui, Minecraft mc, ResourceLocation barId,
+            HotbarContentProvider provider, int screenW, int screenH) {
+        ContentPlan plan = ContentPlan.build(barId, provider);
+        if (plan.isEmpty()) {
+            return null; // broken provider: nothing this frame (already logged once)
+        }
+        BarAnchor anchor = HotbarClientConfig.ANCHOR.get();
+        BarLayout layout = new BarLayout(
+                plan.slotCount(),
+                20,
+                0,
+                HotbarClientConfig.HORIZONTAL.get(),
+                anchor,
+                statusDepth(anchor, mc.player),
+                HotbarClientConfig.OFFSET_X.get(),
+                HotbarClientConfig.OFFSET_Y.get(),
+                HotbarClientConfig.SCALE.get());
+
+        RenderSystem.enableBlend();
+        try {
+            if (plan.emptyTexture() == null) {
+                drawCellChromeClipped(gui, layout, screenW, screenH);
+            }
+            List<ItemStack> cells = plan.stacks();
+            for (int i = 0; i < plan.slotCount(); i++) {
+                int[] rect = layout.slotRect(i, screenW, screenH);
+                ItemStack stack = cells.get(i);
+                if (stack.isEmpty()) {
+                    ResourceLocation texture = plan.emptyTexture();
+                    if (texture != null) {
+                        gui.blitSprite(texture, rect[0], rect[1], rect[2], rect[3]);
+                    }
+                } else {
+                    drawCellItem(gui, mc, stack, rect, layout.scale());
+                }
+            }
+            int active = plan.activeSlot();
+            if (active >= 0) {
+                drawSelectionFrame(gui, layout, layout.slotRect(active, screenW, screenH));
+            }
+        } finally {
+            RenderSystem.disableBlend();
+        }
+        return new int[] {layout.originX(screenW), layout.originY(screenH)};
+    }
+
+    /**
+     * The hotbar's own empty-cell chrome for a provider that supplies no
+     * texture: the background sprite drawn exactly as the stored bar would,
+     * but scissored to this bar's cells - never the nine ghost frames.
+     */
+    private static void drawCellChromeClipped(GuiGraphics gui, BarLayout layout,
+            int screenW, int screenH) {
+        int[] first = layout.slotRect(0, screenW, screenH);
+        int[] last = layout.slotRect(layout.slotCount() - 1, screenW, screenH);
+        int x0 = Math.min(first[0], last[0]);
+        int y0 = Math.min(first[1], last[1]);
+        int x1 = Math.max(first[0] + first[2], last[0] + last[2]);
+        int y1 = Math.max(first[1] + first[3], last[1] + last[3]);
+        gui.enableScissor(x0, y0, x1, y1);
+        try {
+            drawBarBackground(gui, layout, screenW, screenH);
+        } finally {
+            gui.disableScissor();
+        }
+    }
+
+    /**
+     * One content cell: the stack through vanilla item rendering (tint, foil
+     * and other mods' item-render passes fire) plus its count/durability
+     * decorations, 16px centred in the 20px cell and scaled with the bar.
+     */
+    private static void drawCellItem(GuiGraphics gui, Minecraft mc, ItemStack stack,
+            int[] rect, double scale) {
+        PoseStack pose = gui.pose();
+        pose.pushPose();
+        try {
+            pose.translate(rect[0], rect[1], 0.0);
+            pose.scale((float) scale, (float) scale, 1.0f);
+            gui.renderItem(stack, 2, 2);
+            gui.renderItemDecorations(mc.font, stack, 2, 2);
+        } finally {
+            pose.popPose();
+        }
+    }
+
+    /** The vanilla selection frame around one cell, honouring orientation. */
+    private static void drawSelectionFrame(GuiGraphics gui, BarLayout layout, int[] rect) {
+        int x = rect[0];
+        int y = rect[1];
+        double scale = layout.scale();
+        int offset = (int) Math.round(2 * scale);
+        int selW = (int) Math.round(VANILLA_SELECTION_WIDTH * scale);
+        int selH = (int) Math.round(VANILLA_SELECTION_HEIGHT * scale);
+        if (layout.horizontal()) {
+            gui.blitSprite(VANILLA_SELECTION, x - offset, y - offset, selW, selH);
+        } else {
+            blitTurned90(gui, VANILLA_SELECTION, x - offset, y - offset, selW, selH);
         }
     }
 
@@ -216,7 +361,6 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         int y = rect[1];
         int w = rect[2];
         int h = rect[3];
-        double scale = layout.scale();
 
         // Inert slots keep a diagnostic red tint over the vanilla frame.
         if (slot.inert()) {
@@ -227,14 +371,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         // blits HOTBAR_SELECTION, then the item loop), so a pack-replaced frame
         // cannot cover the slot content. Match that order here.
         if (slot.selected()) {
-            int offset = (int) Math.round(2 * scale);
-            int selW = (int) Math.round(VANILLA_SELECTION_WIDTH * scale);
-            int selH = (int) Math.round(VANILLA_SELECTION_HEIGHT * scale);
-            if (layout.horizontal()) {
-                gui.blitSprite(VANILLA_SELECTION, x - offset, y - offset, selW, selH);
-            } else {
-                blitTurned90(gui, VANILLA_SELECTION, x - offset, y - offset, selW, selH);
-            }
+            drawSelectionFrame(gui, layout, rect);
         }
 
         // Icon on top of the selection frame (as vanilla layers items over it).

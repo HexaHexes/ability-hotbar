@@ -7,18 +7,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.function.Predicate;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Cycle-set and skip-empty targeting (REQ-HOT-22, ADR-012): the window then
- * registrations in order (never clipped), prev/next with wrap, direct digits
- * fail-closed past the set, and wheel skipping honours emptiness while
- * Alt+digit never skips.
+ * Cycle-set and skip-empty targeting (REQ-HOT-22, ADR-012, hotbar#83): the
+ * window then registrations in order (never clipped), prev/next with wrap,
+ * direct digits fail-closed past the set, and wheel skipping honours
+ * emptiness - stored bars by their slots, provider bars by {@code hasContent()},
+ * provider-less ones fail-closed to empty - while Alt+digit never skips.
  *
- * <p>Everything takes the window and registrations as parameters, so these
- * fixtures touch no static registry and no config.</p>
+ * <p>The cycle math takes the window and registrations as parameters, so it
+ * touches no config; the provider fixtures register against the static
+ * registries and reset them around every test.</p>
  */
 class BarCyclingTest {
 
@@ -31,8 +38,39 @@ class BarCyclingTest {
     private static final ResourceLocation GHOST =
             ResourceLocation.fromNamespaceAndPath("tensura", "ghost_missing");
 
+    /**
+     * The provider fixtures register against the static registries (a
+     * provider's bar must exist in {@link HotbarRegistry} first), so every
+     * test starts from - and leaves behind - both empty.
+     */
+    @BeforeEach
+    @AfterEach
+    void isolateRegistries() {
+        HotbarRegistry.reset();
+        HotbarContentProviders.reset();
+    }
+
     private static HotbarRegistration registration(ResourceLocation id, boolean assignable) {
         return new HotbarRegistration(id, id.toString(), assignable);
+    }
+
+    private static HotbarContentProvider providerWithContent(boolean content) {
+        return new HotbarContentProvider() {
+            @Override
+            public int slotCount() {
+                return 2;
+            }
+
+            @Override
+            public ItemStack slotStack(int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public boolean hasContent() {
+                return content;
+            }
+        };
     }
 
     @Test
@@ -149,15 +187,46 @@ class BarCyclingTest {
     }
 
     @Test
-    void unstoredBarsAreNeverSkipped() {
-        // A non-assignable bar carries no attachment state; until the
-        // content-provider API defines its emptiness it counts as content,
-        // so the wheel can still reach it.
+    void unstoredBarsWithoutAProviderCountAsEmpty() {
+        // hotbar#83 §4: a registered non-assignable bar with no provider fails
+        // closed to empty - the wheel skips it rather than landing on content
+        // nothing here can vouch for.
+        BarState state = BarState.empty(2, 3).withAssignment(0, FIREBALL);
+        List<HotbarRegistration> registrations = List.of(registration(CURIOS, false));
+        Predicate<ResourceLocation> isEmpty = BarCycling.emptyBars(state);
+
+        // from bar_0: bar_1 and bar_2 are stored-empty, curios has no provider
+        // (empty) - the only content is bar_0 itself, so the walk stays put.
+        assertEquals(HotbarRegistry.builtinBarId(0),
+                BarCycling.stepSkippingEmpty(HotbarRegistry.builtinBarId(0), 1, 3, registrations,
+                        isEmpty).orElseThrow());
+    }
+
+    @Test
+    void providerBarWithContentIsNotSkipped() {
+        // ADR-012 §5: a provider bar's emptiness is its hasContent() answer.
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        HotbarContentProviders.register(CURIOS, providerWithContent(true));
         BarState state = BarState.empty(2, 3).withAssignment(0, FIREBALL);
         List<HotbarRegistration> registrations = List.of(registration(CURIOS, false));
         Predicate<ResourceLocation> isEmpty = BarCycling.emptyBars(state);
 
         assertEquals(CURIOS,
+                BarCycling.stepSkippingEmpty(HotbarRegistry.builtinBarId(0), 1, 3, registrations,
+                        isEmpty).orElseThrow(), "content on curios makes it a landing");
+    }
+
+    @Test
+    void providerBarWithoutContentIsSkipped() {
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        HotbarContentProviders.register(CURIOS, providerWithContent(false));
+        BarState state = BarState.empty(2, 3).withAssignment(0, FIREBALL);
+        List<HotbarRegistration> registrations = List.of(registration(CURIOS, false));
+        Predicate<ResourceLocation> isEmpty = BarCycling.emptyBars(state);
+
+        // every candidate is empty (curios reports no content either), so the
+        // walk wraps back to the only content - bar_0 - and stays there.
+        assertEquals(HotbarRegistry.builtinBarId(0),
                 BarCycling.stepSkippingEmpty(HotbarRegistry.builtinBarId(0), 1, 3, registrations,
                         isEmpty).orElseThrow());
     }
@@ -174,15 +243,17 @@ class BarCyclingTest {
     }
 
     @Test
-    void emptyBarsPredicateReadsStoredContentOnly() {
+    void emptyBarsPredicateReadsStoredContentAndProviders() {
         BarState state = BarState.empty(2, 3).withAssignment(0, FIREBALL);
         Predicate<ResourceLocation> isEmpty = BarCycling.emptyBars(state);
 
         assertTrue(isEmpty.test(HotbarRegistry.builtinBarId(1)), "stored and untouched is empty");
         assertFalse(isEmpty.test(HotbarRegistry.builtinBarId(0)), "an assignment is content");
-        assertFalse(isEmpty.test(CURIOS), "unstored bars are never reported empty");
-        assertFalse(BarCycling.emptyBars(null).test(HotbarRegistry.builtinBarId(0)),
-                "no state means nothing is provably empty");
-        assertFalse(BarCycling.emptyBars(state).test(null));
+        // nothing stored and no provider vouches for it: fail-closed to empty
+        assertTrue(isEmpty.test(CURIOS), "an unproven bar counts as empty (hotbar#83 §4)");
+        // null state: only the stored lookup is skipped, the provider rule stands
+        assertTrue(BarCycling.emptyBars(null).test(HotbarRegistry.builtinBarId(0)),
+                "no state and no provider proves nothing -> empty");
+        assertFalse(BarCycling.emptyBars(state).test(null), "a null id is never a bar");
     }
 }

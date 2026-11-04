@@ -90,7 +90,13 @@ assignments and its own selected slot (REQ-HOT-22):
 - **Registered hotbars** - other mods declare their own bars through the
   registration API (ADR-012 in `ability-core`). Assignable registrations get
   their own state; non-assignable bars (their content belongs to the
-  registering mod) are still switchable.
+  registering mod) are still switchable, and declare what they show through
+  the **content-provider API**: a provider supplies its cells each frame
+  (rendered as vanilla items, so tint and foil come from the item itself),
+  its empty-cell texture, the framed cell, and the emptiness answer the
+  wheel skips by. A bar without a provider counts as empty for skipping,
+  and a provider that throws makes the bar draw nothing for that frame
+  (logged once) rather than crashing.
 - **Notification** - after a switch the new bar's name appears briefly above
   the bar, governed by `display.switchToast`.
 
