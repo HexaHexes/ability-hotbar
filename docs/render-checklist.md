@@ -80,9 +80,35 @@ run before merge. Tick each item in a dev client with `ability_core` +
       switching keeps working.
 - [ ] The text stays clear of the bar at `display.scale` `0.5` and `2.0`, in
       both orientations, at every `display.anchor`.
-- [ ] (interim, expected) the toast lives in the bar's render pass, so while
-      a non-assignable bar is active - and the bar draws nothing - no toast
-      draws either; revisit with the content-provider rendering slice.
+- [ ] The toast follows the bar's fail-closed decision: it draws above a
+      provider bar, and not while the bar itself draws nothing (a
+      provider-less or failing non-assignable bar).
+
+## Provider bars (hotbar#83, ADR-012 §3)
+
+Manual visual pass for content-owned bars (needs a registering mod - the
+pseudocore-curios strip bar is the first consumer). Headless fixtures cover
+the contracts; these are the on-screen half.
+
+- [ ] A provider bar draws **exactly its own cells** (six for curios) at the
+      built-in cell size on the shared anchor - **no nine-slot background**
+      and no ghost frames beyond the last cell.
+- [ ] Filled cells render as **vanilla items**: tier tint, enchant foil and
+      the mob shimmer all come through (the probe: pseudocore's tinted,
+      enchanted cores).
+- [ ] Empty cells use the provider's `emptyCellTexture()` when supplied
+      (curios' empty-slot icon) and the hotbar's own cell chrome otherwise -
+      still clipped to the bar's cells.
+- [ ] `activeSlot()` is framed with the bar's selection frame; a provider
+      returning `-1` (or an out-of-range index) draws no frame, and the
+      violation is logged **once**.
+- [ ] A provider that throws logs one line naming the bar and the bar draws
+      **nothing** for that frame - no crash, no log spam at frame rate.
+- [ ] Wheel skipping: a provider bar with content is landed on, one without
+      is skipped, and a registered bar with no provider is skipped too
+      (fail-closed); Alt+N still lands where pressed regardless.
+- [ ] The switch toast still appears above a provider bar when it is the
+      active one.
 
 ## Availability overlay (REQ-HOT-08, #19 contract)
 

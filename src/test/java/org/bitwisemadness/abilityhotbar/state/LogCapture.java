@@ -23,7 +23,7 @@ import org.apache.logging.log4j.core.config.Property;
  * own). {@link #close()} detaches the appender and restores the previous
  * logger state - always use try-with-resources.</p>
  */
-final class LogCapture implements AutoCloseable {
+public final class LogCapture implements AutoCloseable {
 
     private static final AtomicInteger SEQUENCE = new AtomicInteger();
 
@@ -45,7 +45,7 @@ final class LogCapture implements AutoCloseable {
     }
 
     /** Opens a capture on the logger of the given class (its {@code LogUtils} name). */
-    static LogCapture forLogger(Class<?> loggerOwner) {
+    public static LogCapture forLogger(Class<?> loggerOwner) {
         return forLogger(loggerOwner.getName());
     }
 
@@ -70,7 +70,7 @@ final class LogCapture implements AutoCloseable {
     }
 
     /** Every message logged through the captured logger while open, formatted. */
-    List<String> messages() {
+    public List<String> messages() {
         return List.copyOf(appender.messages);
     }
 

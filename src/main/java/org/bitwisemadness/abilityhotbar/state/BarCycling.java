@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilityhotbar.content.ContentPlan;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 
@@ -23,7 +25,8 @@ import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
  *   <li>{@link #step} - Alt+wheel prev/next with wrap;</li>
  *   <li>{@link #stepSkippingEmpty} - the same, skipping bars whose slots are
  *       all unassigned when {@code display.skipEmptyBars} is on (inert ids
- *       count as assigned);</li>
+ *       count as assigned; a content-provider bar answers through
+ *       {@code hasContent()}, a provider-less one fails closed to empty);</li>
  *   <li>{@link #direct} - Alt+digit, which always lands where pressed.</li>
  * </ul>
  *
@@ -137,43 +140,49 @@ public final class BarCycling {
     }
 
     /**
-     * The emptiness predicate wheel skipping reads from a synced state: a
-     * stored bar is empty when every one of its slots is unassigned. An
+     * The emptiness predicate wheel skipping reads from a synced state:
+     * a stored bar is empty when every one of its slots is unassigned. An
      * <b>inert</b> id (present but unresolvable) counts as assigned, so a
      * diagnosed slot is content, not emptiness.
      *
      * <p>A bar the state does not store - a non-assignable bar, whose content
-     * lives with the registering mod - reports <b>not empty</b>: its true
-     * emptiness comes from the content-provider API (deferred to the rendering
-     * slice), and until it exists, skipping would hide a bar the player can
-     * otherwise reach.</p>
+     * lives with the registering mod - asks its <b>content provider</b>
+     * (ADR-012 §5, hotbar#83): {@code hasContent()} decides, a throwing
+     * provider counts as empty, and a registered bar with <b>no</b> provider
+     * fails closed to empty. The predicate therefore only ever runs where a
+     * provider may be invoked - the client's input handler - never on a
+     * dedicated server.</p>
      *
-     * @param state the synced bar state; a null state reports nothing empty
+     * @param state the synced bar state; a null state skips the stored lookup
      * @return the predicate for {@link #stepSkippingEmpty}
      */
     public static Predicate<ResourceLocation> emptyBars(BarState state) {
         return id -> {
-            if (state == null || id == null) {
+            if (id == null) {
                 return false;
             }
-            Bar match = null;
-            for (Bar bar : state.bars()) {
-                if (bar.id().equals(id)) {
-                    match = bar;
-                    break;
+            if (state != null) {
+                for (Bar bar : state.bars()) {
+                    if (bar.id().equals(id)) {
+                        return allSlotsUnassigned(bar);
+                    }
                 }
             }
-            if (match == null) {
-                // Unstored (non-assignable): interim rule until the
-                // content-provider API defines its emptiness.
-                return false;
-            }
-            for (SlotAssignment assignment : match.assignments()) {
-                if (assignment != null && assignment.isAssigned()) {
-                    return false;
-                }
-            }
-            return true;
+            // Not stored: the provider decides; no provider fails closed to
+            // empty (hotbar#83 §4) - the wheel never lands on unknown content.
+            return HotbarContentProviders.get(id)
+                    .map(provider -> !ContentPlan.hasContent(id, provider))
+                    .orElse(true);
         };
+    }
+
+    /** True when a stored bar holds no assigned ability in any slot. */
+    private static boolean allSlotsUnassigned(Bar bar) {
+        for (SlotAssignment assignment : bar.assignments()) {
+            if (assignment != null && assignment.isAssigned()) {
+                return false;
+            }
+        }
+        return true;
     }
 }
