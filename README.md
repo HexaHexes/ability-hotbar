@@ -57,7 +57,7 @@ ceiling (see Persistence).
 
 | Key | Default | Meaning |
 |---|---|---|
-| `display.slotsPerBar` | `9` | Preferred slots (clamped to the server's `hotbar.maxSlots`, hard cap 18). |
+| `display.slotsPerBar` | `9` | Preferred slots (clamped to the server's `hotbar.maxSlots`, hard cap 18). Bars longer than nine slots render as nine-slot segments, each wearing the full vanilla hotbar texture. |
 | `display.hotbarCount` | `3` | Built-in hotbars in the cycle set (clamped to the server's `hotbar.maxBars`). Registered hotbars are always included and never clipped by this window. |
 | `display.skipEmptyBars` | `true` | Alt+wheel cycling skips bars where every slot is unassigned (inert ids count as assigned). Direct selection (Alt+digit) always lands where pressed. |
 | `display.switchToast` | `true` | Show the newly active bar's name briefly above the bar after a switch. |

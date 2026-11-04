@@ -1,5 +1,6 @@
 package org.bitwisemadness.abilityhotbar.client;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -64,7 +65,9 @@ class BarLayoutTest {
         int[] second = layout.slotRect(1, SCREEN_W, SCREEN_H);
 
         assertEquals(first[0], second[0], "x must not move in a vertical bar");
-        assertTrue(second[1] > first[1], "y must advance downward");
+        // Grow-from-anchor (#86): the bottom anchor owns the ordering, so cell 0
+        // sits nearest it and the column grows upward from the screen edge.
+        assertTrue(second[1] < first[1], "y must advance away from the bottom anchor (up)");
     }
 
     @Test
@@ -233,5 +236,116 @@ class BarLayoutTest {
                 null, StatusCluster.BASELINE_DEPTH, 0, 0, 1.0));
         assertThrows(IllegalArgumentException.class, () -> new BarLayout(3, 20, 1, true,
                 BarAnchor.ABOVE_STATUS, 0, 0, 0, 1.0));
+    }
+
+    @Test
+    void segmentsSplitAtNineCells() {
+        // hotbar#86: one segment through nine slots, two beyond (the ceiling
+        // is 18), and a partial final segment never exceeds nine cells.
+        for (int n = 1; n <= BarLayout.CELLS_PER_SEGMENT; n++) {
+            assertEquals(1, layout(n, 1, true, 0, 0, 1.0).segmentCount(),
+                    n + " slots render as one segment");
+        }
+        for (int n = BarLayout.CELLS_PER_SEGMENT + 1; n <= 18; n++) {
+            BarLayout split = layout(n, 1, true, 0, 0, 1.0);
+            assertEquals(2, split.segmentCount(), n + " slots render as two segments");
+            int lastSegmentCells =
+                    n - BarLayout.CELLS_PER_SEGMENT * (split.segmentCount() - 1);
+            assertTrue(lastSegmentCells >= 1 && lastSegmentCells <= BarLayout.CELLS_PER_SEGMENT,
+                    "the partial segment holds 1..9 cells, got " + lastSegmentCells);
+        }
+        // the documented splits: 10 -> 9 + 1, 18 -> 9 + 9
+        assertEquals(2, layout(10, 1, true, 0, 0, 1.0).segmentCount());
+        assertEquals(2, layout(18, 1, true, 0, 0, 1.0).segmentCount());
+    }
+
+    @Test
+    void segmentOffsetsFollowTheGrowFromAnchorRule() {
+        // #86: cell 0 nearest the anchor, segments grow outward - left = strip
+        // to the right, right = mirrored strip, bottom = rows stacked upward,
+        // side+vertical = the downward column, bottom+vertical = upward column.
+        BarLayout left = new BarLayout(18, 20, 0, true, BarAnchor.LEFT_EDGE,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        assertArrayEquals(new int[] {0, 0}, left.segmentOffset(0));
+        assertArrayEquals(new int[] {180, 0}, left.segmentOffset(1), "grows right");
+
+        BarLayout right = new BarLayout(18, 20, 0, true, BarAnchor.RIGHT_EDGE,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        assertArrayEquals(new int[] {180, 0}, right.segmentOffset(0),
+                "segment 0 meets the right anchor");
+        assertArrayEquals(new int[] {0, 0}, right.segmentOffset(1), "segment 1 to its left");
+
+        BarLayout bottom = new BarLayout(18, 20, 0, true, BarAnchor.ABOVE_HOTBAR,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        assertArrayEquals(new int[] {0, 20}, bottom.segmentOffset(0), "bottom row first");
+        assertArrayEquals(new int[] {0, 0}, bottom.segmentOffset(1), "1 above 0");
+
+        BarLayout column = new BarLayout(18, 20, 0, false, BarAnchor.LEFT_EDGE,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        assertArrayEquals(new int[] {0, 0}, column.segmentOffset(0));
+        assertArrayEquals(new int[] {0, 180}, column.segmentOffset(1),
+                "side anchors keep the downward column");
+
+        BarLayout upColumn = new BarLayout(18, 20, 0, false, BarAnchor.ABOVE_HOTBAR,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        assertArrayEquals(new int[] {0, 180}, upColumn.segmentOffset(0), "bottom run first");
+        assertArrayEquals(new int[] {0, 0}, upColumn.segmentOffset(1), "grows upward");
+
+        // the seam scales with the cells, and bad segments fail loudly
+        BarLayout scaled = new BarLayout(18, 20, 0, true, BarAnchor.LEFT_EDGE,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 2.0);
+        assertArrayEquals(new int[] {360, 0}, scaled.segmentOffset(1));
+        assertThrows(IndexOutOfBoundsException.class, () -> scaled.segmentOffset(2));
+        assertThrows(IndexOutOfBoundsException.class, () -> scaled.segmentOffset(-1));
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> layout(9, 1, true, 0, 0, 1.0).segmentOffset(1));
+    }
+
+    @Test
+    void rightEdgeMirrorsCellsSoCellZeroMeetsTheAnchor() {
+        // #86: at a right anchor the numbering grows leftward - cell 0 sits at
+        // the right edge, so the segments read 1,0 left to right.
+        BarLayout right = new BarLayout(18, 20, 0, true, BarAnchor.RIGHT_EDGE,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+
+        int[] cell0 = right.slotRect(0, SCREEN_W, SCREEN_H);
+        int[] cell17 = right.slotRect(17, SCREEN_W, SCREEN_H);
+
+        assertTrue(cell0[0] > cell17[0], "cell 0 sits nearest the right anchor");
+        assertEquals(right.originX(SCREEN_W) + right.extent() - cell0[2], cell0[0],
+                "cell 0's right edge ends the box");
+        assertTrue(cell17[0] >= right.originX(SCREEN_W), "the grid stays inside the box");
+        assertTrue(cell0[0] + cell0[2] <= SCREEN_W, "on-screen");
+    }
+
+    @Test
+    void bottomAnchorsStackSegmentsAsRows() {
+        // #86: a horizontal bar at a bottom anchor becomes a block - segment 0
+        // on the bottom row (nearest the anchor), segment 1 above it.
+        BarLayout bottom = new BarLayout(18, 20, 0, true, BarAnchor.ABOVE_HOTBAR,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+
+        int[] cell0 = bottom.slotRect(0, SCREEN_W, SCREEN_H);
+        int[] cell9 = bottom.slotRect(9, SCREEN_W, SCREEN_H);
+
+        assertTrue(cell9[1] < cell0[1], "segment 1's row sits above segment 0's");
+        assertEquals(cell0[0], cell9[0], "the rows share the left column");
+        assertEquals((SCREEN_W - 9 * 20) / 2, bottom.originX(SCREEN_W),
+                "the block is centred on its widest row");
+        assertEquals(SCREEN_H - 2 * 20 - 22, bottom.originY(SCREEN_H),
+                "the block's bottom rests on the hotbar");
+    }
+
+    @Test
+    void bottomVerticalColumnGrowsUpwardFromTheAnchor() {
+        BarLayout column = new BarLayout(18, 20, 0, false, BarAnchor.ABOVE_HOTBAR,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+
+        int[] cell0 = column.slotRect(0, SCREEN_W, SCREEN_H);
+        int[] cell17 = column.slotRect(17, SCREEN_W, SCREEN_H);
+
+        assertTrue(cell0[1] > cell17[1], "cell 0 sits at the bottom anchor");
+        assertEquals(SCREEN_H - 18 * 20 - 22, column.originY(SCREEN_H),
+                "the column's box is unchanged - only the cell order mirrors");
     }
 }
