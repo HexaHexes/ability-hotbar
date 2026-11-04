@@ -41,6 +41,13 @@ Selecting a slot never fires an ability. Activating uses the selected slot and
 leaves the selection where it was. Empty, restricted, unaffordable or on-cooldown
 slots fail with no resource consumed.
 
+Abilities can carry a target: when an ability's definition is tagged
+**`targeted`** and you activate it with an entity under the crosshair, that
+entity rides along as the activation's target hint and the server resolves it
+before the ability runs. Untagged abilities - or activating with nothing aimed
+at - send no hint at all, exactly as before; which entity you were pointing at
+is never trusted from the client.
+
 Our controls never steal vanilla or chat input: with any screen open (chat,
 inventory, a mod GUI) nothing is intercepted, and without the modifier held the
 plain wheel and 1-9 behave exactly as if the mod were absent. The in-game
