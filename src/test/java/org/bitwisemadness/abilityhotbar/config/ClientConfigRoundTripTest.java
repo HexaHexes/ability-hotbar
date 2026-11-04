@@ -75,6 +75,11 @@ class ClientConfigRoundTripTest {
             #aboveStatus height: DYNAMIC tracks the player's hearts, armor and oxygen; FIXED uses the vanilla baseline (only read when display.anchor = aboveStatus)
             #Allowed Values: FIXED, DYNAMIC
             statusAnchorMode = "DYNAMIC"
+            [menu]
+            #Last category filter chosen in the ability menu (empty = no filter)
+            lastCategory = ""
+            #Last tag filter chosen in the ability menu (empty = no filter)
+            lastTag = ""
             """;
 
     private static CommentedConfig parse(String toml) {

@@ -160,6 +160,20 @@ class MenuQueryTest {
                 "the screen sorts only if it wants to - the query keeps discovery order");
     }
 
+    @Test
+    void filterOptionsComeFromThePoolInStableOrder() {
+        // The screen's cycle buttons step through these: distinct, sorted -
+        // deterministic regardless of registration or iteration order.
+        Map<ResourceLocation, AbilityDefinition> entries = pool();
+
+        assertEquals(List.of(WILL, MAGIC, SKILL, SPELL), MenuQuery.categories(entries),
+                "sorted distinct categories (ResourceLocation orders path-first)");
+        assertEquals(List.of("active", "passive"), MenuQuery.tags(entries),
+                "sorted distinct tags (FIREBOLT carries none)");
+        assertTrue(MenuQuery.categories(Map.of()).isEmpty(), "an empty pool has no categories");
+        assertTrue(MenuQuery.tags(Map.of()).isEmpty(), "an empty pool has no tags");
+    }
+
     private static List<ResourceLocation> ids(List<MenuQuery.Entry> rows) {
         return rows.stream().map(MenuQuery.Entry::id).toList();
     }

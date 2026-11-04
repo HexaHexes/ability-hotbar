@@ -34,7 +34,40 @@ public final class MenuQuery {
     private MenuQuery() {
     }
 
-    /** One menu row: the id the payload will send, with its definition. */
+    /**
+     * Every distinct category present in the pool, sorted for stable
+     * cycling - the screen's category button steps through these plus a
+     * "no filter" position.
+     *
+     * @param entries the id-aware pool
+     * @return the distinct categories in sorted order (empty for an empty pool)
+     */
+    public static List<ResourceLocation> categories(Map<ResourceLocation, AbilityDefinition> entries) {
+        return entries.values().stream()
+                .map(AbilityDefinition::category)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * Every distinct tag present in the pool, sorted for stable cycling -
+     * the open tag vocabulary the screen's tag button steps through.
+     *
+     * @param entries the id-aware pool
+     * @return the distinct tags in sorted order (empty for an empty pool)
+     */
+    public static List<String> tags(Map<ResourceLocation, AbilityDefinition> entries) {
+        return entries.values().stream()
+                .flatMap(definition -> definition.tags().stream())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * One menu row: the id the payload will send, with its definition.
+     */
     public record Entry(ResourceLocation id, AbilityDefinition definition) {
     }
 

@@ -49,6 +49,20 @@ public final class HotbarClientConfig {
             BUILDER.comment("Show the bar's name briefly after switching hotbars")
                     .define("display.switchToast", true);
 
+    /**
+     * The ability menu's last category filter (hotbar#27): a persisted
+     * CLIENT preference - search/filter state only, bar contents stay
+     * server data.
+     */
+    public static final ModConfigSpec.ConfigValue<String> MENU_CATEGORY =
+            BUILDER.comment("Last category filter chosen in the ability menu (empty = no filter)")
+                    .define("menu.lastCategory", "");
+
+    /** The ability menu's last tag filter; same rules as {@link #MENU_CATEGORY}. */
+    public static final ModConfigSpec.ConfigValue<String> MENU_TAG =
+            BUILDER.comment("Last tag filter chosen in the ability menu (empty = no filter)")
+                    .define("menu.lastTag", "");
+
     /** Show the bar horizontally (true) or vertically (false). */
     public static final ModConfigSpec.BooleanValue HORIZONTAL =
             BUILDER.comment("Bar orientation: true = horizontal, false = vertical")

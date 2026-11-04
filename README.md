@@ -108,6 +108,22 @@ assignments and its own selected slot (REQ-HOT-22):
   other bar and refused activation outside it; abilities without a
   declaration stay freely assignable everywhere.
 
+## Ability menu
+
+Press **K** (rebindable) to open the ability management menu: pick a bar
+from its tabs (every assignable hotbar - the built-in window plus
+registered ones - and never an empty one hidden), pick a slot, then click
+an ability to assign or replace it; **Clear slot** removes it. Search,
+category and tag filters narrow the list and are remembered as client
+preferences (`menu.*`), while the bar's contents themselves stay server
+data. Every change is a server-validated request naming the target bar,
+so a stale click is rejected and the screen repaints from the server's
+answer. Registered non-assignable bars are never listed - their content
+belongs to the owner (ADR-012). The on-screen pass lives in
+`docs/menu-checklist.md`.
+
+Screenshots: _placeholder_.
+
 ## Persistence
 
 Your assignments are per-player data, stored in a server-authoritative attachment
