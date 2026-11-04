@@ -45,7 +45,16 @@ public record AssignAbilityPayload(int slot, String abilityId) implements Custom
             if (context.player() instanceof ServerPlayer player) {
                 BarState current = player.getData(BarStateAttachments.BAR_STATE);
                 BarAssignments.assign(current, payload.slot(), payload.abilityId())
-                        .ifPresent(next -> BarStateSync.acceptAssignment(player, next));
+                        .ifPresentOrElse(
+                                next -> BarStateSync.acceptAssignment(player, next),
+                                () -> {
+                                    // A scope refusal answers with a resync (#90 AC3) -
+                                    // the client may hold an optimistic state the
+                                    // server just refused; other refusals stay silent.
+                                    if (BarAssignments.outOfScope(current, payload.abilityId())) {
+                                        BarStateSync.sendSnapshot(player);
+                                    }
+                                });
             }
         });
     }
