@@ -55,6 +55,16 @@ public final class BarSelection {
      * hotbar: scrolling up moves the selection left (toward slot 1), scrolling
      * down moves it right. A zero delta maps to zero (no movement).
      *
+     * <p>Verified against the game's own code (1.21.1): {@code MouseHandler.onScroll}
+     * feeds {@code Inventory.swapPaint}, which does {@code selected -= signum(scroll)}
+     * - scrolling up decreases the slot - and NeoForge's
+     * {@code MouseScrollingEvent} passes the delta's sign through unchanged
+     * (its constructor receives the scaled scroll values verbatim).
+     * {@link org.bitwisemadness.abilityhotbar.state.BarCycling} reuses this
+     * direction for Alt+wheel bar cycling, so bars page the way slots select;
+     * a request to invert the bar direction was evaluated against this
+     * evidence and declined (2026-11-04).</p>
+     *
      * @param scrollDeltaY the scroll wheel's vertical delta (positive = scroll up)
      * @return -1 for scroll up (left), +1 for scroll down (right), 0 for none
      */
