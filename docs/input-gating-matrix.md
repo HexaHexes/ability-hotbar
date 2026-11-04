@@ -8,7 +8,7 @@ with `ability-core` + `ability-hotbar` installed, and record observed results.
 Legend: **vanilla** = behaves exactly as if the mod were absent · **ours** = the
 hotbar control fires once · **n/a** = not applicable.
 
-| Context | plain wheel | Ctrl+wheel | Alt+wheel | plain 1-9 | Ctrl+1-9 | Alt+1-0 | G | K | Right Ctrl |
+| Context | plain wheel | Ctrl+wheel | Alt+wheel | plain 1-9 | Ctrl+1-9 | Alt+1-0 | G | Grave | Right Ctrl |
 |---|---|---|---|---|---|---|---|---|---|
 | No screen (in-game) | vanilla | ours (one slot step, vanilla bar still) | ours (one bar step, vanilla bar still) | vanilla | ours | ours (bar switch, vanilla digit untouched) | ours | ours | ours |
 | Chat open | vanilla | vanilla | vanilla | vanilla | vanilla | vanilla | vanilla | vanilla | vanilla |
@@ -23,7 +23,7 @@ hotbar control fires once · **n/a** = not applicable.
 - [ ] **Alt+wheel with no screen** moves exactly one bar per notch (no double-scroll),
       the vanilla hotbar selection does *not* also move, and Ctrl+wheel still wins
       when both modifiers are held.
-- [ ] **Ctrl+wheel / Ctrl+1-9 / Alt+wheel / Alt+1-0 / G / K / Right Ctrl with any
+- [ ] **Ctrl+wheel / Ctrl+1-9 / Alt+wheel / Alt+1-0 / G / Grave / Right Ctrl with any
       screen open** do nothing: nothing is intercepted, nothing is sent, the screen
       keeps full input.
 - [ ] **Plain wheel** hotbar selection is identical with the mod installed vs a

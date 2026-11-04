@@ -8,9 +8,9 @@ the input.
 
 ## Open / close (AC5)
 
-- [ ] **K** opens the menu in-game; **K** closes it again when the search
-      box is *not* focused; typing `k` into the search box inserts a letter
-      instead of closing.
+- [ ] The **grave accent** key (left of 1) opens the menu in-game; the same
+      key closes it again when the search box is *not* focused; typing that
+      character into the search box inserts it instead of closing.
 - [ ] **Esc** closes it.
 - [ ] Chat, inventory and other screens are unaffected (cross-check
       `docs/input-gating-matrix.md`).

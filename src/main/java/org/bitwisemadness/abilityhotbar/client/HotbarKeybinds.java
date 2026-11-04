@@ -16,12 +16,13 @@ import org.lwjgl.glfw.GLFW;
  *
  * <p>Twenty-two bound defaults on the mod's own category - never
  * {@code key.irons_spellbooks.*}: Ctrl+1..9 activates a slot directly,
- * Alt+1..9 and Alt+0 switch bars directly, G activates the selected slot, K
- * opens the ability menu, and Right Ctrl toggles ability mode - plus nine
- * deliberately <b>unbound</b> slot-activation bindings for slots 10..18
- * (hotbar#86: no default value, rebindable, claiming no key). Ctrl+wheel
- * (slot) and Alt+wheel (bar) selection are not KeyMappings (the wheel has
- * no Controls entry) and are routed from {@link HotbarInputHandler}.</p>
+ * Alt+1..9 and Alt+0 switch bars directly, G activates the selected slot,
+ * the grave accent (left of 1) opens the ability menu, and Right Ctrl
+ * toggles ability mode - plus nine deliberately <b>unbound</b>
+ * slot-activation bindings for slots 10..18 (hotbar#86: no default value,
+ * rebindable, claiming no key). Ctrl+wheel (slot) and Alt+wheel (bar)
+ * selection are not KeyMappings (the wheel has no Controls entry) and are
+ * routed from {@link HotbarInputHandler}.</p>
  *
  * <p>The Ctrl+number and Alt+number binds use {@link KeyModifier#CONTROL} /
  * {@link KeyModifier#ALT}, so NeoForge claims the digit only while that
@@ -60,7 +61,7 @@ public final class HotbarKeybinds {
     /** G: activate the currently selected slot (REQ-HOT-11). */
     public static final KeyMapping ACTIVATE_SELECTED;
 
-    /** K: open the ability management menu (flow owned by hotbar#27). */
+    /** Grave accent (left of 1): open the ability management menu (hotbar#27). */
     public static final KeyMapping OPEN_MENU;
 
     /** Right Ctrl: toggle ability mode (flow owned by hotbar#17). */
@@ -98,7 +99,7 @@ public final class HotbarKeybinds {
         OPEN_MENU = new KeyMapping(
                 "key.abilityhotbar.open_menu",
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_K,
+                GLFW.GLFW_KEY_GRAVE_ACCENT,
                 CATEGORY);
         ABILITY_MODE = new KeyMapping(
                 "key.abilityhotbar.ability_mode",
