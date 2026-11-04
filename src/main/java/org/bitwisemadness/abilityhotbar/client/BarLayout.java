@@ -3,7 +3,7 @@ package org.bitwisemadness.abilityhotbar.client;
 import org.bitwisemadness.abilityhotbar.config.BarAnchor;
 
 /**
- * Pure layout math for the nine-slot bar (REQ-HOT-01/07).
+ * Pure layout math for the ability bar (REQ-HOT-01/07, hotbar#86).
  *
  * <p>Given the client's display config (orientation, offsets, scale) and a
  * screen size, computes each slot's pixel rectangle. This is deliberately free
@@ -12,9 +12,19 @@ import org.bitwisemadness.abilityhotbar.config.BarAnchor;
  * isolation. The render layer only reads the resulting rectangles and blits.</p>
  *
  * <p>Sizing follows the vanilla hotbar language: a fixed slot size and gap,
- * scaled uniformly, laid out horizontally (default) or vertically. Placement is
- * driven by a {@link BarAnchor}, which resolves both axes so no anchor plus
+ * scaled uniformly, laid out horizontally (default) or vertically. Placement
+ * is driven by a {@link BarAnchor}, which resolves both axes so no anchor plus
  * orientation combination is invalid.</p>
+ *
+ * <p><b>Grow-from-anchor (hotbar#86):</b> cell 0 always sits nearest the
+ * anchor and numbering grows outward. Left anchors grow a strip to the right
+ * ({@code 0,1}); right anchors mirror it so cell 0 meets the right edge
+ * ({@code 1,0} reading left to right); bottom anchors grow <em>away</em> from
+ * the screen edge - horizontal bars stack their segments as rows above each
+ * other ({@code 1 above 0}, an 18-slot bar becoming a 9-wide, 2-row block)
+ * and vertical columns grow upward from the bottom. Side anchors with a
+ * vertical orientation keep the downward column. A bar of nine or fewer slots
+ * takes the same single-row/single-column path as before under every anchor.</p>
  *
  * @param slotCount number of slots (1..18, already clamped by config)
  * @param slotSize  unscaled slot edge length in pixels
@@ -50,6 +60,9 @@ public record BarLayout(
 
     /** Distance from the screen bottom to the vanilla experience bar's top edge. */
     private static final int XP_DEPTH = 29;
+
+    /** Cells per vanilla hotbar segment - the texture's own nine cells. */
+    public static final int CELLS_PER_SEGMENT = 9;
 
     public BarLayout {
         if (slotCount < 1) {
@@ -88,24 +101,21 @@ public record BarLayout(
         return scaledSlotSize() + scaledGap();
     }
 
-    /** Total extent of the bar along its layout axis (scaled). */
+    /** Total extent of a run of {@code slotCount} slots along the layout axis. */
     public int extent() {
-        return slotCount * scaledSlotSize() + (slotCount - 1) * scaledGap();
+        return scaledExtent(slotCount);
     }
 
-    /** Width of the slot grid along X. */
-    private int barWidth() {
-        return horizontal ? extent() : scaledSlotSize();
+    /** Extent of {@code cells} slots in one run (scaled, rounded like the rest). */
+    private int scaledExtent(int cells) {
+        return cells * scaledSlotSize() + Math.max(0, cells - 1) * scaledGap();
     }
-
-    /** Cells per vanilla hotbar segment - the texture's own nine cells. */
-    public static final int CELLS_PER_SEGMENT = 9;
 
     /**
-     * How many full vanilla hotbar segments this bar needs: one for up to
-     * nine slots, two beyond (hotbar#86 - the ceiling is 18). Each segment
-     * blits the complete, unstretched {@code hud/hotbar} sprite, so a
-     * partial final segment shows its unused cells as ordinary empty cells.
+     * How many vanilla hotbar segments this bar needs: one for up to nine
+     * slots, two beyond (the ceiling is 18). Each segment blits the complete,
+     * unstretched {@code hud/hotbar} sprite, so a partial final segment shows
+     * its unused cells as ordinary empty cells.
      *
      * @return the segment count (always at least 1)
      */
@@ -114,30 +124,71 @@ public record BarLayout(
     }
 
     /**
-     * How far a segment's origin sits along the layout axis from the bar's
-     * origin, in scaled pixels. Segments are <b>flush</b>: the next segment
-     * starts exactly where the ninth cell ends, so the pair's bounding box
-     * is this layout's own box - the anchor, offsets, scale and orientation
-     * move every segment together as one unit (hotbar#86).
+     * Where one segment's sprite sits relative to the bar's origin, following
+     * the grow-from-anchor rule: left anchors grow the strip rightward, right
+     * anchors mirror it so cell 0 meets the right edge, bottom anchors stack
+     * segments upward (rows for a horizontal bar, an upward column for a
+     * vertical one), and side anchors keep a vertical column growing downward.
      *
      * @param segment 0-based segment index
-     * @return the offset along the layout axis; 0 for the first segment
+     * @return the {@code {dx, dy}} offset in scaled pixels; {@code {0, 0}}
+     *         for the segment that starts at the origin
      * @throws IndexOutOfBoundsException when the segment does not exist
      */
-    public int segmentOffset(int segment) {
+    public int[] segmentOffset(int segment) {
         if (segment < 0 || segment >= segmentCount()) {
             throw new IndexOutOfBoundsException(
                     "segment " + segment + " out of range [0," + segmentCount() + ")");
         }
-        return segment * CELLS_PER_SEGMENT * stride();
+        if (horizontal) {
+            if (anchor == BarAnchor.RIGHT_EDGE) {
+                // mirrored strip: this segment's cells occupy the run measured
+                // from the far (right) edge, so the last segment starts at 0
+                return new int[] {
+                    (slotCount - CELLS_PER_SEGMENT * (segment + 1)) * stride(), 0};
+            }
+            if (isBottomAnchor()) {
+                // stacked rows: segment 0 is the bottom row, one stride down
+                // from the block's top
+                return new int[] {0, (segmentCount() - 1 - segment) * stride()};
+            }
+            return new int[] {segment * CELLS_PER_SEGMENT * stride(), 0};
+        }
+        if (isBottomAnchor()) {
+            // upward column: segment 0 occupies the bottom run
+            return new int[] {0, (slotCount - CELLS_PER_SEGMENT * (segment + 1)) * stride()};
+        }
+        return new int[] {0, segment * CELLS_PER_SEGMENT * stride()};
     }
 
-    /** Height of the slot grid along Y. */
+    /** Bottom-of-screen anchors are the ones a bar grows away from. */
+    private boolean isBottomAnchor() {
+        return anchor != BarAnchor.LEFT_EDGE && anchor != BarAnchor.RIGHT_EDGE;
+    }
+
+    /** Width of the bar's box along X. */
+    private int barWidth() {
+        if (horizontal) {
+            // bottom anchors: the pair is a block - as wide as the widest row
+            return isBottomAnchor()
+                    ? scaledExtent(Math.min(slotCount, CELLS_PER_SEGMENT))
+                    : extent();
+        }
+        return scaledSlotSize();
+    }
+
+    /** Height of the bar's box along Y. */
     private int barHeight() {
-        return horizontal ? scaledSlotSize() : extent();
+        if (horizontal) {
+            if (isBottomAnchor()) {
+                return scaledExtent(segmentCount());
+            }
+            return scaledSlotSize();
+        }
+        return extent();
     }
 
-    /** The bar's origin (top-left of slot 0) for a given screen size and anchor. */
+    /** The bar's origin (top-left of its box) for a given screen size and anchor. */
     public int originX(int screenWidth) {
         int base = switch (anchor) {
             case LEFT_EDGE -> EDGE_INSET;
@@ -147,7 +198,7 @@ public record BarLayout(
         return base + offsetX;
     }
 
-    /** @return the bar's origin Y (top-left of slot 0) for a screen size. */
+    /** @return the bar's origin Y (top-left of its box) for a screen size. */
     public int originY(int screenHeight) {
         int base = switch (anchor) {
             case ABOVE_HOTBAR -> screenHeight - barHeight() - HOTBAR_DEPTH;
@@ -159,7 +210,10 @@ public record BarLayout(
     }
 
     /**
-     * The pixel rectangle of one slot.
+     * The pixel rectangle of one slot, placed by the grow-from-anchor rule:
+     * cell 0 nearest the anchor, then outward - rightward for a left anchor,
+     * leftward (mirrored) for a right anchor, upward from the bottom for a
+     * bottom anchor's rows or column, downward for a side-anchored column.
      *
      * @param index 0-based slot index
      * @param screenWidth  current screen width (for the horizontal anchor)
@@ -173,13 +227,21 @@ public record BarLayout(
         }
         int x = originX(screenWidth);
         int y = originY(screenHeight);
-        int step = index * stride();
-        if (horizontal) {
-            x += step;
-        } else {
-            y += step;
-        }
         int size = scaledSlotSize();
+        if (horizontal) {
+            if (anchor == BarAnchor.RIGHT_EDGE) {
+                x += (slotCount - 1 - index) * stride();
+            } else if (isBottomAnchor()) {
+                x += (index % CELLS_PER_SEGMENT) * stride();
+                y += (segmentCount() - 1 - index / CELLS_PER_SEGMENT) * stride();
+            } else {
+                x += index * stride();
+            }
+        } else if (isBottomAnchor()) {
+            y += (slotCount - 1 - index) * stride();
+        } else {
+            y += index * stride();
+        }
         return new int[] {x, y, size, size};
     }
 }

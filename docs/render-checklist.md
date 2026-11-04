@@ -112,10 +112,21 @@ the contracts; these are the on-screen half.
 
 ## Segmented bars (hotbar#86)
 
+Segments follow the **grow-from-anchor** rule: cell 0 sits nearest the anchor
+and numbering grows outward.
+
 - [ ] A bar of **10-18 slots** draws **two** complete vanilla hotbar
-      textures, flush along the bar's axis with a single divider between
-      them - each a full, unstretched `hud/hotbar` sprite, never squashed,
-      stretched or cropped.
+      textures - each a full, unstretched `hud/hotbar` sprite, never
+      squashed, stretched or cropped.
+- [ ] **Left edge anchor**: the strip grows rightward (`0,1`).
+- [ ] **Right edge anchor**: the strip is mirrored - cell 0 at the right
+      edge, segments reading `1,0` left to right.
+- [ ] **Bottom anchors** (`aboveHotbar`/`aboveXp`/`aboveStatus`, horizontal
+      bar): segments stack as **rows** - segment 0 on the bottom row,
+      segment 1 above it (`1 above 0`), an 18-slot bar becoming a 9-wide,
+      2-row block that still centres and rests on its anchor.
+- [ ] **Vertical orientation**: side anchors keep the downward column; a
+      bottom anchor grows the column **upward** (cell 0 at the bottom).
 - [ ] A **partial** second segment (10-17 slots) shows its unused cells as
       ordinary empty cells of a second, mostly empty hotbar.
 - [ ] Changing **anchor / offsetX / offsetY / scale / orientation** moves
@@ -123,7 +134,7 @@ the contracts; these are the on-screen half.
 - [ ] Exactly **one** selection frame at any moment, drawn on the selected
       slot's own segment - never two frames.
 - [ ] **Nine or fewer slots** render exactly as before (regression - the
-      single-segment path must be pixel-identical).
+      single-segment path must be unchanged under every anchor).
 - [ ] Slots 10+ show icons, overlays and selection like any other cell, and
       their unbound hotkeys (slice A) activate them.
 

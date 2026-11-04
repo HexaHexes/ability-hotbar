@@ -308,10 +308,12 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
      * (REQ-HOT-01, hotbar#86): one complete {@code hud/hotbar} sprite per
      * {@link BarLayout#segmentCount() segment}, each at native 182x22
      * proportions - never squashed, stretched or cropped, because vanilla
-     * hardcodes that size and resource packs design for it. Segments sit
-     * flush along the layout axis, so a bar of 10..18 slots reads as two
-     * adjacent hotbars (a partial segment's unused cells render empty) and
-     * the anchor, offsets, scale and orientation move them as one unit.
+     * hardcodes that size and resource packs design for it. Segments are
+     * placed by the layout's grow-from-anchor rule (strip to the right of a
+     * left anchor, mirrored at a right anchor, stacked as rows above a
+     * bottom anchor), so a bar of 10..18 slots reads as two adjacent
+     * hotbars - a partial segment's unused cells render empty - and the
+     * anchor, offsets, scale and orientation move them as one unit.
      *
      * <p>A horizontal strip cannot fill a vertical box at all, so the
      * vertical path turns each sprite a quarter turn instead of scaling it
@@ -328,15 +330,17 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             int screenW, int screenH, int segment) {
         int x = layout.originX(screenW);
         int y = layout.originY(screenH);
-        int offset = layout.segmentOffset(segment);
+        int[] offset = layout.segmentOffset(segment);
         // Offset by the sprite's 1px frame so its slot cells align with our grid.
         int border = Math.max(1, (int) Math.round(layout.scale()));
         int w = (int) Math.round(VANILLA_HOTBAR_WIDTH * layout.scale());
         int h = (int) Math.round(VANILLA_HOTBAR_HEIGHT * layout.scale());
+        int dx = x - border + offset[0];
+        int dy = y - border + offset[1];
         if (layout.horizontal()) {
-            gui.blitSprite(VANILLA_HOTBAR, x - border + offset, y - border, w, h);
+            gui.blitSprite(VANILLA_HOTBAR, dx, dy, w, h);
         } else {
-            blitTurned90(gui, VANILLA_HOTBAR, x - border, y - border + offset, w, h);
+            blitTurned90(gui, VANILLA_HOTBAR, dx, dy, w, h);
         }
     }
 
