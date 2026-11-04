@@ -22,8 +22,9 @@ public final class HotbarNetwork {
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
+        // Version 2 (hotbar#27): AssignAbilityPayload gained the target bar id.
         PayloadRegistrar registrar = event.registrar(AbilityHotbar.MOD_ID)
-                .versioned("1")
+                .versioned("2")
                 .optional();
 
         registrar.playToClient(

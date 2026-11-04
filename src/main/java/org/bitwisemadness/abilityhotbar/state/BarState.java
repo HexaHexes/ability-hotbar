@@ -154,6 +154,26 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
     }
 
     /**
+     * Sets a slot on a <b>named</b> bar - the menu's path, which targets any
+     * assignable bar rather than only the active one (ADR-012 id targeting,
+     * hotbar#27). The caller validates the bar's existence, assignability and
+     * slot range; those failures are a no-op here.
+     *
+     * @param barId       the bar to write into
+     * @param slot        the target slot index
+     * @param abilityId   the ability to store, or null to clear the slot
+     * @return this state with that bar updated; an unstored bar is a no-op
+     */
+    public BarState withAssignment(ResourceLocation barId, int slot,
+            @Nullable ResourceLocation abilityId) {
+        int index = indexOf(barId);
+        if (index < 0) {
+            return this;
+        }
+        return withBar(index, bars[index].withAssignment(slot, abilityId));
+    }
+
+    /**
      * Selects a slot on the <b>active</b> bar; every other bar keeps its own
      * selection.
      *
