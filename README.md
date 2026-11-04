@@ -31,7 +31,7 @@ category. Defaults (from SPIKE-hot-3):
 |---|---|---|
 | Select slot | **Ctrl + wheel** | Moves the selected-slot cursor only; plain wheel still drives the vanilla hotbar, and the wheel is only claimed while Ctrl is held. |
 | Switch bar prev/next | **Alt + wheel** | Cycles hotbars, skipping bars with no assigned abilities by default (`display.skipEmptyBars`). Claimed only while Alt is held; Ctrl+wheel wins when both are held. |
-| Activate slot 1..9 | **Ctrl + 1..9** | Activates that slot directly. Plain 1..9 still switches the vanilla hotbar. |
+| Activate slot 01..09 | **Ctrl + 1..9** | Activates that slot directly. Plain 1..9 still switches the vanilla hotbar. |
 | Switch to bar 1..10 | **Alt + 1..9, Alt + 0** | Selects a bar directly (never skips). Plain digits still drive the vanilla hotbar; a digit beyond the cycle set does nothing. |
 | Activate selected slot | **G** | Fires the ability in the selected slot. |
 | Open ability menu | **Grave** (left of 1) | Opens the ability management menu (rebindable; see below). |

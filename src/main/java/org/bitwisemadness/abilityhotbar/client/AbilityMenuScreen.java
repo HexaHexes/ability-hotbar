@@ -1,6 +1,7 @@
 package org.bitwisemadness.abilityhotbar.client;
 
 import java.util.List;
+import java.util.Locale;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -148,8 +149,16 @@ public final class AbilityMenuScreen extends Screen {
             } else if (hovered) {
                 gui.fill(x, 64, x + slotWidth - 1, 80, 0x30FFFFFF);
             }
-            gui.drawString(this.font, String.valueOf(i + 1), x + 3, 68, selected ? 0xFFFFFF : 0xA0A0A0);
+            gui.drawString(this.font, slotLabel(i + 1), x + 3, 68, selected ? 0xFFFFFF : 0xA0A0A0);
         }
+    }
+
+    /**
+     * Slot numbers always render zero-padded (01..18), here and in the
+     * keybind names. Package-private for the format fixture.
+     */
+    static String slotLabel(int slot1Based) {
+        return String.format(Locale.ROOT, "%02d", slot1Based);
     }
 
     /** What the selected slot currently holds: name, empty, or the raw inert id. */
@@ -158,7 +167,7 @@ public final class AbilityMenuScreen extends Screen {
             return;
         }
         StringBuilder label = new StringBuilder();
-        label.append("Slot ").append(selectedSlot + 1).append(": ");
+        label.append("Slot ").append(slotLabel(selectedSlot + 1)).append(": ");
         var assignment = target.assignment(selectedSlot);
         ResourceLocation abilityId = assignment == null || !assignment.isAssigned()
                 ? null : assignment.abilityId();
