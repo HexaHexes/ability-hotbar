@@ -16,7 +16,8 @@ each item against a world with `ability_core` installed.
       Alt+1..9 and Alt+0, G, K, Right Ctrl.
 - [ ] Each is rebindable via the Controls screen (no collisions with the
       verified landscape; note any conflict found).
-- [ ] Vanilla **G** and **K** are unbound or confirmed non-conflicting, and the
+- [ ] Vanilla **G** and the **grave accent** key are unbound or confirmed
+      non-conflicting, and the
       vanilla hotbar's plain **1..9** still switches the vanilla hotbar.
 
 ## Selection (REQ-HOT-09/10)
@@ -58,7 +59,8 @@ each item against a world with `ability_core` installed.
 
 ## Menu / mode seams (REQ-HOT-12/16)
 
-- [ ] **K** is bound and shows the "Open ability menu" action (menu flow itself
-      lands with hotbar#27 - expected no-op for now).
+- [ ] The **grave accent** key (left of 1) is bound and shows the "Open
+      ability menu" action, and opens the menu (hotbar#27 - see
+      docs/menu-checklist.md).
 - [ ] **Right Ctrl** is bound and shows the "Toggle ability mode" action (mode
-      flow lands with hotbar#17 - expected no-op for now).
+      flow is tensura-iss-integration#51 - expected no-op here).

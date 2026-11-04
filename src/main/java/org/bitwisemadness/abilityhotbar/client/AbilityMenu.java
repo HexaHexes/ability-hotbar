@@ -3,8 +3,8 @@ package org.bitwisemadness.abilityhotbar.client;
 import net.minecraft.client.Minecraft;
 
 /**
- * Seam for opening the ability management menu from the K keybind
- * (REQ-HOT-12, hotbar#27).
+ * Seam for opening the ability management menu from the menu keybind
+ * (REQ-HOT-12, hotbar#27 - the grave accent key by default).
  *
  * <p>The key is registered and rebindable (hotbar#20); this opens the
  * actual setup screen. Kept as a named seam so the input handler never

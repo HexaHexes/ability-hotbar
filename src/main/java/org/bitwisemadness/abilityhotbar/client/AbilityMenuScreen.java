@@ -35,8 +35,8 @@ import org.jetbrains.annotations.Nullable;
  * chosen filters persist as CLIENT config ({@code menu.lastCategory}/{@code
  * menu.lastTag}) while bar contents stay server data. Registered
  * non-assignable bars are never listed and the skip-empty cycling option
- * does not apply here (ADR-012). Opens from the K seam, closes with K (when
- * the search box is not focused) or Esc.</p>
+ * does not apply here (ADR-012). Opens from the menu-key seam, closes with
+ * the same key (when the search box is not focused) or Esc.</p>
  */
 public final class AbilityMenuScreen extends Screen {
 
@@ -323,7 +323,8 @@ public final class AbilityMenuScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // K closes - unless the search box is focused and the player is typing.
+        // The menu key closes - unless the search box is focused and the
+        // player is typing that character into their search.
         if (keyCode == HotbarKeybinds.OPEN_MENU.getKey().getValue()
                 && (searchBox == null || !searchBox.isFocused())) {
             onClose();
