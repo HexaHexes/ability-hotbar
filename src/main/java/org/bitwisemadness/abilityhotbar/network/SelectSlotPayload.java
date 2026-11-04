@@ -17,8 +17,9 @@ import org.bitwisemadness.abilityhotbar.state.BarStateAttachments;
  *
  * <p>Carries the client's <em>intent</em> to select a slot (Ctrl+wheel). The
  * server resolves it through {@link BarSelection} - an out-of-range slot is
- * dropped fail-closed - then echoes the authoritative state back. Selecting
- * never fires an ability; it only moves the selected-slot cursor.</p>
+ * dropped fail-closed - and always echoes the authoritative state back
+ * (ADR-003: every rejection re-sends the snapshot). Selecting never fires an
+ * ability; it only moves the selected-slot cursor.</p>
  *
  * @param slot the requested slot index
  */
@@ -41,7 +42,8 @@ public record SelectSlotPayload(int slot) implements CustomPacketPayload {
             if (context.player() instanceof ServerPlayer player) {
                 BarState current = player.getData(BarStateAttachments.BAR_STATE);
                 BarSelection.select(current, payload.slot())
-                        .ifPresent(next -> BarStateSync.acceptSelection(player, next));
+                        .ifPresentOrElse(next -> BarStateSync.acceptSelection(player, next),
+                                () -> BarStateSync.sendSnapshot(player));
             }
         });
     }
