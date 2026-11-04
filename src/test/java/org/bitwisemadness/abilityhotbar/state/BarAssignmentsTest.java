@@ -25,6 +25,8 @@ class BarAssignmentsTest {
             ResourceLocation.fromNamespaceAndPath("pseudocore_curios", "press");
     private static final ResourceLocation CURIOS =
             ResourceLocation.fromNamespaceAndPath("pseudocore", "curios");
+    private static final ResourceLocation EXTRA =
+            ResourceLocation.fromNamespaceAndPath("otherpack", "extra");
 
     @BeforeEach
     @AfterEach
@@ -94,43 +96,77 @@ class BarAssignmentsTest {
     @Test
     void playerPayloadNeverWritesEvenTheScopeBarItself() {
         // #90 AC5: with the scope satisfied the payload still cannot write a
-        // non-assignable bar - its empty view fails the range check first.
+        // non-assignable bar - the assignable gate refuses it outright.
         // Player rejection is unchanged; #89's owner write never comes here.
         HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
         AbilityBarScopes.register(PRESS, CURIOS);
         BarState onCurios = BarState.empty(3).withActiveBar(CURIOS);
 
         assertFalse(BarAssignments.assign(onCurios, 0, "pseudocore_curios:press").isPresent());
-        assertFalse(BarAssignments.outOfScope(onCurios, "pseudocore_curios:press"),
-                "the scope is satisfied here - this is the range gate, not a scope refusal");
+        assertFalse(BarAssignments.assign(onCurios, 0, "").isPresent(),
+                "clearing its cells is rejected too");
     }
 
     @Test
-    void outOfScopeDetectsOnlyScopeRejections() {
+    void namedTargetBarReceivesTheAssignmentEvenWhenNotActive() {
+        // #27 AC9: the menu names its target - any assignable bar, not only
+        // the active one (ADR-012 id targeting).
+        BarState base = BarState.empty(3, 3);
+
+        BarState result = BarAssignments.assign(base, HotbarRegistry.builtinBarId(1), 2,
+                "tensura:fireball").orElseThrow();
+
+        assertEquals(base.activeBarId(), result.activeBarId(), "assigning never switches bars");
+        assertEquals(FIREBALL, result.bars()[1].assignment(2).abilityId(), "the named bar got it");
+        assertTrue(result.bars()[0].assignment(2).isEmpty(), "the active bar is untouched");
+        assertEquals(0, result.bars()[1].selectedSlot(), "selections do not move either");
+    }
+
+    @Test
+    void nonexistentTargetBarIsRejected() {
+        // A registered assignable bar this state does not store (reconciliation
+        // would have appended it on load; a direct-built state may lack it) and
+        // any unknown id are both rejected before a write is attempted.
+        HotbarRegistry.register(EXTRA, "otherpack.bar.extra", true);
+        BarState base = BarState.empty(3);
+
+        assertFalse(BarAssignments.assign(base, EXTRA, 0, "tensura:fireball").isPresent());
+        assertFalse(BarAssignments.assign(base, HotbarRegistry.builtinBarId(9), 0, "tensura:fireball").isPresent());
+        assertFalse(BarAssignments.assign(base,
+                ResourceLocation.fromNamespaceAndPath("nobody", "bar"), 0, "tensura:fireball").isPresent());
+        assertTrue(base.bars()[0].assignment(0).isEmpty(), "nothing was written");
+    }
+
+    @Test
+    void nonAssignableTargetBarIsRejectedEvenWhenStored() {
+        // The content-owned bar may well be stored (owner-seeded, #89) - the
+        // assignable gate still refuses a player write aimed straight at it.
         HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
-        AbilityBarScopes.register(PRESS, CURIOS);
-        BarState onBuiltIn = BarState.empty(3);
+        BarState seeded = SeededAssignments.seed(BarState.empty(3), CURIOS, 0, "pseudocore_curios:press");
 
-        assertTrue(BarAssignments.outOfScope(onBuiltIn, "pseudocore_curios:press"),
-                "the payload resyncs only for scope refusals");
-        assertFalse(BarAssignments.outOfScope(onBuiltIn, "tensura:fireball"),
-                "an unscoped ability keeps the silent-drop path");
-        assertFalse(BarAssignments.outOfScope(onBuiltIn, "not a valid id"),
-                "a malformed id keeps the silent-drop path");
-        assertFalse(BarAssignments.outOfScope(onBuiltIn, ""), "blank clears, never a scope");
-        assertFalse(BarAssignments.outOfScope(onBuiltIn, null));
-        assertFalse(BarAssignments.outOfScope(null, "pseudocore_curios:press"));
+        assertFalse(BarAssignments.assign(seeded, CURIOS, 1, "tensura:fireball").isPresent());
+        assertFalse(BarAssignments.assign(seeded, CURIOS, 0, "").isPresent());
+        assertEquals(PRESS, SeededAssignments.storedBar(seeded, CURIOS).orElseThrow()
+                .assignment(0).abilityId(), "the seed survives the rejected write");
+    }
 
-        BarState onCurios = BarState.empty(3).withActiveBar(CURIOS);
-        assertFalse(BarAssignments.outOfScope(onCurios, "pseudocore_curios:press"),
-                "its own bar is never out of scope");
+    @Test
+    void slotRangeIsValidatedAgainstTheNamedBar() {
+        // Each bar owns its own slot count: bar 1 has three slots here, so
+        // slot 3 fails even though another bar might be longer.
+        BarState base = BarState.empty(3, 2);
+
+        assertFalse(BarAssignments.assign(base, HotbarRegistry.builtinBarId(1), 3, "tensura:fireball").isPresent());
+        assertFalse(BarAssignments.assign(base, HotbarRegistry.builtinBarId(1), -1, "tensura:fireball").isPresent());
+        assertTrue(BarAssignments.assign(base, HotbarRegistry.builtinBarId(1), 2, "tensura:fireball").isPresent(),
+                "an in-range slot on the named bar is accepted");
     }
 
     @Test
     void storedContentOwnedBarIsNeverPlayerWritable() {
-        // #89: once the owner has seeded a content-owned bar, the bar IS
-        // stored - without the assignable gate the player payload would slip
-        // through the range check that used to reject it implicitly.
+        // #89/#27: once the owner has seeded a content-owned bar the bar IS
+        // stored - the assignable gate refuses the player payload outright,
+        // where the range check used to reject it implicitly.
         HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
         BarState seeded = SeededAssignments.seed(BarState.empty(3), CURIOS, 0, "pseudocore_curios:press");
         BarState active = seeded.withActiveBar(CURIOS);

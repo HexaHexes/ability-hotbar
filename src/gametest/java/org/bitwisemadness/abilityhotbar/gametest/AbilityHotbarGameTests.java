@@ -71,14 +71,16 @@ public final class AbilityHotbarGameTests {
         Player player = helper.makeMockPlayer(GameType.CREATIVE);
         BarState initial = player.getData(BarStateAttachments.BAR_STATE);
 
-        BarState next = BarAssignments.assign(initial, 0, "tensura:fireball").orElse(null);
+        BarState next = BarAssignments.assign(initial, initial.activeBarId(), 0, "tensura:fireball")
+                .orElse(null);
         helper.assertTrue(next != null, "a valid assignment must resolve");
         player.setData(BarStateAttachments.BAR_STATE, next);
         helper.assertTrue(player.getData(BarStateAttachments.BAR_STATE).assignment(0).isAssigned(),
                 "slot 0 must be assigned after a valid request");
-        helper.assertTrue(BarAssignments.assign(initial, initial.assignments().length, "tensura:fireball").isEmpty(),
+        helper.assertTrue(BarAssignments.assign(initial, initial.activeBarId(),
+                        initial.assignments().length, "tensura:fireball").isEmpty(),
                 "an out-of-range slot must be rejected");
-        helper.assertTrue(BarAssignments.assign(initial, 0, "not a valid id").isEmpty(),
+        helper.assertTrue(BarAssignments.assign(initial, initial.activeBarId(), 0, "not a valid id").isEmpty(),
                 "a malformed id must be rejected");
         helper.succeed();
     }
