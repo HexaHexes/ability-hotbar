@@ -99,6 +99,11 @@ assignments and its own selected slot (REQ-HOT-22):
   (logged once) rather than crashing.
 - **Notification** - after a switch the new bar's name appears briefly above
   the bar, governed by `display.switchToast`.
+- **Scoped abilities** - a mod may declare that an ability belongs to
+  exactly one registered bar (a release verb that only means something on
+  its own bar, for example). It is then rejected for assignment on every
+  other bar and refused activation outside it; abilities without a
+  declaration stay freely assignable everywhere.
 
 ## Persistence
 
