@@ -20,7 +20,7 @@ public final class HotbarServerConfig {
      */
     public static final ModConfigSpec.IntValue MAX_HOTBAR_SLOTS =
             BUILDER.comment("Maximum slots per hotbar bar (server ceiling - clients cannot exceed this)")
-                    .defineInRange("hotbar.maxSlots", 10, 1, 10);
+                    .defineInRange("hotbar.maxSlots", 10, 1, 18);
 
     /**
      * The server ceiling for cyclable hotbars (REQ-HOT-22): how many bars a

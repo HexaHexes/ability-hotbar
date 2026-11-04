@@ -19,7 +19,7 @@ public final class HotbarClientConfig {
      */
     public static final ModConfigSpec.IntValue SLOTS_PER_BAR =
             BUILDER.comment("Preferred slots per hotbar bar (clamped to the server's maxSlots)")
-                    .defineInRange("display.slotsPerBar", 9, 1, 10);
+                    .defineInRange("display.slotsPerBar", 9, 1, 18);
 
     /**
      * How many <b>built-in</b> hotbars the client's cycle set includes. The
