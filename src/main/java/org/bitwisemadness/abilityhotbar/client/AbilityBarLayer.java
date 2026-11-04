@@ -28,6 +28,7 @@ import org.bitwisemadness.abilityhotbar.content.ContentPlan;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.state.BarState;
+import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -102,7 +103,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         ResourceLocation activeId = state.activeBarId();
         HotbarContentProvider provider = HotbarContentProviders.get(activeId).orElse(null);
         int[] origin = provider != null
-                ? renderProviderBar(gui, mc, activeId, provider, screenW, screenH)
+                ? renderProviderBar(gui, mc, activeId, provider, state, screenW, screenH)
                 : renderStoredBar(gui, mc, state, screenW, screenH);
         if (origin == null) {
             return;
@@ -178,7 +179,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
      */
     @Nullable
     private static int[] renderProviderBar(GuiGraphics gui, Minecraft mc, ResourceLocation barId,
-            HotbarContentProvider provider, int screenW, int screenH) {
+            HotbarContentProvider provider, BarState state, int screenW, int screenH) {
         ContentPlan plan = ContentPlan.build(barId, provider);
         if (plan.isEmpty()) {
             return null; // broken provider: nothing this frame (already logged once)
@@ -217,10 +218,34 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             if (active >= 0) {
                 drawSelectionFrame(gui, layout, layout.slotRect(active, screenW, screenH));
             }
+            drawSeededOverlays(gui, mc, state, layout, screenW, screenH);
         } finally {
             RenderSystem.disableBlend();
         }
         return new int[] {layout.originX(screenW), layout.originY(screenH)};
+    }
+
+    /**
+     * Overlays for a provider bar's own assignments (#89): a mod-seeded verb
+     * contributes only its availability/cooldown/cost overlays over the
+     * provider's cell - the content stays the provider's ItemStack, never a
+     * second icon (ADR-012 §3 amendment). Cells without an assignment, or an
+     * active bar this state does not store, contribute nothing (the
+     * fail-closed view yields the empty sentinel).
+     */
+    private static void drawSeededOverlays(GuiGraphics gui, Minecraft mc, BarState state,
+            BarLayout layout, int screenW, int screenH) {
+        for (int i = 0; i < layout.slotCount(); i++) {
+            SlotAssignment assignment = state.assignment(i);
+            if (assignment == null || !assignment.isAssigned() || assignment.abilityId() == null) {
+                continue;
+            }
+            ResourceLocation id = assignment.abilityId();
+            SlotRender decision = SlotRender.resolve(assignment, false,
+                    AvailabilityProviders.availabilityFor(mc.player, id), AbilityDiscovery.get(id));
+            int[] rect = layout.slotRect(i, screenW, screenH);
+            drawOverlays(gui, decision, rect[0], rect[1], rect[2], rect[3]);
+        }
     }
 
     /**
