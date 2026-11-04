@@ -238,7 +238,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         int y1 = Math.max(first[1] + first[3], last[1] + last[3]);
         gui.enableScissor(x0, y0, x1, y1);
         try {
-            drawBarBackground(gui, layout, screenW, screenH);
+            // One sprite only: provider bars keep single-segment chrome per
+            // #86's open-question default (their cells are provider-owned).
+            drawBackgroundSegment(gui, layout, screenW, screenH, 0);
         } finally {
             gui.disableScissor();
         }
@@ -302,26 +304,39 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     }
 
     /**
-     * Blits the vanilla hotbar sprite as the bar's background so the bar reads in
-     * the vanilla texture language (REQ-HOT-01). The sprite is drawn at its native
-     * 182x22 (x scale) proportions - never squashed to the layout's slot box -
-     * because vanilla hardcodes that size and resource packs design for it;
-     * stretching distorted the art and shifted our slots off the texture's frames.
+     * Blits the bar's background so it reads in the vanilla texture language
+     * (REQ-HOT-01, hotbar#86): one complete {@code hud/hotbar} sprite per
+     * {@link BarLayout#segmentCount() segment}, each at native 182x22
+     * proportions - never squashed, stretched or cropped, because vanilla
+     * hardcodes that size and resource packs design for it. Segments sit
+     * flush along the layout axis, so a bar of 10..18 slots reads as two
+     * adjacent hotbars (a partial segment's unused cells render empty) and
+     * the anchor, offsets, scale and orientation move them as one unit.
      *
-     * <p>A horizontal strip cannot fill a vertical box at all, so the vertical
-     * path turns it a quarter turn instead of scaling it into the box.</p>
+     * <p>A horizontal strip cannot fill a vertical box at all, so the
+     * vertical path turns each sprite a quarter turn instead of scaling it
+     * into the box.</p>
      */
     private static void drawBarBackground(GuiGraphics gui, BarLayout layout, int screenW, int screenH) {
+        for (int segment = 0; segment < layout.segmentCount(); segment++) {
+            drawBackgroundSegment(gui, layout, screenW, screenH, segment);
+        }
+    }
+
+    /** One segment's sprite: native size, framed so its cells align with the grid. */
+    private static void drawBackgroundSegment(GuiGraphics gui, BarLayout layout,
+            int screenW, int screenH, int segment) {
         int x = layout.originX(screenW);
         int y = layout.originY(screenH);
+        int offset = layout.segmentOffset(segment);
         // Offset by the sprite's 1px frame so its slot cells align with our grid.
         int border = Math.max(1, (int) Math.round(layout.scale()));
         int w = (int) Math.round(VANILLA_HOTBAR_WIDTH * layout.scale());
         int h = (int) Math.round(VANILLA_HOTBAR_HEIGHT * layout.scale());
         if (layout.horizontal()) {
-            gui.blitSprite(VANILLA_HOTBAR, x - border, y - border, w, h);
+            gui.blitSprite(VANILLA_HOTBAR, x - border + offset, y - border, w, h);
         } else {
-            blitTurned90(gui, VANILLA_HOTBAR, x - border, y - border, w, h);
+            blitTurned90(gui, VANILLA_HOTBAR, x - border, y - border + offset, w, h);
         }
     }
 

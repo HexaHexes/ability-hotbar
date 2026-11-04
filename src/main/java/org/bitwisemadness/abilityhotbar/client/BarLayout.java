@@ -98,6 +98,40 @@ public record BarLayout(
         return horizontal ? extent() : scaledSlotSize();
     }
 
+    /** Cells per vanilla hotbar segment - the texture's own nine cells. */
+    public static final int CELLS_PER_SEGMENT = 9;
+
+    /**
+     * How many full vanilla hotbar segments this bar needs: one for up to
+     * nine slots, two beyond (hotbar#86 - the ceiling is 18). Each segment
+     * blits the complete, unstretched {@code hud/hotbar} sprite, so a
+     * partial final segment shows its unused cells as ordinary empty cells.
+     *
+     * @return the segment count (always at least 1)
+     */
+    public int segmentCount() {
+        return Math.max(1, (slotCount + CELLS_PER_SEGMENT - 1) / CELLS_PER_SEGMENT);
+    }
+
+    /**
+     * How far a segment's origin sits along the layout axis from the bar's
+     * origin, in scaled pixels. Segments are <b>flush</b>: the next segment
+     * starts exactly where the ninth cell ends, so the pair's bounding box
+     * is this layout's own box - the anchor, offsets, scale and orientation
+     * move every segment together as one unit (hotbar#86).
+     *
+     * @param segment 0-based segment index
+     * @return the offset along the layout axis; 0 for the first segment
+     * @throws IndexOutOfBoundsException when the segment does not exist
+     */
+    public int segmentOffset(int segment) {
+        if (segment < 0 || segment >= segmentCount()) {
+            throw new IndexOutOfBoundsException(
+                    "segment " + segment + " out of range [0," + segmentCount() + ")");
+        }
+        return segment * CELLS_PER_SEGMENT * stride();
+    }
+
     /** Height of the slot grid along Y. */
     private int barHeight() {
         return horizontal ? scaledSlotSize() : extent();

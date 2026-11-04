@@ -234,4 +234,52 @@ class BarLayoutTest {
         assertThrows(IllegalArgumentException.class, () -> new BarLayout(3, 20, 1, true,
                 BarAnchor.ABOVE_STATUS, 0, 0, 0, 1.0));
     }
+
+    @Test
+    void segmentsSplitAtNineCells() {
+        // hotbar#86: one segment through nine slots, two beyond (the ceiling
+        // is 18), and a partial final segment never exceeds nine cells.
+        for (int n = 1; n <= BarLayout.CELLS_PER_SEGMENT; n++) {
+            assertEquals(1, layout(n, 1, true, 0, 0, 1.0).segmentCount(),
+                    n + " slots render as one segment");
+        }
+        for (int n = BarLayout.CELLS_PER_SEGMENT + 1; n <= 18; n++) {
+            BarLayout split = layout(n, 1, true, 0, 0, 1.0);
+            assertEquals(2, split.segmentCount(), n + " slots render as two segments");
+            int lastSegmentCells =
+                    n - BarLayout.CELLS_PER_SEGMENT * (split.segmentCount() - 1);
+            assertTrue(lastSegmentCells >= 1 && lastSegmentCells <= BarLayout.CELLS_PER_SEGMENT,
+                    "the partial segment holds 1..9 cells, got " + lastSegmentCells);
+        }
+        // the documented splits: 10 -> 9 + 1, 18 -> 9 + 9
+        assertEquals(2, layout(10, 1, true, 0, 0, 1.0).segmentCount());
+        assertEquals(2, layout(18, 1, true, 0, 0, 1.0).segmentCount());
+    }
+
+    @Test
+    void segmentOffsetsAreFlushAndMoveAsOneUnit() {
+        // Flush placement: segment 1 starts where the ninth cell ends, so the
+        // pair's bounding box is this layout's own box - anchor, offsets, scale
+        // and orientation apply once and every segment moves together (#86 r4).
+        BarLayout atScaleOne = layout(18, 0, true, 0, 0, 1.0);
+        assertEquals(0, atScaleOne.segmentOffset(0));
+        assertEquals(9 * atScaleOne.stride(), atScaleOne.segmentOffset(1));
+        assertEquals(180, atScaleOne.segmentOffset(1), "nine 20px cells at scale 1");
+
+        BarLayout scaled = layout(18, 0, true, 0, 0, 2.0);
+        assertEquals(9 * scaled.stride(), scaled.segmentOffset(1),
+                "the seam scales with the cells");
+
+        BarLayout vertical = layout(18, 0, false, 0, 0, 1.0);
+        assertEquals(9 * vertical.stride(), vertical.segmentOffset(1),
+                "the same math runs down the Y axis");
+
+        // out-of-range segments fail loudly, like slotRect
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> layout(10, 1, true, 0, 0, 1.0).segmentOffset(2));
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> layout(9, 1, true, 0, 0, 1.0).segmentOffset(1));
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> layout(9, 1, true, 0, 0, 1.0).segmentOffset(-1));
+    }
 }

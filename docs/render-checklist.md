@@ -110,6 +110,23 @@ the contracts; these are the on-screen half.
 - [ ] The switch toast still appears above a provider bar when it is the
       active one.
 
+## Segmented bars (hotbar#86)
+
+- [ ] A bar of **10-18 slots** draws **two** complete vanilla hotbar
+      textures, flush along the bar's axis with a single divider between
+      them - each a full, unstretched `hud/hotbar` sprite, never squashed,
+      stretched or cropped.
+- [ ] A **partial** second segment (10-17 slots) shows its unused cells as
+      ordinary empty cells of a second, mostly empty hotbar.
+- [ ] Changing **anchor / offsetX / offsetY / scale / orientation** moves
+      both segments together as one unit - the seam never drifts.
+- [ ] Exactly **one** selection frame at any moment, drawn on the selected
+      slot's own segment - never two frames.
+- [ ] **Nine or fewer slots** render exactly as before (regression - the
+      single-segment path must be pixel-identical).
+- [ ] Slots 10+ show icons, overlays and selection like any other cell, and
+      their unbound hotkeys (slice A) activate them.
+
 ## Availability overlay (REQ-HOT-08, #19 contract)
 
 - [ ] A **known** cooldown darkens the slot proportionally (0 = covered,
