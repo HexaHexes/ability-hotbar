@@ -14,12 +14,14 @@ import org.lwjgl.glfw.GLFW;
 /**
  * The hotbar's rebindable keybindings (REQ-HOT-10/11/17, SPIKE-hot-3).
  *
- * <p>Fifteen defaults on the mod's own category - never
- * {@code key.irons_spellbooks.*}: Ctrl+1..9 activates a slot directly, Alt+1..9
- * and Alt+0 switch bars directly, G activates the selected slot, K opens the
- * ability menu, and Right Ctrl toggles ability mode. Ctrl+wheel (slot) and
- * Alt+wheel (bar) selection are not KeyMappings (the wheel has no Controls
- * entry) and are routed from {@link HotbarInputHandler}.</p>
+ * <p>Twenty-two bound defaults on the mod's own category - never
+ * {@code key.irons_spellbooks.*}: Ctrl+1..9 activates a slot directly,
+ * Alt+1..9 and Alt+0 switch bars directly, G activates the selected slot, K
+ * opens the ability menu, and Right Ctrl toggles ability mode - plus nine
+ * deliberately <b>unbound</b> slot-activation bindings for slots 10..18
+ * (hotbar#86: no default value, rebindable, claiming no key). Ctrl+wheel
+ * (slot) and Alt+wheel (bar) selection are not KeyMappings (the wheel has
+ * no Controls entry) and are routed from {@link HotbarInputHandler}.</p>
  *
  * <p>The Ctrl+number and Alt+number binds use {@link KeyModifier#CONTROL} /
  * {@link KeyModifier#ALT}, so NeoForge claims the digit only while that
@@ -39,8 +41,14 @@ public final class HotbarKeybinds {
     /**
      * Ctrl+1..9: activate the corresponding slot directly (REQ-HOT-11).
      * Package-private: a public mutable array would let any class rewrite it.
+     *
+     * <p>Slots 10..18 (reachable once {@code hotbar.maxSlots} allows more
+     * than nine, hotbar#86) use the same bindings with <b>no default value</b>
+     * - {@code GLFW_KEY_UNKNOWN} claims no key until the player binds one in
+     * the Controls screen; the Ctrl modifier stays as the family default so a
+     * user-assigned key behaves like the rest.</p>
      */
-    static final KeyMapping[] ACTIVATE_SLOT = new KeyMapping[9];
+    static final KeyMapping[] ACTIVATE_SLOT = new KeyMapping[18];
 
     /**
      * Alt+1..9, Alt+0: switch to the corresponding bar directly - index 0..8
@@ -60,12 +68,15 @@ public final class HotbarKeybinds {
 
     static {
         for (int i = 0; i < ACTIVATE_SLOT.length; i++) {
+            // Slots 1..9 default to Ctrl+1..9; slots 10..18 ship unbound
+            // (GLFW_KEY_UNKNOWN) - rebindable, claiming no default key (#86).
+            int key = i < 9 ? GLFW.GLFW_KEY_1 + i : GLFW.GLFW_KEY_UNKNOWN;
             ACTIVATE_SLOT[i] = new KeyMapping(
                     "key.abilityhotbar.activate_slot_" + (i + 1),
                     KeyConflictContext.IN_GAME,
                     KeyModifier.CONTROL,
                     InputConstants.Type.KEYSYM,
-                    GLFW.GLFW_KEY_1 + i,
+                    key,
                     CATEGORY);
         }
         for (int i = 0; i < SWITCH_BAR.length; i++) {

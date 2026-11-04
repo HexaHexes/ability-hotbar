@@ -40,7 +40,7 @@ class ClientConfigRoundTripTest {
             horizontal = false
             #Preferred slots per hotbar bar (clamped to the server's maxSlots)
             # Default: 9
-            # Range: 1 ~ 10
+            # Range: 1 ~ 18
             slotsPerBar = 9
             #Built-in hotbars in the cycle set (clamped to the server's maxBars)
             # Default: 3

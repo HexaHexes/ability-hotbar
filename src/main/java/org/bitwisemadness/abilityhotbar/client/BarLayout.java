@@ -16,7 +16,7 @@ import org.bitwisemadness.abilityhotbar.config.BarAnchor;
  * driven by a {@link BarAnchor}, which resolves both axes so no anchor plus
  * orientation combination is invalid.</p>
  *
- * @param slotCount number of slots (1..10, already clamped by config)
+ * @param slotCount number of slots (1..18, already clamped by config)
  * @param slotSize  unscaled slot edge length in pixels
  * @param gap       unscaled gap between slots in pixels
  * @param horizontal true for a left-to-right bar, false for top-to-bottom
