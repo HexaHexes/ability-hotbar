@@ -96,7 +96,10 @@ assignments and its own selected slot (REQ-HOT-22):
   its empty-cell texture, the framed cell, and the emptiness answer the
   wheel skips by. A bar without a provider counts as empty for skipping,
   and a provider that throws makes the bar draw nothing for that frame
-  (logged once) rather than crashing.
+  (logged once) rather than crashing. The owner can also **seed its verbs
+  into the bar's cells** server-side - the cell then activates that verb
+  with the cell as its context, while the cell's content stays the
+  provider's item (hotbar#89).
 - **Notification** - after a switch the new bar's name appears briefly above
   the bar, governed by `display.switchToast`.
 - **Scoped abilities** - a mod may declare that an ability belongs to
@@ -148,6 +151,11 @@ Upgrade and preservation rules:
   as diagnosed-inert rather than being dropped (REQ-HOT-21).
 - An id that cannot even be parsed is logged - naming its bar and slot - and
   left empty, never crashing the load (REQ-HOT-15).
+- **Content-owned bars store mod-seeded assignments too**: the mod that owns
+  a non-assignable bar writes its verbs into its own cells server-side (they
+  persist and sync like every other cell), while players can never write
+  them - the menu excludes the bar and the assignment path rejects it
+  outright (ADR-012 §3 amendment, hotbar#89).
 
 Migration ladders (which saved versions upgrade on load):
 

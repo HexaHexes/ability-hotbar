@@ -24,6 +24,8 @@ class ActivationResolverTest {
             ResourceLocation.fromNamespaceAndPath("tensura", "fireball");
     private static final ResourceLocation HEAL =
             ResourceLocation.fromNamespaceAndPath("tensura", "heal");
+    private static final ResourceLocation CURIOS =
+            ResourceLocation.fromNamespaceAndPath("pseudocore", "curios");
 
     @Test
     void emptySlotResolvesToNothing() {
@@ -82,6 +84,26 @@ class ActivationResolverTest {
         BarState unstored = BarState.empty(3)
                 .withActiveBar(ResourceLocation.fromNamespaceAndPath("pseudocore", "curios"));
         assertTrue(ActivationResolver.resolve(unstored, 0, ActivationSource.DIRECT_SLOT).isEmpty());
+    }
+
+    @Test
+    void seededAssignmentResolvesWithItsCellIndex() {
+        // #89 AC2: a seeded cell activates through the normal path with
+        // slotContext = the cell index, exactly like a stored assignment.
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        BarState seeded = SeededAssignments.seed(BarState.empty(3), CURIOS, 2,
+                        "pseudocore_curios:press")
+                .withActiveBar(CURIOS);
+
+        ActivationResolver.Activation a = ActivationResolver
+                .resolve(seeded, 2, ActivationSource.DIRECT_SLOT).orElseThrow();
+
+        assertEquals(ResourceLocation.fromNamespaceAndPath("pseudocore_curios", "press"),
+                a.abilityId());
+        assertEquals(2, a.slot(), "slotContext is the cell index");
+        assertEquals(ActivationSource.DIRECT_SLOT, a.source());
+        // an unseeded cell of the same bar resolves to nothing (no verb, no request)
+        assertTrue(ActivationResolver.resolve(seeded, 0, ActivationSource.DIRECT_SLOT).isEmpty());
     }
 
     @Test

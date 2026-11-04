@@ -125,4 +125,21 @@ class BarAssignmentsTest {
         assertFalse(BarAssignments.outOfScope(onCurios, "pseudocore_curios:press"),
                 "its own bar is never out of scope");
     }
+
+    @Test
+    void storedContentOwnedBarIsNeverPlayerWritable() {
+        // #89: once the owner has seeded a content-owned bar, the bar IS
+        // stored - without the assignable gate the player payload would slip
+        // through the range check that used to reject it implicitly.
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        BarState seeded = SeededAssignments.seed(BarState.empty(3), CURIOS, 0, "pseudocore_curios:press");
+        BarState active = seeded.withActiveBar(CURIOS);
+
+        assertFalse(BarAssignments.assign(active, 1, "tensura:fireball").isPresent(),
+                "writing to a content-owned bar is rejected");
+        assertFalse(BarAssignments.assign(active, 0, "").isPresent(),
+                "clearing its cells is rejected too");
+        assertFalse(BarAssignments.assign(active, 0, "pseudocore_curios:press").isPresent(),
+                "even re-writing the same seeded id belongs to the owner, not the player");
+    }
 }

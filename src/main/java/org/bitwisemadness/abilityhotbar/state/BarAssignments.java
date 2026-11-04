@@ -3,6 +3,7 @@ package org.bitwisemadness.abilityhotbar.state;
 import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
 import org.bitwisemadness.abilityhotbar.registry.AbilityBarScopes;
+import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -29,7 +30,16 @@ public final class BarAssignments {
      * @return the mutated state, or empty when the request is invalid
      */
     public static Optional<BarState> assign(BarState current, int slot, @Nullable String rawAbilityId) {
-        if (current == null || slot < 0 || slot >= current.assignments().length) {
+        if (current == null) {
+            return Optional.empty();
+        }
+        // Content-owned bars are never player-writable: their cells are
+        // owner-seeded (#89) and the menu already excludes them (ADR-012 §2).
+        // Without this gate a seeded (stored) bar would become writable.
+        if (!HotbarRegistry.isAssignable(current.activeBarId())) {
+            return Optional.empty();
+        }
+        if (slot < 0 || slot >= current.assignments().length) {
             return Optional.empty();
         }
         if (rawAbilityId == null || rawAbilityId.isBlank()) {

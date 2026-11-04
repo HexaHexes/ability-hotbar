@@ -8,7 +8,11 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import net.minecraft.resources.ResourceLocation;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.bitwisemadness.abilityhotbar.state.Bar;
 import org.bitwisemadness.abilityhotbar.state.BarState;
+import org.bitwisemadness.abilityhotbar.state.SeededAssignments;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,6 +21,16 @@ import org.junit.jupiter.api.Test;
  * the snapshot payload is the only path by which the client learns the bar.
  */
 class BarStateStreamCodecTest {
+
+    private static final ResourceLocation CURIOS =
+            ResourceLocation.fromNamespaceAndPath("pseudocore", "curios");
+
+    /** The seeding fixture registers a bar; keep the static registry clean. */
+    @BeforeEach
+    @AfterEach
+    void isolateRegistry() {
+        HotbarRegistry.reset();
+    }
 
     private static BarState roundTrip(BarState state) {
         ByteBuf buf = Unpooled.buffer();
@@ -53,6 +67,28 @@ class BarStateStreamCodecTest {
         assertEquals(2, decoded.assignments().length);
         assertTrue(decoded.assignment(0).isEmpty());
         assertTrue(decoded.assignment(1).isEmpty());
+    }
+
+    @Test
+    void seededContentOwnedBarRoundTripsThroughTheSnapshot() {
+        // #89 AC2: seeds ride the same wire as everything else - the client's
+        // snapshot carries the seeded cell and the active content-owned bar.
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        BarState seeded = SeededAssignments.seed(BarState.empty(3), CURIOS, 2,
+                        "pseudocore_curios:press")
+                .withActiveBar(CURIOS);
+
+        BarState decoded = roundTrip(seeded);
+
+        assertEquals(CURIOS, decoded.activeBarId());
+        Bar stored = null;
+        for (Bar bar : decoded.bars()) {
+            if (bar.id().equals(CURIOS)) {
+                stored = bar;
+            }
+        }        assertTrue(stored != null, "the content-owned bar itself crosses the wire");
+        assertEquals(ResourceLocation.fromNamespaceAndPath("pseudocore_curios", "press"),
+                stored.assignment(2).abilityId(), "the seeded cell survives the snapshot");
     }
 
     @Test

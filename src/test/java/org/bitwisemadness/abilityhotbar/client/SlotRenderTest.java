@@ -18,6 +18,7 @@ import org.bitwisemadness.abilitycore.api.Metric;
 import org.bitwisemadness.abilitycore.api.ResourceCost;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.state.BarState;
+import org.bitwisemadness.abilityhotbar.state.SeededAssignments;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -38,6 +39,8 @@ class SlotRenderTest {
             ResourceLocation.fromNamespaceAndPath("tensura", "ghost_missing");
     private static final ResourceLocation ICON =
             ResourceLocation.fromNamespaceAndPath("tensura", "textures/icons/fireball.png");
+    private static final ResourceLocation CURIOS =
+            ResourceLocation.fromNamespaceAndPath("pseudocore", "curios");
 
     private static AbilityDefinition definition(ResourceLocation icon, ResourceCost cost) {
         return new AbilityDefinition("tensura.skill.x", icon,
@@ -163,6 +166,33 @@ class SlotRenderTest {
         assertFalse(slots.get(0).selected());
         assertFalse(slots.get(1).selected());
         assertTrue(slots.get(2).selected(), "highlight follows the state machine");
+    }
+
+    @Test
+    void providerBarCellsCarryOverlaysFromTheirSeededAssignment() {
+        // #89 AC3: the seeded verb contributes availability/cooldown/cost
+        // overlays over the provider's cell content (the ItemStack half is
+        // the layer's draw order - reviewed, GUI not testable headless).
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        BarState seeded = SeededAssignments.seed(BarState.empty(3), CURIOS, 0,
+                "pseudocore_curios:press");
+        BarState state = SeededAssignments.seed(seeded, CURIOS, 2, "pseudocore_curios:press")
+                .withActiveBar(CURIOS);
+        Map<ResourceLocation, AbilityAvailability> table = Map.of(
+                ResourceLocation.fromNamespaceAndPath("pseudocore_curios", "press"),
+                new AbilityAvailability(Metric.known(0.5), Metric.unknown(),
+                        AvailabilityState.unavailable("cooldown")));
+
+        List<SlotRender> slots = SlotRender.resolveAll(state,
+                id -> Optional.ofNullable(table.get(id)),
+                id -> Optional.of(definition(ICON, null)));
+
+        assertTrue(slots.get(0).assigned(), "the seeded cell carries its verb");
+        assertNotNull(slots.get(0).cooldownFraction(), "the assignment's overlays ride along");
+        assertEquals(0.5, slots.get(0).cooldownFraction());
+        assertTrue(slots.get(0).hasCooldownOverlay());
+        assertFalse(slots.get(1).assigned(), "an unseeded cell has no verb");
+        assertFalse(slots.get(1).hasCooldownOverlay(), "and no overlays");
     }
 
     @Test
