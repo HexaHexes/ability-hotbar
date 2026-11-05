@@ -5,9 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Optional;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import org.bitwisemadness.abilitycore.api.AbilityAvailability;
+import org.bitwisemadness.abilitycore.api.AvailabilityState;
+import org.bitwisemadness.abilitycore.api.Metric;
 import org.bitwisemadness.abilityhotbar.MinecraftBootstrap;
 import org.bitwisemadness.abilityhotbar.state.LogCapture;
 import org.junit.jupiter.api.AfterEach;
@@ -34,6 +39,8 @@ class ContentPlanTest {
             ResourceLocation.fromNamespaceAndPath("pseudocore", "other");
     private static final ResourceLocation EMPTY_SPRITE =
             ResourceLocation.fromNamespaceAndPath("curios", "slot/empty_curio_slot");
+    private static final ResourceLocation ICON =
+            ResourceLocation.fromNamespaceAndPath("iss", "spell/fireball");
 
     @BeforeEach
     @AfterEach
@@ -230,6 +237,137 @@ class ContentPlanTest {
             ContentPlan.reset();
             ContentPlan.build(BAR, broken);
             assertEquals(2, reportsFor(logs, BAR), "reset lets a fixture re-trigger");
+        }
+    }
+
+    @Test
+    void stateSelectionSuppliesTheDefaultFrame() {
+        // hotbar#115 AC1: the state's selected slot is the default framed
+        // cell when the provider does not name one; an explicit answer wins
+        HotbarContentProvider noFrame = minimal(6);
+        assertEquals(2, ContentPlan.build(BAR, noFrame, 2).activeSlot(),
+                "the state selection becomes the frame");
+        assertEquals(-1, ContentPlan.build(BAR, noFrame, -1).activeSlot(),
+                "no state selection -> no frame (the old default)");
+        assertEquals(5, ContentPlan.build(BAR, noFrame, 99).activeSlot(),
+                "the default clamps into the cells");
+        assertEquals(3, ContentPlan.build(BAR, sixCells(), 1).activeSlot(),
+                "an explicit provider answer beats the default");
+
+        HotbarContentProvider badFrame = new HotbarContentProvider() {
+            @Override
+            public int slotCount() {
+                return 6;
+            }
+
+            @Override
+            public ItemStack slotStack(int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public int activeSlot() {
+                return 99;
+            }
+        };
+        try (LogCapture logs = LogCapture.forLogger(ContentPlan.class)) {
+            assertEquals(4, ContentPlan.build(BAR, badFrame, 4).activeSlot(),
+                    "an invalid provider answer reports and falls back to the default");
+            assertEquals(1, reportsFor(logs, BAR), "the violation is logged once");
+        }
+    }
+
+    @Test
+    void iconsFollowTheProviderAndDefaultToNull() {
+        // hotbar#115 AC2: default = null everywhere (item-based providers
+        // render their stacks exactly as before); an icon-only provider's
+        // texture rides the plan and the layer draws it for empty stacks
+        ContentPlan plain = ContentPlan.build(BAR, minimal(3));
+        for (int i = 0; i < plain.slotCount(); i++) {
+            assertNull(plain.iconAt(i), "no icon hook -> stack/chrome rendering, unchanged");
+        }
+
+        HotbarContentProvider iconOnly = new HotbarContentProvider() {
+            @Override
+            public int slotCount() {
+                return 2;
+            }
+
+            @Override
+            public ItemStack slotStack(int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public ResourceLocation iconId(int index) {
+                return ICON;
+            }
+        };
+        ContentPlan plan = ContentPlan.build(BAR, iconOnly);
+        assertFalse(plan.isEmpty());
+        assertTrue(plan.stacks().get(0).isEmpty() && plan.stacks().get(1).isEmpty(),
+                "an icon-only provider ships no stacks");
+        assertEquals(ICON, plan.iconAt(0), "cell 0 renders the texture");
+        assertEquals(ICON, plan.iconAt(1), "cell 1 renders the texture");
+    }
+
+    @Test
+    void cellAvailabilityPrefersTheProviderThenFallsBack() {
+        // hotbar#115 AC3: opt-in per-cell answer wins; null = not opted in
+        // (global tuple unchanged); a throw falls back + logs once
+        Optional<AbilityAvailability> global =
+                Optional.of(AbilityAvailability.allUnknown());
+
+        HotbarContentProvider optIn = new HotbarContentProvider() {
+            @Override
+            public int slotCount() {
+                return 2;
+            }
+
+            @Override
+            public ItemStack slotStack(int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public AbilityAvailability availabilityFor(Player player, int index) {
+                return new AbilityAvailability(Metric.known(0.5), Metric.unknown(),
+                        AvailabilityState.available());
+            }
+        };
+        AbilityAvailability chosen = ContentPlan.cellAvailability(BAR, optIn, null, 0, global)
+                .orElseThrow();
+        assertTrue(chosen.isAvailable(), "the provider's per-cell answer wins");
+        assertEquals(Optional.of(0.5), chosen.cooldown().knownValue());
+
+        HotbarContentProvider notOptedIn = minimal(2);
+        assertEquals(global,
+                ContentPlan.cellAvailability(BAR, notOptedIn, null, 0, global),
+                "no opt-in -> the ability-global tuple, byte-identical");
+
+        HotbarContentProvider boom = new HotbarContentProvider() {
+            @Override
+            public int slotCount() {
+                return 2;
+            }
+
+            @Override
+            public ItemStack slotStack(int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public AbilityAvailability availabilityFor(Player player, int index) {
+                throw new IllegalStateException("overlay boom");
+            }
+        };
+        try (LogCapture logs = LogCapture.forLogger(ContentPlan.class)) {
+            assertEquals(global, ContentPlan.cellAvailability(BAR, boom, null, 0, global),
+                    "a throwing hook falls back to the global tuple");
+            assertEquals(global, ContentPlan.cellAvailability(BAR, boom, null, 1, global),
+                    "still the global tuple next frame");
+            assertEquals(1, reportsFor(logs, BAR),
+                    "the failure is logged once per bar, not per frame: " + logs.messages());
         }
     }
 }

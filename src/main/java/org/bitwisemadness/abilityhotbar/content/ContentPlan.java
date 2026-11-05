@@ -2,11 +2,15 @@ package org.bitwisemadness.abilityhotbar.content;
 
 import com.mojang.logging.LogUtils;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import org.bitwisemadness.abilitycore.api.AbilityAvailability;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
@@ -42,14 +46,16 @@ public final class ContentPlan {
 
     private final int slotCount;
     private final List<ItemStack> stacks;
+    private final List<ResourceLocation> icons;
     private final int activeSlot;
     @Nullable
     private final ResourceLocation emptyTexture;
 
-    private ContentPlan(int slotCount, List<ItemStack> stacks, int activeSlot,
-            @Nullable ResourceLocation emptyTexture) {
+    private ContentPlan(int slotCount, List<ItemStack> stacks, List<ResourceLocation> icons,
+            int activeSlot, @Nullable ResourceLocation emptyTexture) {
         this.slotCount = slotCount;
         this.stacks = stacks;
+        this.icons = icons;
         this.activeSlot = activeSlot;
         this.emptyTexture = emptyTexture;
     }
@@ -64,6 +70,25 @@ public final class ContentPlan {
      * @return the frame's plan; empty when the provider cannot be trusted
      */
     public static ContentPlan build(ResourceLocation barId, HotbarContentProvider provider) {
+        return build(barId, provider, -1);
+    }
+
+    /**
+     * The frame's plan with a <b>state-supplied default frame</b>
+     * (hotbar#115): the wheel's selected slot for this bar becomes the
+     * framed cell when the provider does not name one ({@code activeSlot()}
+     * returns {@code -1}); an explicit provider answer wins, an invalid one
+     * is reported and falls back to the default, and the default itself is
+     * clamped into the cells. With the default {@code -1} (the old two-arg
+     * form) behaviour is byte-identical to before.
+     *
+     * @param barId             the bar the provider belongs to (named in diagnostics)
+     * @param provider          the bar's content provider
+     * @param defaultActiveSlot the state's selected slot for this bar, or -1 for none
+     * @return the frame's plan; empty when the provider cannot be trusted
+     */
+    public static ContentPlan build(ResourceLocation barId, HotbarContentProvider provider,
+            int defaultActiveSlot) {
         if (barId == null || provider == null) {
             return empty();
         }
@@ -75,18 +100,26 @@ public final class ContentPlan {
                 return empty();
             }
             List<ItemStack> cells = new ArrayList<>(count);
+            List<ResourceLocation> cellIcons = new ArrayList<>(count);
             for (int i = 0; i < count; i++) {
                 ItemStack stack = provider.slotStack(i);
                 cells.add(stack == null ? ItemStack.EMPTY : stack);
+                cellIcons.add(provider.iconId(i));
             }
+            int fallback = defaultActiveSlot < 0 ? -1 : Math.min(defaultActiveSlot, count - 1);
             int active = provider.activeSlot();
             if (active < -1 || active >= count) {
                 report(barId, new IllegalArgumentException(
                         "activeSlot " + active + " outside [-1," + count + ")"));
                 active = -1;
             }
+            if (active == -1) {
+                active = fallback;
+            }
             ResourceLocation texture = provider.emptyCellTexture();
-            return new ContentPlan(count, List.copyOf(cells), active, texture);
+            // unmodifiable, NOT List.copyOf: icon entries are legitimately null
+            return new ContentPlan(count, List.copyOf(cells),
+                    Collections.unmodifiableList(cellIcons), active, texture);
         } catch (Exception e) {
             report(barId, e);
             return empty();
@@ -102,6 +135,34 @@ public final class ContentPlan {
      * @param provider the bar's content provider
      * @return whether the bar currently holds content
      */
+    /**
+     * One cell's availability (hotbar#115 AC3): the provider's per-cell
+     * answer when it opts in, otherwise the global tuple unchanged - with
+     * the same guarded, once-per-bar diagnostics as every other provider
+     * call (a throw falls back to the global answer).
+     *
+     * @param barId         the bar the provider belongs to (named in diagnostics)
+     * @param provider      the bar's content provider
+     * @param player        the player being rendered (nullable for tests)
+     * @param index         the cell whose overlays are drawn
+     * @param globalFallback the ability-global tuple (from AvailabilityProviders)
+     * @return the tuple to draw with
+     */
+    public static Optional<AbilityAvailability> cellAvailability(ResourceLocation barId,
+            HotbarContentProvider provider, @Nullable Player player, int index,
+            Optional<AbilityAvailability> globalFallback) {
+        if (barId == null || provider == null) {
+            return globalFallback;
+        }
+        try {
+            AbilityAvailability perCell = provider.availabilityFor(player, index);
+            return perCell == null ? globalFallback : Optional.of(perCell);
+        } catch (Exception e) {
+            report(barId, e);
+            return globalFallback;
+        }
+    }
+
     public static boolean hasContent(ResourceLocation barId, HotbarContentProvider provider) {
         if (barId == null || provider == null) {
             return false;
@@ -132,7 +193,7 @@ public final class ContentPlan {
     }
 
     private static ContentPlan empty() {
-        return new ContentPlan(0, List.of(), -1, null);
+        return new ContentPlan(0, List.of(), List.of(), -1, null);
     }
 
     /** @return true when nothing may be drawn this frame */
@@ -153,6 +214,16 @@ public final class ContentPlan {
     /** @return the cell to frame, or {@code -1} for none */
     public int activeSlot() {
         return activeSlot;
+    }
+
+    /**
+     * @param index the cell index
+     * @return the cell's icon texture (hotbar#115), or null when the cell
+     *         renders its stack or the hotbar's own chrome
+     */
+    @Nullable
+    public ResourceLocation iconAt(int index) {
+        return index >= 0 && index < icons.size() ? icons.get(index) : null;
     }
 
     /** @return the empty-cell sprite, or null for the hotbar's own chrome */

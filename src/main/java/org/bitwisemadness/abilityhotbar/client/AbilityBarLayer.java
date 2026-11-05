@@ -28,6 +28,7 @@ import org.bitwisemadness.abilityhotbar.content.ContentPlan;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.state.BarState;
+import org.bitwisemadness.abilityhotbar.state.SeededAssignments;
 import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
 import org.jetbrains.annotations.Nullable;
 
@@ -190,7 +191,12 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     @Nullable
     private static int[] renderProviderBar(GuiGraphics gui, Minecraft mc, ResourceLocation barId,
             HotbarContentProvider provider, BarState state, int screenW, int screenH) {
-        ContentPlan plan = ContentPlan.build(barId, provider);
+        // hotbar#115: the state's selected slot frames the bar unless the
+        // provider names its own cell - a stored (seeded) provider bar carries
+        // the selection, a never-stored one has none (no frame, as before)
+        int defaultActive = SeededAssignments.storedBar(state, barId)
+                .map(stored -> stored.selectedSlot()).orElse(-1);
+        ContentPlan plan = ContentPlan.build(barId, provider, defaultActive);
         if (plan.isEmpty()) {
             return null; // broken provider: nothing this frame (already logged once)
         }
@@ -216,9 +222,16 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
                 int[] rect = layout.slotRect(i, screenW, screenH);
                 ItemStack stack = cells.get(i);
                 if (stack.isEmpty()) {
-                    ResourceLocation texture = plan.emptyTexture();
-                    if (texture != null) {
-                        gui.blitSprite(texture, rect[0], rect[1], rect[2], rect[3]);
+                    // hotbar#115: an icon-only cell (ISS spell textures) draws
+                    // its texture; otherwise the empty-cell chrome
+                    ResourceLocation icon = plan.iconAt(i);
+                    if (icon != null) {
+                        drawIcon(gui, icon, rect[0], rect[1], rect[2], rect[3]);
+                    } else {
+                        ResourceLocation texture = plan.emptyTexture();
+                        if (texture != null) {
+                            gui.blitSprite(texture, rect[0], rect[1], rect[2], rect[3]);
+                        }
                     }
                 } else {
                     drawCellItem(gui, mc, stack, rect, layout.scale());
@@ -228,7 +241,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             if (active >= 0) {
                 drawSelectionFrame(gui, layout, layout.slotRect(active, screenW, screenH));
             }
-            drawSeededOverlays(gui, mc, state, layout, screenW, screenH);
+            drawSeededOverlays(gui, mc, state, layout, screenW, screenH, barId, provider);
         } finally {
             RenderSystem.disableBlend();
         }
@@ -244,15 +257,20 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
      * fail-closed view yields the empty sentinel).
      */
     private static void drawSeededOverlays(GuiGraphics gui, Minecraft mc, BarState state,
-            BarLayout layout, int screenW, int screenH) {
+            BarLayout layout, int screenW, int screenH, ResourceLocation barId,
+            HotbarContentProvider provider) {
         for (int i = 0; i < layout.slotCount(); i++) {
             SlotAssignment assignment = state.assignment(i);
             if (assignment == null || !assignment.isAssigned() || assignment.abilityId() == null) {
                 continue;
             }
             ResourceLocation id = assignment.abilityId();
-            SlotRender decision = SlotRender.resolve(assignment, false,
-                    AvailabilityProviders.availabilityFor(mc.player, id), AbilityDiscovery.get(id));
+            // hotbar#115: the provider's per-cell answer wins when it opts in;
+            // otherwise the ability-global tuple, exactly as before (guarded,
+            // once-per-bar diagnostics live in ContentPlan.cellAvailability)
+            var chosen = ContentPlan.cellAvailability(barId, provider, mc.player, i,
+                    AvailabilityProviders.availabilityFor(mc.player, id));
+            SlotRender decision = SlotRender.resolve(assignment, false, chosen, AbilityDiscovery.get(id));
             int[] rect = layout.slotRect(i, screenW, screenH);
             drawOverlays(gui, decision, rect[0], rect[1], rect[2], rect[3]);
         }

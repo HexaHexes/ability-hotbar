@@ -1,7 +1,9 @@
 package org.bitwisemadness.abilityhotbar.content;
 
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import org.bitwisemadness.abilitycore.api.AbilityAvailability;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -81,6 +83,40 @@ public interface HotbarContentProvider {
      */
     @Nullable
     default ResourceLocation emptyCellTexture() {
+        return null;
+    }
+
+    /**
+     * The texture for one cell when it renders <b>no stack</b> (hotbar#115):
+     * ISS-style spell cells are textures, not items. {@code null} (the
+     * default) means "render the stack" - item-based providers are unchanged
+     * - and the layer consults this only when the cell's stack is empty, so
+     * a stack always wins over an icon for the same cell.
+     *
+     * @param index in {@code [0, slotCount())} by contract
+     * @return the cell's texture, or null to render the stack / empty chrome
+     */
+    @Nullable
+    default ResourceLocation iconId(int index) {
+        return null;
+    }
+
+    /**
+     * Per-cell availability (hotbar#115): when a provider opts in, its
+     * answer replaces the ability-global overlay tuple for that cell's
+     * cooldown/cost overlays (per-spell mana and cooldown). {@code null}
+     * (the default) = not opted in - the existing
+     * {@code AvailabilityProviders} per-ability tuple remains the answer, so
+     * providers that do not opt in are byte-identical to today. Guarded by
+     * {@code ContentPlan} like every other provider call: a throw falls back
+     * to the global tuple, logged once with the bar id.
+     *
+     * @param player the player being rendered (may be null only in tests)
+     * @param index  the cell whose overlays are drawn
+     * @return this cell's availability, or null to use the global tuple
+     */
+    @Nullable
+    default AbilityAvailability availabilityFor(@Nullable Player player, int index) {
         return null;
     }
 }
