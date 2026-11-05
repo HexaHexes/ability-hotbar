@@ -6,6 +6,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -56,8 +57,20 @@ public final class HotbarInputHandler {
      * Ctrl+wheel selects a slot, Alt+wheel cycles bars, plain wheel stays
      * vanilla. When both modifiers are held Ctrl wins - the shipped slot
      * behaviour is never displaced by the later bar control.
+     *
+     * <p><b>{@code HIGHEST} is load-bearing (hotbar#106):</b> architectury's
+     * NeoForge bridge ({@code EventHandlerImplClient.eventInputEvent},
+     * priority {@code HIGH}, {@code receiveCanceled} default false) forwards
+     * this event to {@code ClientRawInputEvent.MOUSE_SCROLLED}, where Tensura:
+     * Reincarnated's ability-preset scrolling listens
+     * ({@code PlayerInputHandler.init}). Cancelling here at {@code HIGHEST}
+     * claims the modifier chords before that bridge runs - at the old
+     * {@code NORMAL} the bridge fired first and one notch drove both features
+     * (the "preset 1..9" notifications). Plain wheel never cancels, so
+     * non-overlapping chords elsewhere still work. Fixture-pinned by
+     * {@code ScrollOwnershipTest}.</p>
      */
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onMouseScroll(InputEvent.MouseScrollingEvent event) {
         // REQ-HOT-18: never act over a screen, and only while a modifier this
         // handler owns is held - plain wheel must stay 100% vanilla. NeoForge
