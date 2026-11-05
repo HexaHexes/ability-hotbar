@@ -69,13 +69,15 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     private static final int VANILLA_SELECTION_WIDTH = 24;
     private static final int VANILLA_SELECTION_HEIGHT = 23;
     /**
-     * The selection sprite's bottom ring is 3 native px (top/left/right are 4:
+     * The selection sprite's top ring is 4 native px (left/right 4, bottom 3:
      * the transparent window sits at 4..19 in both axes of the 24x23 texture -
-     * measured from the vanilla asset). A quarter turn lands this thin ring on
-     * the frame's LEFT, which is what hotbar#103's one-pixel misalignment
-     * traces to.
+     * measured from the vanilla asset). The selector renders at 270 degrees
+     * (hotbar#109: the shipped 90-degree turn plus the requested 180-degree
+     * flip), which maps this TOP ring onto the frame's LEFT - so the
+     * window-solve inset pairs with it (a stale bottom-ring inset parks the
+     * window one pixel right of the slot).
      */
-    private static final int SELECTION_BOTTOM_RING = 3;
+    private static final int SELECTION_TOP_RING = 4;
 
     private static final int INERT_COLOR = 0x66FF2222;
     private static final int UNAVAILABLE_TINT = 0x66FF0000;
@@ -301,29 +303,29 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     /** The vanilla selection frame around one cell, honouring orientation. */
     private static void drawSelectionFrame(GuiGraphics gui, BarLayout layout, int[] rect) {
         int[] frame = selectionFrameRect(rect, layout.horizontal(), layout.scale());
-        if (layout.horizontal()) {
+        if (frame[4] == 0) {
             gui.blitSprite(VANILLA_SELECTION, frame[0], frame[1], frame[2], frame[3]);
         } else {
-            blitTurned90(gui, VANILLA_SELECTION, frame[0], frame[1], frame[2], frame[3]);
+            blitTurned(gui, VANILLA_SELECTION, frame[0], frame[1], frame[2], frame[3], frame[4]);
         }
     }
 
     /**
-     * The frame's blit args {@code (x, y, nativeW, nativeH)} for one slot -
-     * package-private so the window-vs-slot alignment (hotbar#103) is pinned
-     * without a renderer. Horizontal: the symmetric {@code offset} centers the
-     * sprite's 4/4 side rings on the slot. Turned: a quarter turn maps the
-     * sprite's 3px bottom ring onto the frame's LEFT (its 4px rings land
-     * top/right), so solving x for the <em>box</em> parks the 16px window one
-     * pixel left of the slot at scale 1 - the frame then visibly sits left of
-     * the slot it marks. This solves x for the <b>window</b> instead: it must
-     * start where the icon draws (slot + 2 scaled px), exactly like the
-     * horizontal result.
+     * The frame's blit args {@code (x, y, nativeW, nativeH, rotationDegrees)}
+     * for one slot - package-private so the window-vs-slot alignment
+     * (hotbar#103) and the vertical orientation (hotbar#109) are pinned
+     * without a renderer. Horizontal: rotation 0, the symmetric {@code offset}
+     * centers the sprite's 4/4 side rings on the slot. Vertical: rotation
+     * <b>270</b> (the shipped 90-degree turn plus the requested 180-degree
+     * flip) - the flip maps the sprite's 4px TOP ring onto the frame's LEFT,
+     * so the window-solve inset is that ring: solving x for the
+     * <b>window</b> (never the box) keeps the 16px window where the icon
+     * draws, slot + 2 scaled px, exactly like the horizontal result.
      *
      * @param rect       the slot's {@code (x, y, w, h)}
      * @param horizontal the layout orientation
      * @param scale      the layout's uniform scale
-     * @return the frame's {@code (x, y, w, h)} blit args
+     * @return the frame's {@code (x, y, w, h, rotation)} blit args
      */
     static int[] selectionFrameRect(int[] rect, boolean horizontal, double scale) {
         int x = rect[0];
@@ -332,10 +334,10 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         int selW = (int) Math.round(VANILLA_SELECTION_WIDTH * scale);
         int selH = (int) Math.round(VANILLA_SELECTION_HEIGHT * scale);
         if (horizontal) {
-            return new int[] {x - offset, y - offset, selW, selH};
+            return new int[] {x - offset, y - offset, selW, selH, 0};
         }
-        int leftInset = (int) Math.round(SELECTION_BOTTOM_RING * selH / (float) VANILLA_SELECTION_HEIGHT);
-        return new int[] {x + offset - leftInset, y - offset, selW, selH};
+        int leftInset = (int) Math.round(SELECTION_TOP_RING * selH / (float) VANILLA_SELECTION_HEIGHT);
+        return new int[] {x + offset - leftInset, y - offset, selW, selH, 270};
     }
 
     /**
@@ -398,32 +400,36 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         if (layout.horizontal()) {
             gui.blitSprite(VANILLA_HOTBAR, dx, dy, w, h);
         } else {
-            blitTurned90(gui, VANILLA_HOTBAR, dx, dy, w, h);
+            blitTurned(gui, VANILLA_HOTBAR, dx, dy, w, h, 90f);
         }
     }
 
     /**
-     * Blits a landscape sprite turned a quarter turn clockwise, so it keeps its
-     * native proportions instead of being squashed into a portrait box.
+     * Blits a landscape sprite turned a quarter turn (or three), so it keeps
+     * its native proportions instead of being squashed into a portrait box.
      *
-     * <p>The sprite is drawn at {@code (nativeW, nativeH)} and turned about its
-     * centre, so it occupies {@code (nativeH, nativeW)} starting at
-     * {@code (dx, dy)} - the target's width comes from the sprite's height and
-     * its height from the sprite's width.</p>
+     * <p>The sprite is drawn at {@code (nativeW, nativeH)} and turned about
+     * its centre, so it occupies {@code (nativeH, nativeW)} starting at
+     * {@code (dx, dy)} - any quarter turn swaps width and height the same
+     * way, so the footprint is identical for 90 and 270 degrees; only the
+     * content's orientation differs.</p>
      *
-     * <p>A quarter turn maps +X to +Y, and GUI +Y points down, so the sprite's
-     * left cap lands at the top. That puts cell 1 under slot 0, which sits at the
-     * top of a vertical bar just as it sits at the left of a horizontal one.</p>
+     * <p>90 degrees (the bar background) maps +X to +Y, and GUI +Y points
+     * down, so the sprite's left cap lands at the top: cell 1 under slot 0,
+     * at the top of a vertical bar just as at the left of a horizontal one.
+     * 270 degrees (the selection frame - 90 plus hotbar#109's 180-degree
+     * flip) presents the sprite the other way round.</p>
      */
-    private static void blitTurned90(
-            GuiGraphics gui, ResourceLocation sprite, int dx, int dy, int nativeW, int nativeH) {
+    private static void blitTurned(
+            GuiGraphics gui, ResourceLocation sprite, int dx, int dy, int nativeW, int nativeH,
+            float degrees) {
         PoseStack pose = gui.pose();
         pose.pushPose();
         try {
             // Centre of the box the sprite fills once turned: a quarter turn
             // swaps its width and height, so anchor on the swapped half-extents.
             pose.translate(dx + nativeH / 2.0, dy + nativeW / 2.0, 0.0);
-            pose.mulPose(Axis.ZP.rotationDegrees(90));
+            pose.mulPose(Axis.ZP.rotationDegrees(degrees));
             pose.translate(-nativeW / 2.0, -nativeH / 2.0, 0.0);
             gui.blitSprite(sprite, 0, 0, nativeW, nativeH);
         } finally {
