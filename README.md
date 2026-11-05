@@ -39,7 +39,10 @@ category. Defaults (from SPIKE-hot-3):
 
 Selecting a slot never fires an ability. Activating uses the selected slot and
 leaves the selection where it was. Empty, restricted, unaffordable or on-cooldown
-slots fail with no resource consumed.
+slots fail with no resource consumed. Costs themselves are core-side: the hotbar
+only sends the activation intent, and Tensura Ability Core's pipeline validates
+and charges resources — the resource providers and consumers live there, never
+here.
 
 Abilities can carry a target: when an ability's definition is tagged
 **`targeted`** and you activate it with an entity under the crosshair, that

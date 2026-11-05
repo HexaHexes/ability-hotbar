@@ -24,6 +24,10 @@ toggleable equipped-spellbook hotbar (ISS only).
   and the spellbook hotbar - that feature must gate off entirely without ISS),
   `ability_battlewills` (battlewill provider). Optional providers gate behind
   `ModList.isLoaded`; a missing provider disables only its own features.
+- **Resource-cost boundary** (ability-hotbar#117): this repo only fires
+  activation intents and displays core's refusal outcomes — validation,
+  charging, providers and consumers all live in `tensura-ability-core`'s
+  pipeline. No resource imports or cost math here, ever.
 
 **Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
 
