@@ -96,8 +96,8 @@
   "ability_hotbar.configuration.statusAnchorMode.tooltip": "Height used by Above status bars: Dynamic tracks hearts, armor and oxygen, Fixed uses the vanilla baseline. Default: Dynamic.",
   "ability_hotbar.configuration.maxSlots": "Maximum slots per bar",
   "ability_hotbar.configuration.maxSlots.tooltip": "Highest slot count any bar may have; clients are clamped to this. Default: 10.",
-  "ability_hotbar.configuration.maxBars": "Maximum hotbars",
-  "ability_hotbar.configuration.maxBars.tooltip": "Highest number of cyclable hotbars. Default: 10.",
+  "ability_hotbar.configuration.maxBars": "Maximum built-in hotbars",
+  "ability_hotbar.configuration.maxBars.tooltip": "Highest number of built-in hotbars in the Alt+wheel / Alt+number cycle (server ceiling). Mod-registered hotbars are always included and never clipped. Default: 10.",
 
   "ability_hotbar.anchor.above_hotbar": "Above hotbar",
   "ability_hotbar.anchor.above_xp": "Above XP bar",
