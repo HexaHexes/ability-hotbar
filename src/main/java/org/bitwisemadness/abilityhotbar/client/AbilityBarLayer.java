@@ -68,6 +68,14 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             ResourceLocation.withDefaultNamespace("hud/hotbar_selection");
     private static final int VANILLA_SELECTION_WIDTH = 24;
     private static final int VANILLA_SELECTION_HEIGHT = 23;
+    /**
+     * The selection sprite's bottom ring is 3 native px (top/left/right are 4:
+     * the transparent window sits at 4..19 in both axes of the 24x23 texture -
+     * measured from the vanilla asset). A quarter turn lands this thin ring on
+     * the frame's LEFT, which is what hotbar#103's one-pixel misalignment
+     * traces to.
+     */
+    private static final int SELECTION_BOTTOM_RING = 3;
 
     private static final int INERT_COLOR = 0x66FF2222;
     private static final int UNAVAILABLE_TINT = 0x66FF0000;
@@ -292,17 +300,42 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
 
     /** The vanilla selection frame around one cell, honouring orientation. */
     private static void drawSelectionFrame(GuiGraphics gui, BarLayout layout, int[] rect) {
+        int[] frame = selectionFrameRect(rect, layout.horizontal(), layout.scale());
+        if (layout.horizontal()) {
+            gui.blitSprite(VANILLA_SELECTION, frame[0], frame[1], frame[2], frame[3]);
+        } else {
+            blitTurned90(gui, VANILLA_SELECTION, frame[0], frame[1], frame[2], frame[3]);
+        }
+    }
+
+    /**
+     * The frame's blit args {@code (x, y, nativeW, nativeH)} for one slot -
+     * package-private so the window-vs-slot alignment (hotbar#103) is pinned
+     * without a renderer. Horizontal: the symmetric {@code offset} centers the
+     * sprite's 4/4 side rings on the slot. Turned: a quarter turn maps the
+     * sprite's 3px bottom ring onto the frame's LEFT (its 4px rings land
+     * top/right), so solving x for the <em>box</em> parks the 16px window one
+     * pixel left of the slot at scale 1 - the frame then visibly sits left of
+     * the slot it marks. This solves x for the <b>window</b> instead: it must
+     * start where the icon draws (slot + 2 scaled px), exactly like the
+     * horizontal result.
+     *
+     * @param rect       the slot's {@code (x, y, w, h)}
+     * @param horizontal the layout orientation
+     * @param scale      the layout's uniform scale
+     * @return the frame's {@code (x, y, w, h)} blit args
+     */
+    static int[] selectionFrameRect(int[] rect, boolean horizontal, double scale) {
         int x = rect[0];
         int y = rect[1];
-        double scale = layout.scale();
         int offset = (int) Math.round(2 * scale);
         int selW = (int) Math.round(VANILLA_SELECTION_WIDTH * scale);
         int selH = (int) Math.round(VANILLA_SELECTION_HEIGHT * scale);
-        if (layout.horizontal()) {
-            gui.blitSprite(VANILLA_SELECTION, x - offset, y - offset, selW, selH);
-        } else {
-            blitTurned90(gui, VANILLA_SELECTION, x - offset, y - offset, selW, selH);
+        if (horizontal) {
+            return new int[] {x - offset, y - offset, selW, selH};
         }
+        int leftInset = (int) Math.round(SELECTION_BOTTOM_RING * selH / (float) VANILLA_SELECTION_HEIGHT);
+        return new int[] {x + offset - leftInset, y - offset, selW, selH};
     }
 
     /**
