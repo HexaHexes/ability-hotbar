@@ -25,6 +25,8 @@ toggleable equipped-spellbook hotbar (ISS only).
   `ability_battlewills` (battlewill provider). Optional providers gate behind
   `ModList.isLoaded`; a missing provider disables only its own features.
 
+**Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
+
 **Test:** `./gradlew runGameTestServer` - `AbilityHotbarGameTests` (3 tests). `expectedTests = 3`
 in `build.gradle` must match the `@GameTest` count.
 
