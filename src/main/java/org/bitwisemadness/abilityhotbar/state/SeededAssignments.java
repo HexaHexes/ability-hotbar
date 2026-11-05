@@ -1,6 +1,8 @@
 package org.bitwisemadness.abilityhotbar.state;
 
+import com.mojang.logging.LogUtils;
 import java.util.Optional;
+import java.util.function.IntFunction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import org.bitwisemadness.abilityhotbar.content.ContentPlan;
@@ -8,6 +10,7 @@ import org.bitwisemadness.abilityhotbar.network.BarStateSync;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
 
 /**
  * <p>The owner write API for content-owned bars (hotbar#89, ADR-012 §3
@@ -33,6 +36,8 @@ import org.jetbrains.annotations.Nullable;
  * snapshot so the client sees the seed immediately.</p>
  */
 public final class SeededAssignments {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private SeededAssignments() {
     }
@@ -104,6 +109,8 @@ public final class SeededAssignments {
             grown[bars.length] = target;
             bars = grown;
         }
+        LOGGER.debug("Seeded bar {} slot {} with {}", barId, slot,
+                rawAbilityId == null ? "<cleared>" : rawAbilityId);
         return new BarState(bars, current.activeBarId(), current.schemaVersion());
     }
 
@@ -124,6 +131,66 @@ public final class SeededAssignments {
         BarState next = seed(player.getData(BarStateAttachments.BAR_STATE), barId, slot, rawAbilityId);
         player.setData(BarStateAttachments.BAR_STATE, next);
         BarStateSync.sendSnapshot(player);
+    }
+
+    /**
+     * Seeds every cell {@code [0, slotCount)} for a live player in one pass
+     * (hotbar#114): the same per-slot semantics as {@link #seed} (idempotent
+     * overwrite, a null answer clears the cell), validated up front so a bad
+     * {@code slotCount} or bar id mutates nothing, then persisted <b>once</b>
+     * and echoed <b>once</b> - the per-call overload would send a snapshot
+     * per cell on a join-time seeding loop.
+     *
+     * @param player        the owning player
+     * @param barId         the content-owned bar to write into
+     * @param slotCount     how many cells to seed, {@code [0, ContentPlan.MAX_CELLS]}
+     * @param abilityForSlot the ability for one slot, or null to clear it
+     * @throws IllegalArgumentException on a null bar/fn, an unregistered or
+     *         assignable bar, or an out-of-range slotCount - nothing written
+     */
+    public static void seedAll(ServerPlayer player, ResourceLocation barId, int slotCount,
+            IntFunction<String> abilityForSlot) {
+        BarState next = seedAll(player.getData(BarStateAttachments.BAR_STATE), barId, slotCount,
+                abilityForSlot);
+        player.setData(BarStateAttachments.BAR_STATE, next);
+        BarStateSync.sendSnapshot(player);
+    }
+
+    /**
+     * Pure core of {@link #seedAll(ServerPlayer, ResourceLocation, int, IntFunction)}:
+     * a validated loop over {@link #seed} - each cell keeps the per-slot
+     * fail-closed rules, the batch validates the whole range before writing,
+     * and a throw discards the intermediate state (the caller persists only a
+     * returned value).
+     *
+     * @param current       the player's current bar state
+     * @param barId         the content-owned bar to write into
+     * @param slotCount     how many cells to seed, {@code [0, ContentPlan.MAX_CELLS]}
+     * @param abilityForSlot the ability for one slot, or null to clear it
+     * @return the state with all requested cells written
+     * @throws IllegalArgumentException on nulls, an unregistered/assignable
+     *         bar, or a slotCount outside {@code [0, ContentPlan.MAX_CELLS]}
+     */
+    public static BarState seedAll(BarState current, ResourceLocation barId, int slotCount,
+            IntFunction<String> abilityForSlot) {
+        if (current == null) {
+            throw new IllegalArgumentException("bar state must not be null");
+        }
+        if (barId == null) {
+            throw new IllegalArgumentException("bar id must not be null");
+        }
+        if (abilityForSlot == null) {
+            throw new IllegalArgumentException("ability function must not be null for " + barId);
+        }
+        if (slotCount < 0 || slotCount > ContentPlan.MAX_CELLS) {
+            throw new IllegalArgumentException(
+                    "slotCount " + slotCount + " outside [0," + ContentPlan.MAX_CELLS + ") for " + barId);
+        }
+        BarState next = current;
+        for (int slot = 0; slot < slotCount; slot++) {
+            next = seed(next, barId, slot, abilityForSlot.apply(slot));
+        }
+        return next;
     }
 
     /** Grows a bar's slot array, preserving its slots, selection and id. */

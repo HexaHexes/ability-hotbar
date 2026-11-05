@@ -46,19 +46,29 @@ public final class LogCapture implements AutoCloseable {
 
     /** Opens a capture on the logger of the given class (its {@code LogUtils} name). */
     public static LogCapture forLogger(Class<?> loggerOwner) {
-        return forLogger(loggerOwner.getName());
+        return forLogger(loggerOwner.getName(), Level.INFO);
     }
 
-    private static LogCapture forLogger(String loggerName) {
+    /**
+     * Opens a capture at an explicit level - {@link Level#DEBUG} for the
+     * debug-log fixtures (hotbar#114), {@link Level#INFO} is the default so
+     * assertions do not depend on the ambient config.
+     */
+    public static LogCapture forLogger(Class<?> loggerOwner, Level level) {
+        return forLogger(loggerOwner.getName(), level);
+    }
+
+    private static LogCapture forLogger(String loggerName, Level level) {
         LoggerContext context = (LoggerContext) LogManager.getContext(false);
         Configuration config = context.getConfiguration();
         LoggerConfig before = config.getLoggerConfig(loggerName);
         boolean preexisting = loggerName.equals(before.getName());
         Level previousLevel = before.getLevel();
 
-        // Force INFO so the assertions do not depend on the ambient config;
-        // this creates an exact LoggerConfig for the name when none existed.
-        Configurator.setLevel(loggerName, Level.INFO);
+        // Force the level so the assertions do not depend on the ambient
+        // config; this creates an exact LoggerConfig for the name when none
+        // existed.
+        Configurator.setLevel(loggerName, level);
         LoggerConfig target = config.getLoggerConfig(loggerName);
 
         CapturingAppender appender =
