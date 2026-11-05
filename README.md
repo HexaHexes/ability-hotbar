@@ -34,7 +34,7 @@ category. Defaults (from SPIKE-hot-3):
 | Activate slot 01..09 | **Ctrl + 1..9** | Activates that slot directly. Plain 1..9 still switches the vanilla hotbar. |
 | Switch to bar 1..10 | **Alt + 1..9, Alt + 0** | Selects a bar directly (never skips). Plain digits still drive the vanilla hotbar; a digit beyond the cycle set does nothing. |
 | Activate selected slot | **G** | Fires the ability in the selected slot. |
-| Open ability menu | **Grave** (left of 1) | Opens the ability management menu (rebindable; see below). |
+| Open ability menu | **Grave** (left of 1) | Opens the ability management menu (rebindable; see below). Does nothing when no mod has registered any ability - there would be nothing to manage (hotbar#107). |
 | Toggle ability mode | **Right Ctrl** | Aligned with Tensura's native mode key. |
 
 Selecting a slot never fires an ability. Activating uses the selected slot and
