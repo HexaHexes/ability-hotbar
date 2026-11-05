@@ -28,7 +28,8 @@ public final class HotbarClientConfig {
      * by it (ADR-012).
      */
     public static final ModConfigSpec.IntValue HOTBAR_COUNT =
-            BUILDER.comment("Built-in hotbars in the cycle set (clamped to the server's maxBars)")
+            BUILDER.comment("Built-in hotbars in the cycle set (clamped to the server's maxBars; "
+                            + "mod-registered bars are always included)")
                     .defineInRange("display.hotbarCount", 3, 1, 10);
 
     /**
