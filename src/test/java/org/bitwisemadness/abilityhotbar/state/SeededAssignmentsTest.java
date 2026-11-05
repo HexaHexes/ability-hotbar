@@ -137,6 +137,99 @@ class SeededAssignmentsTest {
     }
 
     @Test
+    void seedAllMatchesTheEquivalentSeedLoop() {
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        BarState base = BarState.empty(3);
+
+        BarState viaLoop = base;
+        for (int slot = 0; slot < 4; slot++) {
+            viaLoop = SeededAssignments.seed(viaLoop, CURIOS, slot, "pseudocore_curios:press");
+        }
+        BarState viaBatch = SeededAssignments.seedAll(base, CURIOS, 4,
+                slot -> "pseudocore_curios:press");
+
+        assertSameState(viaLoop, viaBatch, "the batch is the loop, end to end (hotbar#114)");
+        assertSameState(viaBatch, SeededAssignments.seedAll(viaBatch, CURIOS, 4,
+                        slot -> "pseudocore_curios:press"),
+                "re-running the batch changes nothing");
+    }
+
+    /**
+     * Field-wise state comparison: BarState/Bar carry arrays, so record
+     * equality is reference equality - the existing fixtures compare pieces
+     * for the same reason.
+     */
+    private static void assertSameState(BarState expected, BarState actual, String message) {
+        assertEquals(expected.activeBarId(), actual.activeBarId(), message + " (active bar)");
+        assertEquals(expected.schemaVersion(), actual.schemaVersion(), message + " (schema)");
+        assertEquals(expected.bars().length, actual.bars().length, message + " (bar count)");
+        for (int i = 0; i < expected.bars().length; i++) {
+            assertEquals(expected.bars()[i].id(), actual.bars()[i].id(), message + " (id " + i + ")");
+            assertEquals(expected.bars()[i].slotCount(), actual.bars()[i].slotCount(),
+                    message + " (slots " + i + ")");
+            assertEquals(expected.bars()[i].selectedSlot(), actual.bars()[i].selectedSlot(),
+                    message + " (selection " + i + ")");
+            assertArrayEquals(expected.bars()[i].assignments(), actual.bars()[i].assignments(),
+                    message + " (assignments " + i + ")");
+        }
+    }
+
+    @Test
+    void seedAllAppliesNullAsClearPerSlot() {
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+
+        BarState seeded = SeededAssignments.seedAll(BarState.empty(3), CURIOS, 3,
+                slot -> "pseudocore_curios:press");
+        BarState cleared = SeededAssignments.seedAll(seeded, CURIOS, 3, slot -> null);
+
+        Bar bar = SeededAssignments.storedBar(cleared, CURIOS).orElseThrow();
+        assertEquals(3, bar.slotCount(), "the entry stays (it is stored state now)");
+        for (int slot = 0; slot < 3; slot++) {
+            assertTrue(bar.assignment(slot).isEmpty(), "slot " + slot + " cleared");
+        }
+    }
+
+    @Test
+    void seedAllRejectsABadBatchBeforeWritingAnything() {
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        BarState base = BarState.empty(3);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> SeededAssignments.seedAll(base, CURIOS, ContentPlan.MAX_CELLS + 1,
+                        slot -> "pseudocore_curios:press"),
+                "slotCount past MAX_CELLS fails before the first write");
+        assertThrows(IllegalArgumentException.class,
+                () -> SeededAssignments.seedAll(base, CURIOS, -1, slot -> "pseudocore_curios:press"));
+        assertThrows(IllegalArgumentException.class,
+                () -> SeededAssignments.seedAll(base,
+                        ResourceLocation.fromNamespaceAndPath("nobody", "bar"), 2,
+                        slot -> "pseudocore_curios:press"),
+                "an unregistered bar fails (the first seed validates it)");
+        assertThrows(IllegalArgumentException.class,
+                () -> SeededAssignments.seedAll(base, CURIOS, 2, null));
+
+        assertEquals(base, base, "a rejected batch mutates nothing (pure - nothing was returned)");
+        assertTrue(SeededAssignments.storedBar(base, CURIOS).isEmpty());
+    }
+
+    @Test
+    void seedAllLogsEverySeedInDebug() {
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+
+        try (LogCapture logs = LogCapture.forLogger(SeededAssignments.class,
+                org.apache.logging.log4j.Level.DEBUG)) {
+            SeededAssignments.seedAll(BarState.empty(3), CURIOS, 3,
+                    slot -> "pseudocore_curios:press");
+
+            List<String> lines = logs.messages();
+            assertEquals(3, lines.size(), "one debug line per seeded cell: " + lines);
+            assertTrue(lines.get(0).contains("pseudocore:curios") && lines.get(0).contains("slot 0")
+                    && lines.get(0).contains("pseudocore_curios:press"),
+                    "bar, slot and ability ride the line: " + lines.get(0));
+        }
+    }
+
+    @Test
     void statePackageNeverReferencesClientOnlyClasses() throws IOException {
         // AC: the write API and its state are common code - callable on a
         // dedicated server with no client class loaded.
