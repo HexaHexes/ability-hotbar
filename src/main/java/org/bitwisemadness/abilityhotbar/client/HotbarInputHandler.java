@@ -141,8 +141,13 @@ public final class HotbarInputHandler {
         if (state == null) {
             return;
         }
+        int drawn = HotbarConfig.effectiveRenderCount(state.assignments().length);
         for (int i = 0; i < HotbarKeybinds.ACTIVATE_SLOT.length; i++) {
             while (HotbarKeybinds.ACTIVATE_SLOT[i].consumeClick()) {
+                // vanilla parity (hotbar#108): the digit parks the cursor on
+                // its slot too - two independent intents over one key press
+                digitSelection(i, state.selectedSlot(), drawn)
+                        .ifPresent(payload -> PacketDistributor.sendToServer(payload));
                 activate(state, i, ActivationSource.DIRECT_SLOT);
             }
         }
@@ -169,6 +174,28 @@ public final class HotbarInputHandler {
     private static BarState localState() {
         Minecraft mc = Minecraft.getInstance();
         return mc.player == null ? null : ClientBarState.get();
+    }
+
+    /**
+     * Ctrl+digit's selection half (hotbar#108): the request that parks the
+     * cursor on the digit's slot, through the same server-authoritative path
+     * Ctrl+wheel uses ({@code SelectSlotPayload} - the server fail-closes an
+     * out-of-range index exactly as before). Empty when the slot is not
+     * drawn this frame (vanilla parity: digits past the bar are inert) or
+     * already selected (no redundant packet). Config-free - the caller
+     * passes the drawn count, mirroring the scroll path's clamp.
+     *
+     * @param index        the digit's zero-based slot index
+     * @param selectedSlot the cursor's current slot
+     * @param renderCount  how many slots the bar draws this frame
+     * @return the selection request, or empty for a no-op press
+     */
+    static Optional<SelectSlotPayload> digitSelection(
+            int index, int selectedSlot, int renderCount) {
+        if (index < 0 || index >= renderCount || index == selectedSlot) {
+            return Optional.empty();
+        }
+        return Optional.of(new SelectSlotPayload(index));
     }
 
     /**
