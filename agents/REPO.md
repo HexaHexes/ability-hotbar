@@ -49,6 +49,26 @@ the CLIENT `menu.barStyles` preference (`barId=styleId;...`), and
 - a content bar keeps its mod's brand, and stale or malformed entries fall
 back to the registration's textures (vanilla by default), never a crash.
 
+**Menu styles** (issue #129): `MenuStyle` is the ability menu's palette and
+backdrop parameters as data (background/raised/text/muted/accent/action +
+world dim and panel opacity percentages, `alpha(rgb, percent)` baking the
+percentage into the alpha byte). `MenuStyles.register(id, displayNameKey,
+style)` adds a style at setup (loud duplicate/null/blank ownership, same
+contract as bars/styles); the shipped default is pre-registered core-owned
+as `ability_hotbar:trs_saodark` - **`MenuStyle.TRS_SAODARK` is a palette
+sync from Tensura RPG System's default `InterfaceTheme.SAO_DARK`** (their
+enum, MIT; recorded with provenance in the record's javadoc - re-syncing
+their palette later is a deliberate edit, never an automatic coupling):
+background `0x131D2C`, raised `0x22354A`, text `0xEAF4FF`, muted
+`0x95ACC2`, accent `0x67DDED`, action `0xFFC679`, dim `15%`, opacity
+`78%`. The screen resolves the CLIENT config `menu.style` (empty =
+built-in; stale/malformed falls back, never crashes) through
+`MenuStyles.active` and draws **every** fill and text through it - the
+palette hex literals live in `MenuStyle` only, enforced by a grep fixture
+(the inert-diagnostic red is the one exception). The menu-style cycler pill
+appears by the title once a second style is registered and writes the
+preference.
+
 **Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
 
 **Test:** `./gradlew runGameTestServer` - `AbilityHotbarGameTests` (3 tests). `expectedTests = 3`

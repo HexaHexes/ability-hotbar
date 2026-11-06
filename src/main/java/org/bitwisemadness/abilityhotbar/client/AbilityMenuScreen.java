@@ -16,6 +16,8 @@ import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyle;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
+import org.bitwisemadness.abilityhotbar.registry.MenuStyle;
+import org.bitwisemadness.abilityhotbar.registry.MenuStyles;
 import org.bitwisemadness.abilityhotbar.state.Bar;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.jetbrains.annotations.Nullable;
@@ -40,6 +42,14 @@ import org.jetbrains.annotations.Nullable;
  * non-assignable bars are never listed and the skip-empty cycling option
  * does not apply here (ADR-012). Opens from the menu-key seam, closes with
  * the same key (when the search box is not focused) or Esc.</p>
+ *
+ * <p>Every fill and text color resolves through the active
+ * {@link MenuStyle} (issue #129): the backdrop is the style's blur + world
+ * dim + cyan hairline frame, the title carries the accent underline, and
+ * the palette (default: the TRS SAO_DARK sync) replaces every one-off hex
+ * literal. The menu-style cycler pill (top right, visible once more than
+ * one style is registered) writes the CLIENT {@code menu.style}
+ * preference.</p>
  */
 public final class AbilityMenuScreen extends Screen {
 
@@ -50,6 +60,8 @@ public final class AbilityMenuScreen extends Screen {
     private static final int INERT_COLOR = 0xFFFF5555;
     /** The style cycler's pill on the bar-tab row (issue #127). */
     private static final int STYLE_PILL_WIDTH = 110;
+    /** The menu-style cycler's pill by the title (issue #129). */
+    private static final int MENU_STYLE_PILL_WIDTH = 120;
 
     private ResourceLocation selectedBar;
     private int selectedSlot;
@@ -80,20 +92,53 @@ public final class AbilityMenuScreen extends Screen {
         searchBox.setMaxLength(64);
         searchBox.setHint(Component.translatable("ability_hotbar.menu.search"));
         searchBox.setResponder(value -> this.scrollOffset = 0);
+        searchBox.setTextColor(style().text());
+        searchBox.setTextColorUneditable(style().muted());
         addRenderableWidget(searchBox);
+    }
+
+    /** The active menu style: the config id resolved through the registry. */
+    private MenuStyle style() {
+        return MenuStyles.active(HotbarClientConfig.MENU_STYLE.get());
+    }
+
+    /**
+     * The style's backdrop (issue #129): vanilla blur first (their blur-on
+     * default), then the style's world dim and the cyan hairline frame plus
+     * header rule - the palette's background sequence.
+     */
+    @Override
+    public void renderBackground(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
+        super.renderBackground(gui, mouseX, mouseY, partialTick);
+        MenuStyle style = style();
+        int dim = MenuStyle.alpha(style.background(), style.dimPercent());
+        gui.fill(0, 0, this.width, this.height, dim);
+        int hairline = MenuStyle.alpha(style.accent(), 30);
+        gui.fill(0, 0, this.width, 1, hairline);
+        gui.fill(0, this.height - 1, this.width, this.height, hairline);
+        gui.fill(0, 0, 1, this.height, hairline);
+        gui.fill(this.width - 1, 0, this.width, this.height, hairline);
+        gui.fill(LIST_LEFT, 40, this.width - LIST_LEFT, 41,
+                MenuStyle.alpha(style.accent(), 45));
     }
 
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
         super.render(gui, mouseX, mouseY, partialTick); // background + the search box
+        MenuStyle style = style();
         Component title = Component.translatable("ability_hotbar.menu.title");
-        gui.drawString(this.font, title.getString(),
-                (this.width - this.font.width(title)) / 2, 6, 0xFFFFFF);
+        int titleX = (this.width - this.font.width(title)) / 2;
+        gui.drawString(this.font, title.getString(), titleX, 6, style.text());
+        // the accent underline (their header treatment)
+        gui.fill(titleX, 16, titleX + this.font.width(title), 17, style.accent());
+        if (menuStylePillVisible()) {
+            drawMenuStylePill(gui, mouseX, mouseY);
+        }
 
         BarState state = ClientBarState.get();
         if (state == null) {
             gui.drawString(this.font, Component.translatable("ability_hotbar.menu.waiting").getString(),
-                    LIST_LEFT, LIST_TOP, 0xA0A0A0);
+                    LIST_LEFT, LIST_TOP, style.muted());
             return;
         }
 
@@ -114,8 +159,8 @@ public final class AbilityMenuScreen extends Screen {
         Component tag = tagFilter == null
                 ? Component.translatable("ability_hotbar.menu.tag_any")
                 : Component.translatable("ability_hotbar.menu.tag_fmt", tagFilter);
-        gui.drawString(this.font, category.getString(), 132, 24, 0xFFE0B0);
-        gui.drawString(this.font, tag.getString(), Math.max(132, this.width - 84), 24, 0xFFE0B0);
+        gui.drawString(this.font, category.getString(), 132, 24, style().action());
+        gui.drawString(this.font, tag.getString(), Math.max(132, this.width - 84), 24, style().action());
     }
 
     private void drawBarTabs(GuiGraphics gui, int mouseX, int mouseY) {
@@ -129,17 +174,21 @@ public final class AbilityMenuScreen extends Screen {
         boolean styleCycler = styleCyclerVisible();
         int available = (this.width - 16) - (styleCycler ? STYLE_PILL_WIDTH + 4 : 0);
         int tabWidth = Math.min(48, Math.max(8, available) / bars.size());
+        MenuStyle style = style();
         for (int i = 0; i < bars.size(); i++) {
             int x = LIST_LEFT + i * tabWidth;
             boolean active = bars.get(i).equals(selectedBar);
             boolean hovered = inside(mouseX, mouseY, x, 42, tabWidth - 1, 16);
             if (active) {
-                gui.fill(x, 42, x + tabWidth - 1, 58, 0x6040A0FF);
+                gui.fill(x, 42, x + tabWidth - 1, 58,
+                        MenuStyle.alpha(style.accent(), 30));
             } else if (hovered) {
-                gui.fill(x, 42, x + tabWidth - 1, 58, 0x30FFFFFF);
+                gui.fill(x, 42, x + tabWidth - 1, 58,
+                        MenuStyle.alpha(style.raised(), 55));
             }
             Component label = BarName.of(bars.get(i));
-            gui.drawString(this.font, label, x + 2, 46, active ? 0xFFFFFF : 0xA0A0A0);
+            gui.drawString(this.font, label, x + 2, 46,
+                    active ? style.text() : style.muted());
         }
         if (styleCycler) {
             drawStylePill(gui, mouseX, mouseY);
@@ -156,13 +205,16 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     private void drawStylePill(GuiGraphics gui, int mouseX, int mouseY) {
+        MenuStyle style = style();
         int pillX = this.width - 8 - STYLE_PILL_WIDTH;
         boolean hovered = inside(mouseX, mouseY, pillX, 42, STYLE_PILL_WIDTH, 16);
         gui.fill(pillX, 42, pillX + STYLE_PILL_WIDTH, 58,
-                hovered ? 0x6040A0FF : 0x40000000);
+                hovered ? MenuStyle.alpha(style.accent(), 35)
+                        : MenuStyle.alpha(style.background(), 60));
         Component label = styleLabel();
         String text = this.font.plainSubstrByWidth(label.getString(), STYLE_PILL_WIDTH - 8);
-        gui.drawString(this.font, text, pillX + 4, 46, hovered ? 0xFFFFFF : 0xA0A0A0);
+        gui.drawString(this.font, text, pillX + 4, 46,
+                hovered ? style.text() : style.muted());
     }
 
     /** The selected bar's current style name (default = the vanilla pair). */
@@ -198,22 +250,87 @@ public final class AbilityMenuScreen extends Screen {
         HotbarClientConfig.SPEC.save();
     }
 
+    /** The menu-style pill shows only when a style beyond the built-in exists. */
+    private boolean menuStylePillVisible() {
+        return MenuStyles.all().size() > 1;
+    }
+
+    private void drawMenuStylePill(GuiGraphics gui, int mouseX, int mouseY) {
+        MenuStyle style = style();
+        int x = this.width - 8 - MENU_STYLE_PILL_WIDTH;
+        boolean hovered = inside(mouseX, mouseY, x, 6, MENU_STYLE_PILL_WIDTH, 14);
+        gui.fill(x, 6, x + MENU_STYLE_PILL_WIDTH, 20,
+                hovered ? MenuStyle.alpha(style.accent(), 35)
+                        : MenuStyle.alpha(style.background(), 60));
+        String text = this.font.plainSubstrByWidth(menuStyleLabel().getString(),
+                MENU_STYLE_PILL_WIDTH - 8);
+        gui.drawString(this.font, text, x + 4, 9,
+                hovered ? style.text() : style.muted());
+    }
+
+    /** The active menu style's display name (the built-in when unset/stale). */
+    private Component menuStyleLabel() {
+        String configured = HotbarClientConfig.MENU_STYLE.get();
+        if (configured != null && !configured.isEmpty()) {
+            try {
+                var entry = MenuStyles.get(ResourceLocation.parse(configured));
+                if (entry.isPresent()) {
+                    return Component.translatable(entry.get().displayNameKey());
+                }
+            } catch (RuntimeException malformed) {
+                // a corrupt pref must not stop the menu - fall through
+            }
+        }
+        return MenuStyles.get(MenuStyles.BUILT_IN)
+                .map(entry -> Component.translatable(entry.displayNameKey()))
+                .orElseGet(() -> Component.translatable("ability_hotbar.menu.menustyle_trs_saodark"));
+    }
+
+    /** Cycles the menu style: built-in -> registered styles -> built-in. */
+    private void cycleMenuStyle() {
+        List<MenuStyles.MenuStyleEntry> styles = MenuStyles.all();
+        if (styles.isEmpty()) {
+            return;
+        }
+        String configured = HotbarClientConfig.MENU_STYLE.get();
+        int index = -1; // an unset or stale value starts from the front
+        for (int i = 0; i < styles.size(); i++) {
+            ResourceLocation id = styles.get(i).id();
+            if (configured == null || configured.isEmpty()
+                    ? id.equals(MenuStyles.BUILT_IN)
+                    : id.toString().equals(configured)) {
+                index = i;
+                break;
+            }
+        }
+        int next = (index + 1) % styles.size();
+        ResourceLocation nextId = styles.get(next).id();
+        // the built-in stays the config's default answer (empty value)
+        HotbarClientConfig.MENU_STYLE.set(
+                nextId.equals(MenuStyles.BUILT_IN) ? "" : nextId.toString());
+        HotbarClientConfig.SPEC.save();
+    }
+
     private void drawSlotRow(GuiGraphics gui, int mouseX, int mouseY, @Nullable Bar target) {
         int slotCount = target == null ? 0 : target.slotCount();
         if (slotCount == 0) {
             return;
         }
+        MenuStyle style = style();
         int slotWidth = Math.min(40, (this.width - 16) / slotCount);
         for (int i = 0; i < slotCount; i++) {
             int x = LIST_LEFT + i * slotWidth;
             boolean selected = i == selectedSlot;
             boolean hovered = inside(mouseX, mouseY, x, 64, slotWidth - 1, 16);
             if (selected) {
-                gui.fill(x, 64, x + slotWidth - 1, 80, 0x60FFD060);
+                gui.fill(x, 64, x + slotWidth - 1, 80,
+                        MenuStyle.alpha(style.accent(), 35));
             } else if (hovered) {
-                gui.fill(x, 64, x + slotWidth - 1, 80, 0x30FFFFFF);
+                gui.fill(x, 64, x + slotWidth - 1, 80,
+                        MenuStyle.alpha(style.raised(), 55));
             }
-            gui.drawString(this.font, slotLabel(i + 1), x + 3, 68, selected ? 0xFFFFFF : 0xA0A0A0);
+            gui.drawString(this.font, slotLabel(i + 1), x + 3, 68,
+                    selected ? style.text() : style.muted());
         }
     }
 
@@ -230,6 +347,7 @@ public final class AbilityMenuScreen extends Screen {
         if (target == null) {
             return;
         }
+        MenuStyle style = style();
         StringBuilder label = new StringBuilder();
         label.append("Slot ").append(slotLabel(selectedSlot + 1)).append(": ");
         var assignment = target.assignment(selectedSlot);
@@ -248,22 +366,24 @@ public final class AbilityMenuScreen extends Screen {
         }
         int x = LIST_LEFT;
         int y = 86;
-        gui.drawString(this.font, label.toString(), x, y, 0xA0A0A0);
+        gui.drawString(this.font, label.toString(), x, y, style.muted());
         int nameX = x + this.font.width(label.toString());
-        gui.drawString(this.font, name.getString(), nameX, y, inert ? INERT_COLOR : 0xFFFFFF);
+        gui.drawString(this.font, name.getString(), nameX, y,
+                inert ? INERT_COLOR : style.text());
         gui.drawString(this.font, Component.translatable("ability_hotbar.menu.clear").getString(),
-                this.width - 64, 84, 0xFF8080);
+                this.width - 64, 84, style.action());
     }
 
     private void drawAbilityList(GuiGraphics gui, int mouseX, int mouseY, BarState state) {
         List<MenuQuery.Entry> rows = visibleRows();
+        MenuStyle style = style();
         int listWidth = this.width - 16;
         int listBottom = this.height - LIST_BOTTOM_PAD;
         int visible = Math.max(0, (listBottom - LIST_TOP) / ROW_HEIGHT);
         scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, rows.size() - visible)));
         if (rows.isEmpty()) {
             gui.drawString(this.font, Component.translatable("ability_hotbar.menu.no_results"),
-                    LIST_LEFT, LIST_TOP, 0xA0A0A0);
+                    LIST_LEFT, LIST_TOP, style.muted());
             return;
         }
         int y = LIST_TOP;
@@ -271,25 +391,34 @@ public final class AbilityMenuScreen extends Screen {
             MenuQuery.Entry row = rows.get(i);
             boolean hovered = inside(mouseX, mouseY, LIST_LEFT, y, listWidth, ROW_HEIGHT - 2);
             if (hovered) {
-                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2, 0x30FFFFFF);
+                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
+                        MenuStyle.alpha(style.raised(), 55));
+                // the active row's left-bar marker (their list selection)
+                gui.fill(LIST_LEFT, y, LIST_LEFT + 2, y + ROW_HEIGHT - 2, style.accent());
             }
             ResourceLocation icon = row.definition().iconId();
             if (icon != null && HotbarClientConfig.SHOW_ICONS.get()) {
                 gui.blit(icon, LIST_LEFT + 2, y, 0, 0, 16, 16, 16, 16);
             }
             Component displayName = Component.translatable(row.definition().displayNameKey());
-            gui.drawString(this.font, displayName.getString(), LIST_LEFT + 22, y + 4, 0xFFFFFF);
+            gui.drawString(this.font, displayName.getString(), LIST_LEFT + 22, y + 4,
+                    style.text());
             String cost = costText(row.definition());
             if (!cost.isEmpty()) {
                 gui.drawString(this.font, cost,
-                        LIST_LEFT + listWidth - this.font.width(cost), y + 4, 0xC0C0C0);
+                        LIST_LEFT + listWidth - this.font.width(cost), y + 4,
+                        style.action());
             }
+            // the cyan row underline (their list chrome)
+            gui.fill(LIST_LEFT, y + ROW_HEIGHT - 2, LIST_LEFT + listWidth, y + ROW_HEIGHT - 1,
+                    MenuStyle.alpha(style.accent(), 45));
         }
     }
 
     /** Hovered row detail: category, tags, cost, then the description if the provider supplied one. */
     private void drawHoveredDetail(GuiGraphics gui, int mouseX, int mouseY) {
         List<MenuQuery.Entry> rows = visibleRows();
+        MenuStyle style = style();
         int listBottom = this.height - LIST_BOTTOM_PAD;
         int visible = Math.max(0, (listBottom - LIST_TOP) / ROW_HEIGHT);
         int index = (int) ((mouseY - LIST_TOP) / ROW_HEIGHT) + scrollOffset;
@@ -308,12 +437,13 @@ public final class AbilityMenuScreen extends Screen {
             meta.append("  ").append(cost);
         }
         int y = this.height - 24;
-        gui.drawString(this.font, meta.toString(), LIST_LEFT, y, 0xC0C0C0);
+        gui.drawString(this.font, meta.toString(), LIST_LEFT, y, style.muted());
         String description = definition.data().get("description");
         if (description != null && !description.isBlank()) {
             int line = 0;
             for (var part : this.font.split(Component.literal(description), this.width - 16)) {
-                gui.drawString(this.font, part, LIST_LEFT, y + 10 + line * 10, 0x808080);
+                gui.drawString(this.font, part, LIST_LEFT, y + 10 + line * 10,
+                        MenuStyle.alpha(style.muted(), 70));
                 if (++line >= 1) {
                     break;
                 }
@@ -327,7 +457,18 @@ public final class AbilityMenuScreen extends Screen {
             return true; // the search box took it
         }
         searchBox.setFocused(false);
-        if (button != 0 || ClientBarState.get() == null) {
+        if (button != 0) {
+            return false;
+        }
+        // menu style cycler (issue #129): the pill owns its rect top-right
+        if (menuStylePillVisible()) {
+            int pillX = this.width - 8 - MENU_STYLE_PILL_WIDTH;
+            if (inside(mouseX, mouseY, pillX, 6, MENU_STYLE_PILL_WIDTH, 14)) {
+                cycleMenuStyle();
+                return true;
+            }
+        }
+        if (ClientBarState.get() == null) {
             return false;
         }
         // category / tag cycle

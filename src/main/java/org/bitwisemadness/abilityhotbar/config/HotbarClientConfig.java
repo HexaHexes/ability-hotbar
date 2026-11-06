@@ -65,6 +65,15 @@ public final class HotbarClientConfig {
                     .define("menu.lastTag", "");
 
     /**
+     * The active menu style (issue #129): a registered style id, empty =
+     * the shipped built-in (the Tensura RPG System palette sync) - a CLIENT
+     * visual preference like the rest of the menu settings.
+     */
+    public static final ModConfigSpec.ConfigValue<String> MENU_STYLE =
+            BUILDER.comment("The ability menu's style id (empty = the built-in style)")
+                    .define("menu.style", "");
+
+    /**
      * The player's per-bar hotbar styles (issue #127): an encoded
      * {@code barId=styleId;...} string - a CLIENT visual preference, same
      * class as the filter prefs; bar contents stay server data. Parsing and
