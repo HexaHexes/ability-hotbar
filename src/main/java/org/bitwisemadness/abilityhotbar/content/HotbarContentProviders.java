@@ -8,6 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 import org.bitwisemadness.abilityhotbar.registry.BarTextures;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
 import org.slf4j.Logger;
 
 /**
@@ -111,6 +112,27 @@ public final class HotbarContentProviders {
      */
     public static void registerContentBar(ResourceLocation barId, String displayNameKey) {
         registerContentBar(barId, displayNameKey, BarTextures.DEFAULT);
+    }
+
+    /**
+     * One-call registration naming a registered style (issue #127): resolves
+     * the style's textures at registration and follows the {@link BarTextures}
+     * path from there - the render path is unchanged. Register styles before
+     * the bars that use them.
+     *
+     * @param styleId a style from {@link HotbarStyles#register}
+     * @throws IllegalArgumentException when the style id is unknown (loud,
+     *         carrying both ids - order-safety like the pairing rule)
+     */
+    public static void registerContentBar(ResourceLocation barId, String displayNameKey,
+            ResourceLocation styleId) {
+        if (styleId == null) {
+            throw new IllegalArgumentException("style id must not be null for " + barId);
+        }
+        BarTextures textures = HotbarStyles.textures(styleId).orElseThrow(() ->
+                new IllegalArgumentException("unknown hotbar style '" + styleId + "' for " + barId
+                        + " - register styles before the bars that use them"));
+        registerContentBar(barId, displayNameKey, textures);
     }
 
     /**

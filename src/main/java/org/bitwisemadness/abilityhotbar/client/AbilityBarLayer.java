@@ -28,8 +28,8 @@ import org.bitwisemadness.abilityhotbar.content.ContentPlan;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.registry.BarTextures;
-import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.bitwisemadness.abilityhotbar.state.SeededAssignments;
 import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
@@ -116,10 +116,13 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         // else draws the stored bar. Both paths return the origin they drew
         // at, or null when they drew nothing, so the toast follows that.
         ResourceLocation activeId = state.activeBarId();
-        // hotbar#125: the active bar's registration may brand its two sprites;
-        // built-ins (and unbranded registrations) resolve to the vanilla pair
+        // hotbar#125/#127: registration sprites with the player's style choice
+        // applied to assignable bars (HotbarStyles.effective holds the whole
+        // policy); built-ins have no registration -> the vanilla pair
         BarTextures textures = HotbarRegistry.get(activeId)
-                .map(HotbarRegistration::textures).orElse(BarTextures.DEFAULT);
+                .map(registration -> HotbarStyles.effective(registration,
+                        HotbarClientConfig.BAR_STYLES.get(), activeId))
+                .orElse(BarTextures.DEFAULT);
         ResourceLocation background = textures.backgroundOr(VANILLA_HOTBAR);
         ResourceLocation selection = textures.selectionOr(VANILLA_SELECTION);
         HotbarContentProvider provider = HotbarContentProviders.get(activeId).orElse(null);

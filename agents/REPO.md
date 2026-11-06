@@ -39,6 +39,16 @@ vanilla). The ids must resolve in the GUI sprite atlas (`blitSprite`): ship
 namespace in `assets/<namespace>/atlases/gui.json` - the data-driven
 registration vanilla's own sprites use.
 
+**Hotbar styles** (issue #127): `HotbarStyles.register(id, displayNameKey,
+BarTextures)` names a texture set for reuse and presentation; content bars
+select one at registration (`registerContentBar(barId, key, styleId)` -
+register styles before the bars that use them, unknown ids fail loudly with
+both ids). Assignable bars are player-owned: the menu's style cycler writes
+the CLIENT `menu.barStyles` preference (`barId=styleId;...`), and
+`HotbarStyles.effective` applies a player choice to **assignable bars only**
+- a content bar keeps its mod's brand, and stale or malformed entries fall
+back to the registration's textures (vanilla by default), never a crash.
+
 **Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
 
 **Test:** `./gradlew runGameTestServer` - `AbilityHotbarGameTests` (3 tests). `expectedTests = 3`
