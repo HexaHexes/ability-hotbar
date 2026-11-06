@@ -415,7 +415,7 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     private static String costText(AbilityDefinition definition) {
-        var cost = definition.cost();
+        var cost = RepresentativeCost.of(definition);
         if (cost == null) {
             return "";
         }

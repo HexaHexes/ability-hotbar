@@ -13,6 +13,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
 import org.bitwisemadness.abilitycore.api.ActivationType;
+import org.bitwisemadness.abilitycore.api.AmountResolvers;
+import org.bitwisemadness.abilitycore.api.ConsumptionStrategies;
 import org.bitwisemadness.abilityhotbar.registry.AbilityBarScopes;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
@@ -48,7 +50,8 @@ class MenuQueryTest {
             ResourceLocation.fromNamespaceAndPath("otherpack", "extra");
 
     private static AbilityDefinition def(String displayKey, ResourceLocation category, Set<String> tags) {
-        return new AbilityDefinition(displayKey, null, category, ActivationType.INSTANT, null, tags, Map.of());
+        return new AbilityDefinition(displayKey, null, category, ActivationType.INSTANT, java.util.List.of(),
+                ConsumptionStrategies.ALL, AmountResolvers.STATIC, tags, Map.of());
     }
 
     /** Resolved names the way the screen resolves them: key -> display text. */

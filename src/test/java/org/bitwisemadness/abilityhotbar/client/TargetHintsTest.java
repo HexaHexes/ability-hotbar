@@ -16,6 +16,8 @@ import java.util.stream.Stream;
 import net.minecraft.resources.ResourceLocation;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
 import org.bitwisemadness.abilitycore.api.ActivationType;
+import org.bitwisemadness.abilitycore.api.AmountResolvers;
+import org.bitwisemadness.abilitycore.api.ConsumptionStrategies;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -38,7 +40,8 @@ class TargetHintsTest {
     private static AbilityDefinition definition(Set<String> tags) {
         return new AbilityDefinition("tensura.skill.x", null,
                 ResourceLocation.fromNamespaceAndPath("tensura", "skill"),
-                ActivationType.INSTANT, null, tags, Map.of());
+                ActivationType.INSTANT, java.util.List.of(),
+                ConsumptionStrategies.ALL, AmountResolvers.STATIC, tags, Map.of());
     }
 
     @Test

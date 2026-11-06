@@ -98,9 +98,9 @@ public record SlotRender(
                 .filter(p -> p >= 0.0 && p <= 1.0)
                 .orElse(null);
 
-        // Cost: only a known cost is badged.
-        ResourceCost cost = avail.cost().knownValue().orElse(
-                def.cost()); // fall back to the definition's declared cost
+        // Cost: only a known cost is badged; the definition side is the first
+        // declared entry (the overlay contract's representative cost).
+        ResourceCost cost = avail.cost().knownValue().orElse(RepresentativeCost.of(def));
 
         return new SlotRender(true, false, selected, def.iconId(), cooldown,
                 avail.availability(), cost);
