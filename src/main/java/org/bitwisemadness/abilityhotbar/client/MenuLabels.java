@@ -80,6 +80,26 @@ final class MenuLabels {
                 : Component.literal(prettify(namespace));
     }
 
+    /**
+     * A localised subcategory name (hotbar#142): {@code type:unique} reads
+     * as "Unique" - the convention key (reused from the tag vocabulary, so
+     * one provider translation covers the tag chip and the category cycle)
+     * wins when present, else the prefix-stripped prettified tail.
+     */
+    static Component subcategory(String typeTag) {
+        String key = tagKey(typeTag);
+        if (I18n.exists(key)) {
+            return Component.translatable(key);
+        }
+        return Component.literal(subcategoryBare(typeTag));
+    }
+
+    /** The fallback text for a subcategory: the tag with its {@code type:} prefix stripped, prettified. */
+    static String subcategoryBare(String typeTag) {
+        String bare = typeTag.startsWith("type:") ? typeTag.substring("type:".length()) : typeTag;
+        return prettify(bare);
+    }
+
     /** {@code a/b:c} -&gt; {@code a.b.c} so the key stays a valid translation id. */
     private static String separatorsToDots(String raw) {
         return raw.replace('/', '.').replace(':', '.');

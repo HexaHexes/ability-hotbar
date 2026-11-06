@@ -48,6 +48,18 @@ class MenuLabelsTest {
     }
 
     @Test
+    void subcategoriesStripTheirTypePrefix() {
+        // hotbar#142: the category cycle reads "Skill / Unique"
+        assertEquals("Unique", MenuLabels.subcategoryBare("type:unique"),
+                "the type: prefix never reaches the player");
+        assertEquals("Summoning", MenuLabels.subcategoryBare("type:summoning"));
+        assertEquals("Bare", MenuLabels.subcategoryBare("bare"),
+                "a tag without the prefix prettifies as-is");
+        assertEquals("ability_hotbar.tag.type.unique", MenuLabels.tagKey("type:unique"),
+                "one provider translation covers the tag chip and the cycle");
+    }
+
+    @Test
     void theScreenNeverRendersRawVocabularyIds() throws Exception {
         // every id reaches the player through MenuLabels (issue #139) - the
         // raw sites the issue lists must not come back. Persisting the raw

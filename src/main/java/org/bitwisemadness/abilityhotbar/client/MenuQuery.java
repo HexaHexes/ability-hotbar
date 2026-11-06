@@ -1,6 +1,7 @@
 package org.bitwisemadness.abilityhotbar.client;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,9 +36,61 @@ public final class MenuQuery {
     }
 
     /**
+     * Every distinct provider namespace present in the pool, sorted for
+     * stable cycling - the id namespace is the provider (hotbar#142), so
+     * the screen's provider button steps through these plus a "no filter"
+     * position.
+     *
+     * @param entries the id-aware pool
+     * @return the distinct namespaces in sorted order (empty for an empty pool)
+     */
+    public static List<String> providers(Map<ResourceLocation, AbilityDefinition> entries) {
+        return entries.keySet().stream()
+                .map(ResourceLocation::getNamespace)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /** The tag prefix marking a subcategory (the open convention, hotbar#142). */
+    public static final String SUBCATEGORY_PREFIX = "type:";
+
+    /**
+     * Every distinct {@code type:} subcategory tag present under one
+     * category, sorted for stable cycling (hotbar#142) - the subdivision
+     * Tensura's skills/magic use ({@code type:unique} and friends); a pool
+     * or category without such tags answers empty.
+     *
+     * @param entries  the id-aware pool
+     * @param category the category whose subcategories to list
+     * @return the subcategory tags in sorted order
+     */
+    public static List<String> subCategories(Map<ResourceLocation, AbilityDefinition> entries,
+            ResourceLocation category) {
+        return entries.entrySet().stream()
+                .filter(candidate -> candidate.getValue().category().equals(category))
+                .flatMap(candidate -> candidate.getValue().tags().stream())
+                .filter(tag -> tag.startsWith(SUBCATEGORY_PREFIX))
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
+     * One step of the hierarchical category cycle (hotbar#142): {@code null}
+     * (no filter), then each category, then each of its {@code type:}
+     * subcategories before the next category begins - so the cycle reads
+     * "any" -&gt; "Skill" -&gt; "Skill / Unique" -&gt; ...
+     *
+     * @param category the required category, or null for "any"
+     * @param subTag   the required subcategory tag (only with a category), or null
+     */
+    public record CategoryStep(@Nullable ResourceLocation category, @Nullable String subTag) {
+    }
+
+    /**
      * Every distinct category present in the pool, sorted for stable
-     * cycling - the screen's category button steps through these plus a
-     * "no filter" position.
+     * cycling - the foundation of {@link #categorySteps}.
      *
      * @param entries the id-aware pool
      * @return the distinct categories in sorted order (empty for an empty pool)
@@ -48,6 +101,27 @@ public final class MenuQuery {
                 .distinct()
                 .sorted()
                 .toList();
+    }
+
+    /**
+     * The category cycle as flat steps: the "any" position, then every
+     * category with its subcategory steps (sorted) - the screen's category
+     * button walks this list and stores the selected step's pair.
+     *
+     * @param entries the id-aware pool
+     * @return the cycle in order (at least the "any" step)
+     */
+    public static List<CategoryStep> categorySteps(
+            Map<ResourceLocation, AbilityDefinition> entries) {
+        List<CategoryStep> steps = new ArrayList<>();
+        steps.add(new CategoryStep(null, null));
+        for (ResourceLocation category : categories(entries)) {
+            steps.add(new CategoryStep(category, null));
+            for (String sub : subCategories(entries, category)) {
+                steps.add(new CategoryStep(category, sub));
+            }
+        }
+        return List.copyOf(steps);
     }
 
     /**
@@ -99,24 +173,31 @@ public final class MenuQuery {
     /**
      * One bar's visible rows (AC1): the id-aware pool narrowed by the
      * ability's scope ({@link AbilityBarScopes} - a scoped ability shows
-     * only on its own bar) and by the live search/category/tag filters.
-     * Blank text, a null category and a null tag each mean "no filter";
-     * text matches the resolved display name case-insensitively; category
-     * and tag are the open vocabulary on {@link AbilityDefinition}. Input
-     * order is preserved.
+     * only on its own bar) and by the live search/category/subcategory/tag/
+     * provider filters. Blank text and a null filter each mean "no filter";
+     * text matches the resolved display name case-insensitively; category,
+     * subTag and tag are the open vocabulary on {@link AbilityDefinition}
+     * and provider is the id namespace (hotbar#142).
+     *
+     * <p>Rows return in the deterministic <b>default order: provider
+     * -&gt; category -&gt; lowest tag -&gt; id</b> - stable across reloads
+     * regardless of registration/map order (hotbar#142).</p>
      *
      * @param entries    the id-aware pool ({@code AbilityDiscovery.entries()})
      * @param targetBar  the bar section being listed
      * @param searchText the search box text; null/blank = no search
      * @param category   required category, or null for any
+     * @param subTag     required {@code type:} subcategory tag, or null for any
      * @param tag        required tag, or null for any
+     * @param provider   required id namespace (provider), or null for any
      * @param nameOf     resolves a definition to its display text (the screen
      *                   resolves translation keys; tests pass literals)
-     * @return the visible rows, in input order
+     * @return the visible rows, in the default order
      */
     public static List<Entry> visibleEntries(Map<ResourceLocation, AbilityDefinition> entries,
             ResourceLocation targetBar, @Nullable String searchText,
-            @Nullable ResourceLocation category, @Nullable String tag,
+            @Nullable ResourceLocation category, @Nullable String subTag,
+            @Nullable String tag, @Nullable String provider,
             Function<AbilityDefinition, Component> nameOf) {
         String needle = searchText == null ? "" : searchText.trim().toLowerCase(Locale.ROOT);
         List<Entry> out = new ArrayList<>(entries.size());
@@ -125,7 +206,13 @@ public final class MenuQuery {
             if (!AbilityBarScopes.isInScope(candidate.getKey(), targetBar)) {
                 continue;
             }
+            if (provider != null && !candidate.getKey().getNamespace().equals(provider)) {
+                continue;
+            }
             if (category != null && !definition.category().equals(category)) {
+                continue;
+            }
+            if (subTag != null && !definition.tags().contains(subTag)) {
                 continue;
             }
             if (tag != null && !definition.tags().contains(tag)) {
@@ -137,6 +224,15 @@ public final class MenuQuery {
             }
             out.add(new Entry(candidate.getKey(), definition));
         }
+        out.sort(DEFAULT_ORDER);
         return List.copyOf(out);
     }
+
+    /** provider -> category -> lowest tag -> id: the deterministic default order (#142). */
+    private static final Comparator<Entry> DEFAULT_ORDER = Comparator
+            .comparing((Entry entry) -> entry.id().getNamespace())
+            .thenComparing(entry -> entry.definition().category())
+            .thenComparing(entry -> entry.definition().tags().stream().sorted()
+                    .findFirst().orElse(""))
+            .thenComparing(Entry::id);
 }
