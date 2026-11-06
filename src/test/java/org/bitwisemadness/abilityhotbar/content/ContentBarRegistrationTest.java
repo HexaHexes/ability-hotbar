@@ -10,6 +10,7 @@ import org.apache.logging.log4j.Level;
 import org.bitwisemadness.abilityhotbar.registry.BarTextures;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
 import org.bitwisemadness.abilityhotbar.state.LogCapture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,12 +29,18 @@ class ContentBarRegistrationTest {
     private static final ResourceLocation BAR =
             ResourceLocation.fromNamespaceAndPath("otherpack", "content");
     private static final String NAME = "otherpack.bar.content";
+    private static final ResourceLocation STYLE =
+            ResourceLocation.fromNamespaceAndPath("otherpack", "branded");
+    private static final BarTextures STYLE_TEXTURES = new BarTextures(
+            ResourceLocation.fromNamespaceAndPath("otherpack", "gui/sprites/branded/background"),
+            null);
 
     @BeforeEach
     @AfterEach
     void isolate() {
         HotbarRegistry.reset();
         HotbarContentProviders.reset();
+        HotbarStyles.remove(STYLE);
     }
 
     @Test
@@ -52,6 +59,24 @@ class ContentBarRegistrationTest {
                     line -> line.contains(BAR.toString()) && line.contains("registered via one-call helper")),
                     "debug.log shows the registration without consumer code: " + logs.messages());
         }
+    }
+
+    @Test
+    void stylesRideTheContentBarRegistration() {
+        HotbarStyles.register(STYLE, "otherpack.style.branded", STYLE_TEXTURES);
+
+        HotbarContentProviders.registerContentBar(BAR, NAME, STYLE);
+        assertEquals(STYLE_TEXTURES, HotbarRegistry.get(BAR).orElseThrow().textures(),
+                "the style resolves to its textures at registration (render path unchanged)");
+
+        // an unknown style fails loudly with both ids - register styles first
+        HotbarRegistry.reset();
+        IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class,
+                () -> HotbarContentProviders.registerContentBar(BAR, NAME,
+                        ResourceLocation.fromNamespaceAndPath("otherpack", "nope")));
+        assertTrue(unknown.getMessage().contains("nope"), unknown.getMessage());
+        assertTrue(unknown.getMessage().contains(BAR.toString()), unknown.getMessage());
+        assertTrue(HotbarRegistry.get(BAR).isEmpty(), "nothing registers on a failed lookup");
     }
 
     @Test

@@ -82,6 +82,8 @@ class ClientConfigRoundTripTest {
             lastTag = ""
             #The ability menu's style id (empty = the built-in style)
             style = ""
+            #Per-bar hotbar styles as barId=styleId pairs separated by ';' (empty = vanilla default)
+            barStyles = ""
             """;
 
     private static CommentedConfig parse(String toml) {

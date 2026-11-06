@@ -14,6 +14,8 @@ import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
 import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.bitwisemadness.abilityhotbar.registry.HotbarStyle;
+import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
 import org.bitwisemadness.abilityhotbar.state.Bar;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.jetbrains.annotations.Nullable;
@@ -46,6 +48,8 @@ public final class AbilityMenuScreen extends Screen {
     private static final int LIST_TOP = 104;
     private static final int LIST_BOTTOM_PAD = 28;
     private static final int INERT_COLOR = 0xFFFF5555;
+    /** The style cycler's pill on the bar-tab row (issue #127). */
+    private static final int STYLE_PILL_WIDTH = 110;
 
     private ResourceLocation selectedBar;
     private int selectedSlot;
@@ -119,7 +123,12 @@ public final class AbilityMenuScreen extends Screen {
         if (bars.isEmpty()) {
             return;
         }
-        int tabWidth = Math.min(48, (this.width - 16) / bars.size());
+        // hotbar#127: the style cycler occupies the row's right end for an
+        // assignable bar with styles to pick; tabs shrink so they never hide
+        // beneath it
+        boolean styleCycler = styleCyclerVisible();
+        int available = (this.width - 16) - (styleCycler ? STYLE_PILL_WIDTH + 4 : 0);
+        int tabWidth = Math.min(48, Math.max(8, available) / bars.size());
         for (int i = 0; i < bars.size(); i++) {
             int x = LIST_LEFT + i * tabWidth;
             boolean active = bars.get(i).equals(selectedBar);
@@ -132,6 +141,61 @@ public final class AbilityMenuScreen extends Screen {
             Component label = BarName.of(bars.get(i));
             gui.drawString(this.font, label, x + 2, 46, active ? 0xFFFFFF : 0xA0A0A0);
         }
+        if (styleCycler) {
+            drawStylePill(gui, mouseX, mouseY);
+        }
+    }
+
+    /** The style cycler shows only for an assignable bar with registered styles. */
+    private boolean styleCyclerVisible() {
+        if (selectedBar == null || HotbarStyles.all().isEmpty()) {
+            return false;
+        }
+        return HotbarRegistry.get(selectedBar)
+                .map(registration -> registration.assignable()).orElse(false);
+    }
+
+    private void drawStylePill(GuiGraphics gui, int mouseX, int mouseY) {
+        int pillX = this.width - 8 - STYLE_PILL_WIDTH;
+        boolean hovered = inside(mouseX, mouseY, pillX, 42, STYLE_PILL_WIDTH, 16);
+        gui.fill(pillX, 42, pillX + STYLE_PILL_WIDTH, 58,
+                hovered ? 0x6040A0FF : 0x40000000);
+        Component label = styleLabel();
+        String text = this.font.plainSubstrByWidth(label.getString(), STYLE_PILL_WIDTH - 8);
+        gui.drawString(this.font, text, pillX + 4, 46, hovered ? 0xFFFFFF : 0xA0A0A0);
+    }
+
+    /** The selected bar's current style name (default = the vanilla pair). */
+    private Component styleLabel() {
+        String styleId = selectedBar == null ? null
+                : HotbarStyles.playerStyleId(HotbarClientConfig.BAR_STYLES.get(), selectedBar);
+        if (styleId == null) {
+            return Component.translatable("ability_hotbar.menu.style_default");
+        }
+        return HotbarStyles.get(ResourceLocation.parse(styleId))
+                .map(style -> Component.translatable(style.displayNameKey()))
+                .orElseGet(() -> Component.translatable("ability_hotbar.menu.style_default"));
+    }
+
+    /** Cycles the selected assignable bar: default -> styles -> default. */
+    private void cycleStyle() {
+        List<HotbarStyle> styles = HotbarStyles.all();
+        if (selectedBar == null || styles.isEmpty()) {
+            return;
+        }
+        String raw = HotbarClientConfig.BAR_STYLES.get();
+        String current = HotbarStyles.playerStyleId(raw, selectedBar);
+        int index = -1; // the vanilla default sits before every style
+        for (int i = 0; i < styles.size(); i++) {
+            if (styles.get(i).id().toString().equals(current)) {
+                index = i;
+                break;
+            }
+        }
+        index = (index + 1) % (styles.size() + 1);
+        String next = index < 0 ? null : styles.get(index).id().toString();
+        HotbarClientConfig.BAR_STYLES.set(HotbarStyles.withStyle(raw, selectedBar, next));
+        HotbarClientConfig.SPEC.save();
     }
 
     private void drawSlotRow(GuiGraphics gui, int mouseX, int mouseY, @Nullable Bar target) {
@@ -285,6 +349,14 @@ public final class AbilityMenuScreen extends Screen {
                     selectedSlot = 0;
                     scrollOffset = 0;
                 }
+                return true;
+            }
+        }
+        // style cycler (issue #127): the pill owns its rect at the row's right
+        if (styleCyclerVisible()) {
+            int pillX = this.width - 8 - STYLE_PILL_WIDTH;
+            if (inside(mouseX, mouseY, pillX, 42, STYLE_PILL_WIDTH, 16)) {
+                cycleStyle();
                 return true;
             }
         }

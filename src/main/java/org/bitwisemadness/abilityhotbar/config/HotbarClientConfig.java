@@ -73,6 +73,18 @@ public final class HotbarClientConfig {
             BUILDER.comment("The ability menu's style id (empty = the built-in style)")
                     .define("menu.style", "");
 
+    /**
+     * The player's per-bar hotbar styles (issue #127): an encoded
+     * {@code barId=styleId;...} string - a CLIENT visual preference, same
+     * class as the filter prefs; bar contents stay server data. Parsing and
+     * rewriting live pure in {@code HotbarStyles} (resource-location paths
+     * never contain the separators).
+     */
+    public static final ModConfigSpec.ConfigValue<String> BAR_STYLES =
+            BUILDER.comment("Per-bar hotbar styles as barId=styleId pairs separated by ';' "
+                    + "(empty = vanilla default)")
+            .define("menu.barStyles", "");
+
     /** Show the bar horizontally (true) or vertically (false). */
     public static final ModConfigSpec.BooleanValue HORIZONTAL =
             BUILDER.comment("Bar orientation: true = horizontal, false = vertical")
