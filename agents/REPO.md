@@ -66,8 +66,21 @@ built-in; stale/malformed falls back, never crashes) through
 `MenuStyles.active` and draws **every** fill and text through it - the
 palette hex literals live in `MenuStyle` only, enforced by a grep fixture
 (the inert-diagnostic red is the one exception). The menu-style cycler pill
-appears by the title once a second style is registered and writes the
+sits at the hint bar's right end (it once sat by the title; the #27
+rework moved it), visible once a second style is registered, and writes the
 preference.
+
+**Menu layout** (issue #27): the screen follows the Tensura RPG System
+skill-menu geometry (the design comment on that issue): a header band with
+the title top-left and the target-bar selector top-right (chip + used/total
++ slot meter; the chip cycles bars), one collapsed filter strip (borderless
+search pill + category/tag cycle chips), the full-width ability list with
+**inline** hover metadata directly under the row (no detail pane, no
+sidebar), and a bottom stack of chamfered slot cells over the hint bar.
+`MenuChrome` (client) owns the drawing primitives - backdrop, chamfered
+glass capsules/cells, meters - all fed by the active `MenuStyle`; the row
+hit-test, slot width and meter math are pure and fixture-pinned
+(`MenuGeometryTest`).
 
 **Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
 
