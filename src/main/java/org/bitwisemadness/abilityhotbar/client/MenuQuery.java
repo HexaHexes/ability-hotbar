@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
@@ -199,11 +200,33 @@ public final class MenuQuery {
             @Nullable ResourceLocation category, @Nullable String subTag,
             @Nullable String tag, @Nullable String provider,
             Function<AbilityDefinition, Component> nameOf) {
+        return visibleEntries(entries, targetBar, searchText, category, subTag, tag, provider,
+                id -> true, nameOf);
+    }
+
+    /**
+     * The unlock-filtered variant (hotbar#135, owner call: filter, not dim):
+     * ids the predicate rejects never reach the list - the screen maps
+     * {@code UnlockRule.provenUnlearned(AbilityUnlocks.isLearned(...))}, so
+     * only a proven-unlearned ability hides and unknown always shows.
+     *
+     * @param unlocked whether an id may appear at all (the never-guess gate)
+     * @return the visible rows, in the default order
+     */
+    public static List<Entry> visibleEntries(Map<ResourceLocation, AbilityDefinition> entries,
+            ResourceLocation targetBar, @Nullable String searchText,
+            @Nullable ResourceLocation category, @Nullable String subTag,
+            @Nullable String tag, @Nullable String provider,
+            Predicate<ResourceLocation> unlocked,
+            Function<AbilityDefinition, Component> nameOf) {
         String needle = searchText == null ? "" : searchText.trim().toLowerCase(Locale.ROOT);
         List<Entry> out = new ArrayList<>(entries.size());
         for (Map.Entry<ResourceLocation, AbilityDefinition> candidate : entries.entrySet()) {
             AbilityDefinition definition = candidate.getValue();
             if (!AbilityBarScopes.isInScope(candidate.getKey(), targetBar)) {
+                continue;
+            }
+            if (!unlocked.test(candidate.getKey())) {
                 continue;
             }
             if (provider != null && !candidate.getKey().getNamespace().equals(provider)) {

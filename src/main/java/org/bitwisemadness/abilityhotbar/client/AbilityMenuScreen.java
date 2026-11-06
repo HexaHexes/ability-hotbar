@@ -603,13 +603,6 @@ public final class AbilityMenuScreen extends Screen {
                         LIST_LEFT + listWidth - this.font.width(cost), y + 5,
                         style.action());
             }
-            // The unlock dim (ability-hotbar#135): proven-unlearned rows
-            // take the unavailable verdict; unknown stays undimmed.
-            if (UnlockRule.provenUnlearned(
-                    AbilityUnlocks.isLearned(this.minecraft.player, row.id()))) {
-                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
-                        AbilityBarLayer.UNAVAILABLE_TINT);
-            }
             // the cyan row underline (their list chrome)
             gui.fill(LIST_LEFT, y + ROW_HEIGHT - 2, LIST_LEFT + listWidth, y + ROW_HEIGHT - 1,
                     MenuStyle.alpha(style.accent(), 45));
@@ -867,9 +860,13 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     private List<MenuQuery.Entry> visibleRows() {
+        // hotbar#135's owner call: only unlocked abilities are visible -
+        // proven-unlearned ids filter out, unknown always shows (UnlockRule).
         return MenuQuery.visibleEntries(AbilityDiscovery.entries(), selectedBar,
                 searchBox == null ? "" : searchBox.getValue(), categoryFilter, subCategoryFilter,
                 tagFilter, providerFilter,
+                id -> !UnlockRule.provenUnlearned(
+                        AbilityUnlocks.isLearned(this.minecraft.player, id)),
                 definition -> Component.translatable(definition.displayNameKey()));
     }
 

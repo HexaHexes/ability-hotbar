@@ -7,12 +7,13 @@ import java.util.Optional;
  * <b>provably unlearned</b> - only an explicit {@code false} blocks.
  * {@code Optional.empty} (undeclared id, abstaining provider, or a
  * contract-violating provider read) is <i>unknown</i>, and unknown never
- * refuses an assignment and never dims a menu row (REQ-HOT-08: unknown is
+ * refuses an assignment and never hides a menu row (REQ-HOT-08: unknown is
  * not a wrong verdict - the failure mode of guessing would be locking
  * players out of abilities they hold).
  *
  * <p>Consumers: the assignment payload refuses only on proven-unlearned;
- * the menu dims only proven-unlearned rows. Both ask core
+ * the menu hides only proven-unlearned rows (the owner's filter decision,
+ * hotbar#135). Both ask core
  * ({@code AbilityUnlocks.isLearned}) - this rule is the shared mapping.</p>
  */
 public final class UnlockRule {
