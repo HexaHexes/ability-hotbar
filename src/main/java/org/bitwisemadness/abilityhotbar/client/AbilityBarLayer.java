@@ -294,8 +294,10 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     /**
      * The hotbar's own empty-cell chrome for a provider that supplies no
      * texture: one background sprite per {@link BarLayout#segmentCount()
-     * segment}, each scissored to the cells that segment actually owns -
-     * so a bar of 10..18 slots reads as two adjacent hotbars (the #86
+     * segment}, each scissored to {@link BarLayout#segmentClipBounds} -
+     * the segment's cells grown by the sprite's frame, so the border
+     * renders instead of being shaved off (hotbar#136) - so a bar of
+     * 10..18 slots reads as two adjacent hotbars (the #86
      * segmentation assignable bars already document, now applied to
      * provider bars; their cells are provider-owned, so the sprite never
      * bleeds past the last cell into ghost frames), while a bar of nine
@@ -304,7 +306,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     private static void drawCellChromeClipped(GuiGraphics gui, BarLayout layout,
             int screenW, int screenH, ResourceLocation background) {
         for (int segment = 0; segment < layout.segmentCount(); segment++) {
-            int[] bounds = layout.segmentCellBounds(segment, screenW, screenH);
+            int[] bounds = layout.segmentClipBounds(segment, screenW, screenH);
             gui.enableScissor(bounds[0], bounds[1], bounds[2], bounds[3]);
             try {
                 drawBackgroundSegment(gui, layout, screenW, screenH, segment, background);
@@ -428,8 +430,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         int x = layout.originX(screenW);
         int y = layout.originY(screenH);
         int[] offset = layout.segmentOffset(segment);
-        // Offset by the sprite's 1px frame so its slot cells align with our grid.
-        int border = Math.max(1, (int) Math.round(layout.scale()));
+        // Offset by the sprite's frame so its slot cells align with our grid;
+        // the same border grows the clip box (hotbar#136).
+        int border = layout.spriteBorder();
         int w = (int) Math.round(VANILLA_HOTBAR_WIDTH * layout.scale());
         int h = (int) Math.round(VANILLA_HOTBAR_HEIGHT * layout.scale());
         int dx = x - border + offset[0];
