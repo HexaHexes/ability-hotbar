@@ -11,6 +11,8 @@ import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceLocation;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
 import org.bitwisemadness.abilitycore.api.ActivationType;
+import org.bitwisemadness.abilitycore.api.AmountResolvers;
+import org.bitwisemadness.abilitycore.api.ConsumptionStrategies;
 import org.bitwisemadness.abilitycore.registry.AbilityRegistries;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,7 +44,8 @@ class AbilityMenuGateTest {
     private static AbilityDefinition definition() {
         return new AbilityDefinition("tensura.skill.gate", null,
                 ResourceLocation.fromNamespaceAndPath("tensura", "skill"),
-                ActivationType.INSTANT, null, Set.of(), Map.of());
+                ActivationType.INSTANT, java.util.List.of(),
+                ConsumptionStrategies.ALL, AmountResolvers.STATIC, Set.of(), Map.of());
     }
 
     private static Registry<AbilityDefinition> emptyFixture() {

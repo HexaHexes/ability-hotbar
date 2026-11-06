@@ -39,7 +39,7 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "ability_core"
 type = "optional"
-versionRange = "[1.0.0-alpha.9,)"
+versionRange = "[1.0.0-alpha.34,)"
 ordering = "AFTER"
 side = "BOTH"
 
