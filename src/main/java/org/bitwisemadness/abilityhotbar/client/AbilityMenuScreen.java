@@ -543,6 +543,10 @@ public final class AbilityMenuScreen extends Screen {
                     MenuStyle.alpha(style.accent(), 45));
         }
         if (hoveredIndex >= 0) {
+            // Drain the rows' queued batches before the overlay: fills, icon
+            // blits and text flush per render type, so row content still in
+            // flight would paint over the panel's background (hotbar#140).
+            gui.flush();
             drawRowMeta(gui, rows.get(hoveredIndex), hoveredY, listWidth, listBottom);
         }
     }
