@@ -4,10 +4,7 @@ import com.mojang.logging.LogUtils;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.fml.loading.FMLEnvironment;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.slf4j.Logger;
@@ -31,12 +28,14 @@ import org.slf4j.Logger;
  * the distribution fixture).</p>
  *
  * <p>{@link #registerContentBar} is the DX wrapper over that ritual: it
- * registers the bar first (so {@code AbilityBarScopes} calls stay compatible
- * afterwards - scopes validate the bar is registered), then constructs the
- * provider <b>only on the client</b>, so a consumer's client-only provider
- * class is never loaded on a dedicated server (the dist-cleaner trap this
- * helper exists to remove). Identical re-registration is a no-op; a live id
- * with a different contract fails loudly with the id.</p>
+ * registers the bar (on both distributions) with the order, idempotency and
+ * loud-misuse rules below. It deliberately takes <b>no provider supplier</b>
+ * (hotbar#120): a supplier argument is evaluated - and its target class
+ * linked - at the call site on <i>both</i> distributions, so a client-reading
+ * provider class dies with a {@code BootstrapMethodError} on a dedicated
+ * server before this helper runs a single line. The provider half stays in
+ * the caller's dist-gated {@link #register} call, whose call site never
+ * links on the server.</p>
  */
 public final class HotbarContentProviders {
 
@@ -84,47 +83,37 @@ public final class HotbarContentProviders {
     }
 
     /**
-     * One-call registration for a content-owned bar (hotbar#114): registers
-     * the bar as non-assignable, then - <b>only on the client</b> - constructs
-     * and registers the provider. The order is the load-bearing one: the bar
-     * must exist before {@code AbilityBarScopes.register} (which validates it)
-     * and before {@link #register} (which validates it); the supplier is never
-     * invoked on a dedicated server, so a client-only provider class cannot
-     * trip the dist cleaner.
+     * One-call registration for a content-owned bar (hotbar#114, reshaped by
+     * hotbar#120): registers the bar as non-assignable, on both
+     * distributions, with the load-bearing order (the bar exists before
+     * {@code AbilityBarScopes.register} and before {@link #register}, which
+     * both validate it).
+     *
+     * <p><b>No provider-supplier parameter, by design</b> (hotbar#120): a
+     * supplier argument links its target class at the call site on both
+     * distributions - a client-reading provider would crash a dedicated
+     * server with a {@code BootstrapMethodError} before this method runs.
+     * Register the provider through the dist-gated {@link #register} call
+     * instead; that call site sits behind the consumer's dist guard, so the
+     * provider class is never linked on the server.</p>
      *
      * <p>Idempotent: an identical second call is a no-op (mod setup may run
      * more than once); the same id with a different name key, or an
      * assignable bar, fails loudly with the id. Every misuse message carries
      * {@code barId}.</p>
      *
-     * @param barId           the content bar's id (reserved-namespace and
-     *                        duplicate rules follow {@link HotbarRegistry#register})
-     * @param displayNameKey  non-blank translation key for the bar's name
-     * @param providerSupplier constructs the provider; invoked only on {@code Dist.CLIENT}
-     * @throws IllegalArgumentException on nulls/blank key or a supplier that
-     *         returns null - nothing registered
+     * @param barId          the content bar's id (reserved-namespace and
+     *                       duplicate rules follow {@link HotbarRegistry#register})
+     * @param displayNameKey non-blank translation key for the bar's name
+     * @throws IllegalArgumentException on null id, or a null/blank name key
      * @throws IllegalStateException    when the id is live with a different contract
      */
-    public static void registerContentBar(ResourceLocation barId, String displayNameKey,
-            Supplier<HotbarContentProvider> providerSupplier) {
-        registerContentBar(barId, displayNameKey, providerSupplier,
-                FMLEnvironment.dist == Dist.CLIENT);
-    }
-
-    /**
-     * Dist-injected core so fixtures can pin both distributions without a
-     * game instance (hotbar#114 AC1).
-     */
-    static void registerContentBar(ResourceLocation barId, String displayNameKey,
-            Supplier<HotbarContentProvider> providerSupplier, boolean clientSide) {
+    public static void registerContentBar(ResourceLocation barId, String displayNameKey) {
         if (barId == null) {
             throw new IllegalArgumentException("bar id must not be null");
         }
         if (displayNameKey == null || displayNameKey.isBlank()) {
             throw new IllegalArgumentException("display name key must not be blank for " + barId);
-        }
-        if (providerSupplier == null) {
-            throw new IllegalArgumentException("provider supplier must not be null for " + barId);
         }
         HotbarRegistration existing = HotbarRegistry.get(barId).orElse(null);
         if (existing != null) {
@@ -132,39 +121,11 @@ public final class HotbarContentProviders {
                 throw new IllegalStateException(
                         "content bar already registered with a different contract: " + barId);
             }
-            if (clientSide && PROVIDERS.containsKey(barId)) {
-                LOGGER.debug("registerContentBar: {} already registered - idempotent no-op", barId);
-                return;
-            }
-            if (clientSide) {
-                register(barId, requireProvider(providerSupplier, barId));
-                LOGGER.debug("Content bar {} registered via one-call helper (provider registered: true)",
-                        barId);
-            } else {
-                LOGGER.debug("Content bar {} registered via one-call helper (provider registered: false)",
-                        barId);
-            }
+            LOGGER.debug("registerContentBar: {} already registered - idempotent no-op", barId);
             return;
         }
         HotbarRegistry.register(barId, displayNameKey, false);
-        boolean providerRegistered = false;
-        if (clientSide) {
-            register(barId, requireProvider(providerSupplier, barId));
-            providerRegistered = true;
-        }
-        LOGGER.debug("Content bar {} registered via one-call helper (provider registered: {})",
-                barId, providerRegistered);
-    }
-
-    /** The supplier's answer, with the id on a null (misuse is loud). */
-    private static HotbarContentProvider requireProvider(
-            Supplier<HotbarContentProvider> providerSupplier, ResourceLocation barId) {
-        HotbarContentProvider provider = providerSupplier.get();
-        if (provider == null) {
-            throw new IllegalArgumentException(
-                    "provider supplier returned null for " + barId);
-        }
-        return provider;
+        LOGGER.debug("Content bar {} registered via one-call helper", barId);
     }
 
     /**
