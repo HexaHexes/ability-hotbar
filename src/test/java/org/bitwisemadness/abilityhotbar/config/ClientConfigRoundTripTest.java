@@ -80,6 +80,8 @@ class ClientConfigRoundTripTest {
             lastCategory = ""
             #Last tag filter chosen in the ability menu (empty = no filter)
             lastTag = ""
+            #Per-bar hotbar styles as barId=styleId pairs separated by ';' (empty = vanilla default)
+            barStyles = ""
             """;
 
     private static CommentedConfig parse(String toml) {
