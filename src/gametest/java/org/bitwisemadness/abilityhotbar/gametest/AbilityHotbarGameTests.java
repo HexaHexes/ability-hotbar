@@ -6,10 +6,14 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
 import org.bitwisemadness.abilityhotbar.config.HotbarServerConfig;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.state.Bar;
 import org.bitwisemadness.abilityhotbar.state.BarAssignments;
@@ -145,5 +149,66 @@ public final class AbilityHotbarGameTests {
                         .equals(player.getData(BarStateAttachments.BAR_STATE).activeBarId()),
                 "the switched state must persist to the attachment");
         helper.succeed();
+    }
+
+    /**
+     * hotbar#120's AC on a real dedicated server: a content bar registers
+     * while the consumer's client-reading provider class is never linked.
+     * Linking that class is the {@code BootstrapMethodError} the reshaped
+     * helper removes - it takes no supplier argument, so there is no call
+     * site to link. The provider half keeps the standard dist ritual: the
+     * guarded call is an invokestatic into a separate class, so verifying
+     * this test method never resolves the client-reading types (they live
+     * only behind the guard, in their own classes).
+     */
+    @GameTest(template = "empty")
+    public static void content_bar_registers_without_linking_the_provider(GameTestHelper helper) {
+        ResourceLocation bar = ResourceLocation.fromNamespaceAndPath("otherpack", "gametest_content");
+        HotbarContentProviders.registerContentBar(bar, "otherpack.bar.gametest");
+
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            // never taken on the GameTestServer: had the helper still taken a
+            // supplier, a call site like this one would link the provider
+            // class at argument evaluation and crash before registering
+            ClientSideRegistration.register(bar);
+        }
+
+        helper.assertTrue(HotbarRegistry.get(bar).isPresent(),
+                "the bar half registers without any provider argument");
+        helper.assertTrue(HotbarContentProviders.get(bar).isEmpty(),
+                "no provider on a dedicated server - the class was never linked");
+        helper.succeed();
+    }
+
+    /** Client-only half: loaded only when the guard above passes. */
+    private static final class ClientSideRegistration {
+
+        private ClientSideRegistration() {
+        }
+
+        static void register(ResourceLocation bar) {
+            HotbarContentProviders.register(bar, new ClientReadingProvider());
+        }
+    }
+
+    /**
+     * Reads client state in its method body (the shape that fails the dist
+     * cleaner when linked on a server). Loaded only from the guarded class
+     * above, so the GameTestServer proves the call site never links it.
+     */
+    private static final class ClientReadingProvider implements HotbarContentProvider {
+
+        @Override
+        public int slotCount() {
+            return 1;
+        }
+
+        @Override
+        public net.minecraft.world.item.ItemStack slotStack(int index) {
+            var player = net.minecraft.client.Minecraft.getInstance().player;
+            return player == null
+                    ? net.minecraft.world.item.ItemStack.EMPTY
+                    : player.getMainHandItem();
+        }
     }
 }
