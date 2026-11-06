@@ -59,18 +59,18 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class AbilityMenuScreen extends Screen {
 
-    private static final int ROW_HEIGHT = 16;
+    private static final int ROW_HEIGHT = 18;
     private static final int LIST_LEFT = 8;
-    /** The list starts right under the collapsed filter strip (#27). */
-    private static final int LIST_TOP = 58;
+    /** The list starts 6px under the collapsed filter strip (#141). */
+    private static final int LIST_TOP = 64;
     /** Below the list: slot detail, slot cells and the hint bar (#27). */
-    private static final int LIST_BOTTOM_PAD = 50;
+    private static final int LIST_BOTTOM_PAD = 54;
     private static final int INERT_COLOR = 0xFFFF5555;
     /** The filter strip row (search pill + category/tag chips). */
-    private static final int FILTER_Y = 38;
-    private static final int CHIP_HEIGHT = 16;
+    private static final int FILTER_Y = 40;
+    private static final int CHIP_HEIGHT = 18;
     private static final int SEARCH_X = 8;
-    private static final int SEARCH_Y = 42;
+    private static final int SEARCH_Y = 44;
     private static final int SEARCH_WIDTH = 140;
     /** The header's target-bar chip (cycles the bar on click). */
     private static final int BAR_CHIP_Y = 4;
@@ -525,12 +525,12 @@ public final class AbilityMenuScreen extends Screen {
                 gui.blit(icon, LIST_LEFT + 2, y, 0, 0, 16, 16, 16, 16);
             }
             Component displayName = Component.translatable(row.definition().displayNameKey());
-            gui.drawString(this.font, displayName.getString(), LIST_LEFT + 22, y + 4,
+            gui.drawString(this.font, displayName.getString(), LIST_LEFT + 22, y + 5,
                     style.text());
             String cost = costText(row.definition());
             if (!cost.isEmpty()) {
                 gui.drawString(this.font, cost,
-                        LIST_LEFT + listWidth - this.font.width(cost), y + 4,
+                        LIST_LEFT + listWidth - this.font.width(cost), y + 5,
                         style.action());
             }
             // The unlock dim (ability-hotbar#135): proven-unlearned rows
