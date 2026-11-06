@@ -1,13 +1,16 @@
 package org.bitwisemadness.abilityhotbar.network;
 
 import io.netty.buffer.ByteBuf;
+import java.util.Optional;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
+import org.bitwisemadness.abilitycore.api.AbilityUnlocks;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
+import org.bitwisemadness.abilityhotbar.UnlockRule;
 import org.bitwisemadness.abilityhotbar.state.BarAssignments;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.bitwisemadness.abilityhotbar.state.BarStateAttachments;
@@ -50,15 +53,26 @@ public record AssignAbilityPayload(int slot, String abilityId, ResourceLocation 
         return TYPE;
     }
 
-    /** Server handler: resolve, then always echo the authoritative state. */
+    /**
+     * Server handler: the unlock gate (ability-hotbar#135), then resolve,
+     * then always echo the authoritative state. A proven-unlearned ability
+     * never lands in a slot (crafted payloads included); unknown answers
+     * pass through - core's rule, never a guess.
+     */
     public static void handle(AssignAbilityPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer player) {
                 BarState current = player.getData(BarStateAttachments.BAR_STATE);
-                BarAssignments.assign(current, payload.barId(), payload.slot(), payload.abilityId())
-                        .ifPresentOrElse(
-                                next -> BarStateSync.acceptAssignment(player, next),
-                                () -> BarStateSync.sendSnapshot(player));
+                ResourceLocation abilityId = ResourceLocation.tryParse(payload.abilityId());
+                Optional<BarState> next = abilityId == null
+                        || !UnlockRule.provenUnlearned(
+                                AbilityUnlocks.isLearned(player, abilityId))
+                                ? BarAssignments.assign(current, payload.barId(),
+                                        payload.slot(), payload.abilityId())
+                                : Optional.empty();
+                next.ifPresentOrElse(
+                        applied -> BarStateSync.acceptAssignment(player, applied),
+                        () -> BarStateSync.sendSnapshot(player));
             }
         });
     }

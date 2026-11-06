@@ -9,7 +9,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
+import org.bitwisemadness.abilitycore.api.AbilityUnlocks;
 import org.bitwisemadness.abilitycore.discovery.AbilityDiscovery;
+import org.bitwisemadness.abilityhotbar.UnlockRule;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
 import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
@@ -528,6 +530,13 @@ public final class AbilityMenuScreen extends Screen {
                 gui.drawString(this.font, cost,
                         LIST_LEFT + listWidth - this.font.width(cost), y + 4,
                         style.action());
+            }
+            // The unlock dim (ability-hotbar#135): proven-unlearned rows
+            // take the unavailable verdict; unknown stays undimmed.
+            if (UnlockRule.provenUnlearned(
+                    AbilityUnlocks.isLearned(this.minecraft.player, row.id()))) {
+                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
+                        AbilityBarLayer.UNAVAILABLE_TINT);
             }
             // the cyan row underline (their list chrome)
             gui.fill(LIST_LEFT, y + ROW_HEIGHT - 2, LIST_LEFT + listWidth, y + ROW_HEIGHT - 1,
