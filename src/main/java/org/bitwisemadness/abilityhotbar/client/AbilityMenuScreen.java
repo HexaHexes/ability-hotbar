@@ -2,6 +2,7 @@ package org.bitwisemadness.abilityhotbar.client;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -264,14 +265,15 @@ public final class AbilityMenuScreen extends Screen {
         Component base = categoryFilter == null
                 ? Component.translatable("ability_hotbar.menu.category_any")
                 : Component.translatable("ability_hotbar.menu.category_fmt",
-                        categoryFilter.toString());
+                        MenuLabels.category(categoryFilter));
         return Component.literal(base.getString() + " >");
     }
 
     private Component tagChipLabel() {
         Component base = tagFilter == null
                 ? Component.translatable("ability_hotbar.menu.tag_any")
-                : Component.translatable("ability_hotbar.menu.tag_fmt", tagFilter);
+                : Component.translatable("ability_hotbar.menu.tag_fmt",
+                        MenuLabels.tag(tagFilter));
         return Component.literal(base.getString() + " >");
     }
 
@@ -577,9 +579,11 @@ public final class AbilityMenuScreen extends Screen {
     /** The category/tags/cost line shared by the inline meta panel. */
     private static String metaText(AbilityDefinition definition) {
         StringBuilder meta = new StringBuilder();
-        meta.append(definition.category());
+        meta.append(MenuLabels.category(definition.category()).getString());
         if (!definition.tags().isEmpty()) {
-            meta.append("  ").append(String.join(", ", definition.tags()));
+            meta.append("  ").append(definition.tags().stream()
+                    .map(tag -> MenuLabels.tag(tag).getString())
+                    .collect(Collectors.joining(", ")));
         }
         String cost = costText(definition);
         if (!cost.isEmpty()) {
