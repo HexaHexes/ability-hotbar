@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import net.minecraft.resources.ResourceLocation;
 import org.apache.logging.log4j.Level;
+import org.bitwisemadness.abilityhotbar.registry.BarTextures;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.state.LogCapture;
@@ -43,12 +44,35 @@ class ContentBarRegistrationTest {
             HotbarRegistration registration = HotbarRegistry.get(BAR).orElseThrow();
             assertEquals(NAME, registration.displayNameKey());
             assertFalse(registration.assignable(), "content bars are non-assignable by construction");
+            assertEquals(BarTextures.DEFAULT, registration.textures(),
+                    "the two-arg form means no sprite overrides (hotbar#125)");
             assertTrue(HotbarContentProviders.get(BAR).isEmpty(),
                     "the helper never attaches a provider (hotbar#120: no supplier exists to link)");
             assertTrue(logs.messages().stream().anyMatch(
                     line -> line.contains(BAR.toString()) && line.contains("registered via one-call helper")),
                     "debug.log shows the registration without consumer code: " + logs.messages());
         }
+    }
+
+    @Test
+    void texturesRideTheContract() {
+        var custom = new BarTextures(
+                ResourceLocation.fromNamespaceAndPath("otherpack", "gui/sprites/content/background"),
+                null);
+        HotbarContentProviders.registerContentBar(BAR, NAME, custom);
+        assertEquals(custom, HotbarRegistry.get(BAR).orElseThrow().textures());
+
+        // identical re-call stays a no-op
+        HotbarContentProviders.registerContentBar(BAR, NAME, custom);
+
+        // same id, same name, different textures = a different contract
+        IllegalStateException conflict = assertThrows(IllegalStateException.class,
+                () -> HotbarContentProviders.registerContentBar(BAR, NAME,
+                        new BarTextures(null,
+                                ResourceLocation.fromNamespaceAndPath("otherpack",
+                                        "gui/sprites/content/selection"))));
+        assertTrue(conflict.getMessage().contains(BAR.toString()),
+                "contract conflicts carry the bar id: " + conflict.getMessage());
     }
 
     @Test

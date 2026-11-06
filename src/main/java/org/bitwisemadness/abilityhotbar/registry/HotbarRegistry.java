@@ -55,6 +55,18 @@ public final class HotbarRegistry {
      * @throws IllegalStateException    when the id is already registered
      */
     public static HotbarRegistration register(ResourceLocation id, String displayNameKey, boolean assignable) {
+        return register(id, displayNameKey, assignable, BarTextures.DEFAULT);
+    }
+
+    /**
+     * Registers with sprite overrides (hotbar#125): the bar layer draws the
+     * registration's background/selection sprites instead of the vanilla ones
+     * (null textures = {@link BarTextures#DEFAULT} = vanilla).
+     *
+     * @param textures the optional sprite overrides, or null for vanilla
+     */
+    public static HotbarRegistration register(ResourceLocation id, String displayNameKey, boolean assignable,
+            BarTextures textures) {
         if (id == null) {
             throw new IllegalArgumentException("hotbar id must not be null");
         }
@@ -65,7 +77,8 @@ public final class HotbarRegistry {
         if (displayNameKey == null || displayNameKey.isBlank()) {
             throw new IllegalArgumentException("display name key must not be blank for " + id);
         }
-        HotbarRegistration registration = new HotbarRegistration(id, displayNameKey.trim(), assignable);
+        HotbarRegistration registration = new HotbarRegistration(id, displayNameKey.trim(), assignable,
+                textures);
         // CopyOnWriteArrayList has no atomic put-if-absent; registration is a
         // setup-time action, so synchronized check-then-add suffices. The
         // duplicate check is by id so changed metadata still fails loudly.

@@ -27,6 +27,9 @@ import org.bitwisemadness.abilityhotbar.config.StatusAnchorMode;
 import org.bitwisemadness.abilityhotbar.content.ContentPlan;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
+import org.bitwisemadness.abilityhotbar.registry.BarTextures;
+import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
+import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.bitwisemadness.abilityhotbar.state.SeededAssignments;
 import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
@@ -41,8 +44,9 @@ import org.jetbrains.annotations.Nullable;
  * diagnostics), and blits it using {@link BarLayout}'s rectangles. The bar
  * background reuses the vanilla {@code hud/hotbar} sprite and the selection
  * reuses {@code hud/hotbar_selection}, so it reads in the vanilla texture
- * language. Every display branch lives in {@link SlotRender} (unit-tested);
- * this layer only performs the GPU draws.</p>
+ * language - unless the active bar's registration overrides them
+ * (hotbar#125 {@link BarTextures}); every display branch lives in
+ * {@link SlotRender} (unit-tested); this layer only performs the GPU draws.</p>
  *
  * <p>When the <b>active</b> bar is content-owned (non-assignable with a
  * registered {@link HotbarContentProvider}) the layer draws that provider's
@@ -112,10 +116,17 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         // else draws the stored bar. Both paths return the origin they drew
         // at, or null when they drew nothing, so the toast follows that.
         ResourceLocation activeId = state.activeBarId();
+        // hotbar#125: the active bar's registration may brand its two sprites;
+        // built-ins (and unbranded registrations) resolve to the vanilla pair
+        BarTextures textures = HotbarRegistry.get(activeId)
+                .map(HotbarRegistration::textures).orElse(BarTextures.DEFAULT);
+        ResourceLocation background = textures.backgroundOr(VANILLA_HOTBAR);
+        ResourceLocation selection = textures.selectionOr(VANILLA_SELECTION);
         HotbarContentProvider provider = HotbarContentProviders.get(activeId).orElse(null);
         int[] origin = provider != null
-                ? renderProviderBar(gui, mc, activeId, provider, state, screenW, screenH)
-                : renderStoredBar(gui, mc, state, screenW, screenH);
+                ? renderProviderBar(gui, mc, activeId, provider, state, screenW, screenH,
+                        background, selection)
+                : renderStoredBar(gui, mc, state, screenW, screenH, background, selection);
         if (origin == null) {
             return;
         }
@@ -135,7 +146,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
      */
     @Nullable
     private static int[] renderStoredBar(GuiGraphics gui, Minecraft mc, BarState state,
-            int screenW, int screenH) {
+            int screenW, int screenH, ResourceLocation background, ResourceLocation selection) {
         // The attachment is sized to the server ceiling, but the client renders only
         // the first effectiveRenderCount() entries (server maxSlots clamps the client
         // preference, REQ-CFG-02). Saved state may exceed the ceiling, so clamp here.
@@ -166,11 +177,11 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         // renders opaque without it; never leak blend into the next frame's draw.
         RenderSystem.enableBlend();
         try {
-            drawBarBackground(gui, layout, screenW, screenH);
+            drawBarBackground(gui, layout, screenW, screenH, background);
             for (int i = 0; i < renderCount && i < slots.size(); i++) {
                 SlotRender slot = slots.get(i);
                 int[] rect = layout.slotRect(i, screenW, screenH);
-                drawSlot(gui, slot, rect, layout);
+                drawSlot(gui, slot, rect, layout, selection);
             }
         } finally {
             // Never leak blend state into the next frame's vanilla hotbar draw.
@@ -190,7 +201,8 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
      */
     @Nullable
     private static int[] renderProviderBar(GuiGraphics gui, Minecraft mc, ResourceLocation barId,
-            HotbarContentProvider provider, BarState state, int screenW, int screenH) {
+            HotbarContentProvider provider, BarState state, int screenW, int screenH,
+            ResourceLocation background, ResourceLocation selection) {
         // hotbar#115: the state's selected slot frames the bar unless the
         // provider names its own cell - a stored (seeded) provider bar carries
         // the selection, a never-stored one has none (no frame, as before)
@@ -215,7 +227,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         RenderSystem.enableBlend();
         try {
             if (plan.emptyTexture() == null) {
-                drawCellChromeClipped(gui, layout, screenW, screenH);
+                drawCellChromeClipped(gui, layout, screenW, screenH, background);
             }
             List<ItemStack> cells = plan.stacks();
             for (int i = 0; i < plan.slotCount(); i++) {
@@ -239,7 +251,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             }
             int active = plan.activeSlot();
             if (active >= 0) {
-                drawSelectionFrame(gui, layout, layout.slotRect(active, screenW, screenH));
+                drawSelectionFrame(gui, layout, layout.slotRect(active, screenW, screenH), selection);
             }
             drawSeededOverlays(gui, mc, state, layout, screenW, screenH, barId, provider);
         } finally {
@@ -282,7 +294,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
      * but scissored to this bar's cells - never the nine ghost frames.
      */
     private static void drawCellChromeClipped(GuiGraphics gui, BarLayout layout,
-            int screenW, int screenH) {
+            int screenW, int screenH, ResourceLocation background) {
         int[] first = layout.slotRect(0, screenW, screenH);
         int[] last = layout.slotRect(layout.slotCount() - 1, screenW, screenH);
         int x0 = Math.min(first[0], last[0]);
@@ -293,7 +305,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         try {
             // One sprite only: provider bars keep single-segment chrome per
             // #86's open-question default (their cells are provider-owned).
-            drawBackgroundSegment(gui, layout, screenW, screenH, 0);
+            drawBackgroundSegment(gui, layout, screenW, screenH, 0, background);
         } finally {
             gui.disableScissor();
         }
@@ -318,13 +330,14 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         }
     }
 
-    /** The vanilla selection frame around one cell, honouring orientation. */
-    private static void drawSelectionFrame(GuiGraphics gui, BarLayout layout, int[] rect) {
+    /** The selection frame around one cell, honouring orientation (sprite per hotbar#125). */
+    private static void drawSelectionFrame(GuiGraphics gui, BarLayout layout, int[] rect,
+            ResourceLocation selection) {
         int[] frame = selectionFrameRect(rect, layout.horizontal(), layout.scale());
         if (frame[4] == 0) {
-            gui.blitSprite(VANILLA_SELECTION, frame[0], frame[1], frame[2], frame[3]);
+            gui.blitSprite(selection, frame[0], frame[1], frame[2], frame[3]);
         } else {
-            blitTurned(gui, VANILLA_SELECTION, frame[0], frame[1], frame[2], frame[3], frame[4]);
+            blitTurned(gui, selection, frame[0], frame[1], frame[2], frame[3], frame[4]);
         }
     }
 
@@ -383,10 +396,12 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
 
     /**
      * Blits the bar's background so it reads in the vanilla texture language
-     * (REQ-HOT-01, hotbar#86): one complete {@code hud/hotbar} sprite per
+     * (REQ-HOT-01, hotbar#86): one complete sprite per
      * {@link BarLayout#segmentCount() segment}, each at native 182x22
      * proportions - never squashed, stretched or cropped, because vanilla
-     * hardcodes that size and resource packs design for it. Segments are
+     * hardcodes that size and resource packs design for it. The sprite is the
+     * resolved background (vanilla {@code hud/hotbar} unless the bar's
+     * registration overrides it, hotbar#125). Segments are
      * placed by the layout's grow-from-anchor rule (strip to the right of a
      * left anchor, mirrored at a right anchor, stacked as rows above a
      * bottom anchor), so a bar of 10..18 slots reads as two adjacent
@@ -397,15 +412,16 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
      * vertical path turns each sprite a quarter turn instead of scaling it
      * into the box.</p>
      */
-    private static void drawBarBackground(GuiGraphics gui, BarLayout layout, int screenW, int screenH) {
+    private static void drawBarBackground(GuiGraphics gui, BarLayout layout, int screenW,
+            int screenH, ResourceLocation background) {
         for (int segment = 0; segment < layout.segmentCount(); segment++) {
-            drawBackgroundSegment(gui, layout, screenW, screenH, segment);
+            drawBackgroundSegment(gui, layout, screenW, screenH, segment, background);
         }
     }
 
     /** One segment's sprite: native size, framed so its cells align with the grid. */
     private static void drawBackgroundSegment(GuiGraphics gui, BarLayout layout,
-            int screenW, int screenH, int segment) {
+            int screenW, int screenH, int segment, ResourceLocation background) {
         int x = layout.originX(screenW);
         int y = layout.originY(screenH);
         int[] offset = layout.segmentOffset(segment);
@@ -416,9 +432,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         int dx = x - border + offset[0];
         int dy = y - border + offset[1];
         if (layout.horizontal()) {
-            gui.blitSprite(VANILLA_HOTBAR, dx, dy, w, h);
+            gui.blitSprite(background, dx, dy, w, h);
         } else {
-            blitTurned(gui, VANILLA_HOTBAR, dx, dy, w, h, 90f);
+            blitTurned(gui, background, dx, dy, w, h, 90f);
         }
     }
 
@@ -456,8 +472,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         }
     }
 
-    /** Draws one slot: icon/placeholder, overlays, and the vanilla selection frame. */
-    private static void drawSlot(GuiGraphics gui, SlotRender slot, int[] rect, BarLayout layout) {
+    /** Draws one slot: icon/placeholder, overlays, and the selection frame. */
+    private static void drawSlot(GuiGraphics gui, SlotRender slot, int[] rect, BarLayout layout,
+            ResourceLocation selection) {
         int x = rect[0];
         int y = rect[1];
         int w = rect[2];
@@ -472,7 +489,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         // blits HOTBAR_SELECTION, then the item loop), so a pack-replaced frame
         // cannot cover the slot content. Match that order here.
         if (slot.selected()) {
-            drawSelectionFrame(gui, layout, rect);
+            drawSelectionFrame(gui, layout, rect, selection);
         }
 
         // Icon on top of the selection frame (as vanilla layers items over it).

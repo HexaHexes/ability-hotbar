@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilityhotbar.registry.BarTextures;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.slf4j.Logger;
@@ -109,22 +110,36 @@ public final class HotbarContentProviders {
      * @throws IllegalStateException    when the id is live with a different contract
      */
     public static void registerContentBar(ResourceLocation barId, String displayNameKey) {
+        registerContentBar(barId, displayNameKey, BarTextures.DEFAULT);
+    }
+
+    /**
+     * One-call registration with sprite overrides (hotbar#125): same contract
+     * as the two-arg form, but the bar layer draws this registration's
+     * background/selection sprites (null = vanilla).
+     *
+     * @param textures the optional sprite overrides, or null for vanilla
+     */
+    public static void registerContentBar(ResourceLocation barId, String displayNameKey,
+            BarTextures textures) {
         if (barId == null) {
             throw new IllegalArgumentException("bar id must not be null");
         }
         if (displayNameKey == null || displayNameKey.isBlank()) {
             throw new IllegalArgumentException("display name key must not be blank for " + barId);
         }
+        BarTextures effective = textures == null ? BarTextures.DEFAULT : textures;
         HotbarRegistration existing = HotbarRegistry.get(barId).orElse(null);
         if (existing != null) {
-            if (existing.assignable() || !displayNameKey.equals(existing.displayNameKey())) {
+            if (existing.assignable() || !displayNameKey.equals(existing.displayNameKey())
+                    || !effective.equals(existing.textures())) {
                 throw new IllegalStateException(
                         "content bar already registered with a different contract: " + barId);
             }
             LOGGER.debug("registerContentBar: {} already registered - idempotent no-op", barId);
             return;
         }
-        HotbarRegistry.register(barId, displayNameKey, false);
+        HotbarRegistry.register(barId, displayNameKey, false, effective);
         LOGGER.debug("Content bar {} registered via one-call helper", barId);
     }
 
