@@ -161,6 +161,38 @@ public record BarLayout(
         return new int[] {0, segment * CELLS_PER_SEGMENT * stride()};
     }
 
+    /**
+     * The screen-space bounding box of one segment's cells: the
+     * {@code {x0, y0, x1, y1}} rect a renderer scissored to it shows
+     * exactly the cells that segment owns - the whole sprite for a full
+     * segment, a partial final segment cut at its last cell (no ghost
+     * frames past a provider's cells: hotbar#86's provider-bar rule).
+     * Cells within a segment are always one contiguous run along the
+     * layout axis, so the two endpoints' box is exact.
+     *
+     * @param segment      0-based segment index
+     * @param screenWidth  current screen width (for the horizontal anchor)
+     * @param screenHeight current screen height (for the vertical anchor)
+     * @return the {@code {x0, y0, x1, y1}} bounds in screen pixels
+     * @throws IndexOutOfBoundsException when the segment does not exist
+     */
+    public int[] segmentCellBounds(int segment, int screenWidth, int screenHeight) {
+        if (segment < 0 || segment >= segmentCount()) {
+            throw new IndexOutOfBoundsException(
+                    "segment " + segment + " out of range [0," + segmentCount() + ")");
+        }
+        int firstIndex = segment * CELLS_PER_SEGMENT;
+        int lastIndex = Math.min(slotCount - 1, firstIndex + CELLS_PER_SEGMENT - 1);
+        int[] first = slotRect(firstIndex, screenWidth, screenHeight);
+        int[] last = slotRect(lastIndex, screenWidth, screenHeight);
+        return new int[] {
+            Math.min(first[0], last[0]),
+            Math.min(first[1], last[1]),
+            Math.max(first[0] + first[2], last[0] + last[2]),
+            Math.max(first[1] + first[3], last[1] + last[3])
+        };
+    }
+
     /** Bottom-of-screen anchors are the ones a bar grows away from. */
     private boolean isBottomAnchor() {
         return anchor != BarAnchor.LEFT_EDGE && anchor != BarAnchor.RIGHT_EDGE;

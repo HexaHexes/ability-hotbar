@@ -109,7 +109,9 @@ assignments and its own selected slot (REQ-HOT-22):
   (logged once) rather than crashing. The owner can also **seed its verbs
   into the bar's cells** server-side - the cell then activates that verb
   with the cell as its context, while the cell's content stays the
-  provider's item (hotbar#89).
+  provider's item (hotbar#89). Provider bars draw their chrome in the
+  same nine-slot segments as stored bars (hotbar#86): a 10..18-cell bar
+  reads as two adjacent hotbars wearing one selection frame.
 - **Notification** - after a switch the new bar's name appears briefly above
   the bar, governed by `display.switchToast`.
 - **Scoped abilities** - a mod may declare that an ability belongs to
