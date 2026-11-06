@@ -22,7 +22,7 @@ toggleable equipped-spellbook hotbar (ISS only).
   Gradle step only - see AGENTS.md).
 - Optional: `tensura` (skill/magic provider), `irons_spellbooks` (spell provider
   and the spellbook hotbar - that feature must gate off entirely without ISS),
-  `ability_battlewills` (battlewill provider). Optional providers gate behind
+  `ability_tensura` (battlewill provider). Optional providers gate behind
   `ModList.isLoaded`; a missing provider disables only its own features.
 - **Resource-cost boundary** (ability-hotbar#117): this repo only fires
   activation intents and displays core's refusal outcomes — validation,
