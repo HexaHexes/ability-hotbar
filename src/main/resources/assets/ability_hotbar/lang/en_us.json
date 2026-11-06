@@ -56,6 +56,7 @@
   "ability_hotbar.menu.empty_slot": "(empty)",
   "ability_hotbar.menu.clear": "Clear slot",
   "ability_hotbar.menu.no_results": "No abilities match.",
+  "ability_hotbar.menu.hint": "Click a slot to assign \u00b7 Esc to close",
 
   "ability_hotbar.configuration.display": "Display",
   "ability_hotbar.configuration.display.tooltip": "How and where the ability bar is drawn.",
