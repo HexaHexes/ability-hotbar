@@ -64,7 +64,7 @@ public final class HotbarKeybinds {
     /** Grave accent (left of 1): open the ability management menu (hotbar#27). */
     public static final KeyMapping OPEN_MENU;
 
-    /** Right Ctrl: toggle ability mode (flow owned by hotbar#17). */
+    /** Right Ctrl: toggle ability mode (flow owned by HexaHexes/tensura-iss-integration#51). */
     public static final KeyMapping ABILITY_MODE;
 
     static {
