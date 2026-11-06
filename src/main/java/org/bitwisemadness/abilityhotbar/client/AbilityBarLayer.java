@@ -85,7 +85,8 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     private static final int SELECTION_TOP_RING = 4;
 
     private static final int INERT_COLOR = 0x66FF2222;
-    private static final int UNAVAILABLE_TINT = 0x66FF0000;
+    /** Shared with the menu's unlock dim (ability-hotbar#135) - same verdict, same colour. */
+    static final int UNAVAILABLE_TINT = 0x66FF0000;
     private static final int COOLDOWN_COLOR = 0xAA000000;
     private static final int COST_BG = 0xCC000000;
 
