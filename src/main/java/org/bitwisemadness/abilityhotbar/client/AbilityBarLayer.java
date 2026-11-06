@@ -293,24 +293,24 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
 
     /**
      * The hotbar's own empty-cell chrome for a provider that supplies no
-     * texture: the background sprite drawn exactly as the stored bar would,
-     * but scissored to this bar's cells - never the nine ghost frames.
+     * texture: one background sprite per {@link BarLayout#segmentCount()
+     * segment}, each scissored to the cells that segment actually owns -
+     * so a bar of 10..18 slots reads as two adjacent hotbars (the #86
+     * segmentation assignable bars already document, now applied to
+     * provider bars; their cells are provider-owned, so the sprite never
+     * bleeds past the last cell into ghost frames), while a bar of nine
+     * or fewer slots takes the identical single-segment path as before.
      */
     private static void drawCellChromeClipped(GuiGraphics gui, BarLayout layout,
             int screenW, int screenH, ResourceLocation background) {
-        int[] first = layout.slotRect(0, screenW, screenH);
-        int[] last = layout.slotRect(layout.slotCount() - 1, screenW, screenH);
-        int x0 = Math.min(first[0], last[0]);
-        int y0 = Math.min(first[1], last[1]);
-        int x1 = Math.max(first[0] + first[2], last[0] + last[2]);
-        int y1 = Math.max(first[1] + first[3], last[1] + last[3]);
-        gui.enableScissor(x0, y0, x1, y1);
-        try {
-            // One sprite only: provider bars keep single-segment chrome per
-            // #86's open-question default (their cells are provider-owned).
-            drawBackgroundSegment(gui, layout, screenW, screenH, 0, background);
-        } finally {
-            gui.disableScissor();
+        for (int segment = 0; segment < layout.segmentCount(); segment++) {
+            int[] bounds = layout.segmentCellBounds(segment, screenW, screenH);
+            gui.enableScissor(bounds[0], bounds[1], bounds[2], bounds[3]);
+            try {
+                drawBackgroundSegment(gui, layout, screenW, screenH, segment, background);
+            } finally {
+                gui.disableScissor();
+            }
         }
     }
 

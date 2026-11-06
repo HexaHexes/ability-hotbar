@@ -260,6 +260,46 @@ class BarLayoutTest {
     }
 
     @Test
+    void segmentCellBoundsClipEachSegmentToItsOwnCells() {
+        // hotbar#86: each segment's scissor box covers exactly the cells it
+        // owns - rows/columns split, partial segments cut at their last cell,
+        // and the nine-or-fewer path identical to the old whole-bar box.
+        BarLayout rows = new BarLayout(18, 20, 0, true, BarAnchor.ABOVE_HOTBAR,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        int[] bottom = rows.segmentCellBounds(0, 1920, 1080);
+        int[] top = rows.segmentCellBounds(1, 1920, 1080);
+        assertEquals(9 * 20, bottom[2] - bottom[0], "a full row spans nine cells");
+        assertEquals(bottom[2] - bottom[0], top[2] - top[0], "both rows are nine wide");
+        assertTrue(top[1] < bottom[1], "segment 1 sits above segment 0 (1 above 0)");
+        assertEquals(20, bottom[1] - top[1], "one stride apart at gap 0");
+
+        BarLayout column = new BarLayout(18, 20, 0, false, BarAnchor.RIGHT_EDGE,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        int[] head = column.segmentCellBounds(0, 1920, 1080);
+        int[] tail = column.segmentCellBounds(1, 1920, 1080);
+        assertTrue(tail[1] > head[1], "side anchors keep the downward column");
+        assertEquals(9 * 20, head[3] - head[1], "a full column segment spans nine cells");
+
+        BarLayout partial = new BarLayout(12, 20, 0, true, BarAnchor.ABOVE_HOTBAR,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        int[] second = partial.segmentCellBounds(1, 1920, 1080);
+        assertEquals(3 * 20, second[2] - second[0],
+                "the partial segment clips to its three owned cells, not nine");
+
+        BarLayout single = new BarLayout(6, 20, 0, true, BarAnchor.ABOVE_HOTBAR,
+                StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
+        int[] only = single.segmentCellBounds(0, 1920, 1080);
+        int[] cell0 = single.slotRect(0, 1920, 1080);
+        int[] cell5 = single.slotRect(5, 1920, 1080);
+        assertArrayEquals(new int[] {
+                cell0[0], cell0[1], cell5[0] + cell5[2], cell5[1] + cell5[3] },
+                only, "nine-or-fewer keeps the exact whole-bar clip (regression)");
+
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> rows.segmentCellBounds(2, 1920, 1080));
+    }
+
+    @Test
     void segmentOffsetsFollowTheGrowFromAnchorRule() {
         // #86: cell 0 nearest the anchor, segments grow outward - left = strip
         // to the right, right = mirrored strip, bottom = rows stacked upward,
