@@ -79,6 +79,16 @@ and falls back to the prettified raw value (separators to spaces, first
 letter capitalised: `tensura:magic` reads as "Magic"). A grep fixture keeps
 the raw sites out of the screen.
 
+**Menu filtering and order** (issue #142): rows ship in the deterministic
+default order **provider (id namespace) -> category -> lowest tag -> id**;
+the header's second line carries the **provider tabs** (`All` + one tab per
+namespace, CLIENT pref `menu.lastProvider`); the category cycle is
+hierarchical over the open **`type:` subcategory convention** (any ->
+category -> its `type:` tags, pref `menu.lastSubCategory`) - a provider
+adopts `type:`-prefixed tags to subdivide its categories (Tensura's eight
+skill/magic types are the first consumers). A pool without `type:` tags
+behaves exactly as before.
+
 **Menu layout** (issue #27): the screen follows the Tensura RPG System
 skill-menu geometry (the design comment on that issue): a header band with
 the title top-left and the target-bar selector top-right (chip + used/total

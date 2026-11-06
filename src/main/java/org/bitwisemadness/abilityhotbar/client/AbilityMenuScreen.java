@@ -89,6 +89,10 @@ public final class AbilityMenuScreen extends Screen {
     private ResourceLocation categoryFilter;
     @Nullable
     private String tagFilter;
+    @Nullable
+    private String subCategoryFilter;
+    @Nullable
+    private String providerFilter;
     private int scrollOffset;
     private EditBox searchBox;
 
@@ -98,6 +102,18 @@ public final class AbilityMenuScreen extends Screen {
         // so mid-session filters are not clobbered by the last saved pair.
         categoryFilter = parseFilter(HotbarClientConfig.MENU_CATEGORY.get());
         tagFilter = emptyToNull(HotbarClientConfig.MENU_TAG.get());
+        subCategoryFilter = emptyToNull(HotbarClientConfig.MENU_SUBCATEGORY.get());
+        providerFilter = emptyToNull(HotbarClientConfig.MENU_PROVIDER.get());
+        // A corrupt pref must never blank the menu (the parseFilter posture):
+        // filters that name nothing in the pool drop to "no filter".
+        var pool = AbilityDiscovery.entries();
+        if (providerFilter != null && !MenuQuery.providers(pool).contains(providerFilter)) {
+            providerFilter = null;
+        }
+        if (subCategoryFilter != null && (categoryFilter == null
+                || !MenuQuery.subCategories(pool, categoryFilter).contains(subCategoryFilter))) {
+            subCategoryFilter = null;
+        }
         BarState state = ClientBarState.get();
         List<ResourceLocation> bars = manageableBars();
         ResourceLocation active = state == null ? null : state.activeBarId();
@@ -161,6 +177,7 @@ public final class AbilityMenuScreen extends Screen {
 
         Bar target = targetBar(state);
         drawHeader(gui, mouseX, mouseY, target);
+        drawProviderTabs(gui, mouseX, mouseY);
         if (styleCyclerVisible()) {
             drawStylePill(gui, mouseX, mouseY);
         }
@@ -262,11 +279,16 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     private Component categoryChipLabel() {
-        Component base = categoryFilter == null
-                ? Component.translatable("ability_hotbar.menu.category_any")
-                : Component.translatable("ability_hotbar.menu.category_fmt",
-                        MenuLabels.category(categoryFilter));
-        return Component.literal(base.getString() + " >");
+        if (categoryFilter == null) {
+            return withChevron(Component.translatable("ability_hotbar.menu.category_any"));
+        }
+        String name = MenuLabels.category(categoryFilter).getString();
+        if (subCategoryFilter != null) {
+            // the hierarchical cycle's composite label: "Skill / Unique" (#142)
+            name = name + " / " + MenuLabels.subcategory(subCategoryFilter).getString();
+        }
+        return withChevron(Component.translatable("ability_hotbar.menu.category_fmt",
+                Component.literal(name)));
     }
 
     private Component tagChipLabel() {
@@ -274,7 +296,55 @@ public final class AbilityMenuScreen extends Screen {
                 ? Component.translatable("ability_hotbar.menu.tag_any")
                 : Component.translatable("ability_hotbar.menu.tag_fmt",
                         MenuLabels.tag(tagFilter));
+        return withChevron(base);
+    }
+
+    /** The cycle affordance on every filter chip (the chip owns a click). */
+    private static Component withChevron(Component base) {
         return Component.literal(base.getString() + " >");
+    }
+
+    /**
+     * The header's provider tab strip (hotbar#142): {@code All} plus one tab
+     * per provider namespace, on the style pill's row - the menu splits its
+     * pool per provider without a fourth filter chip. Tabs shrink to fit
+     * beside the pill; the active tab is the current provider filter.
+     */
+    private void drawProviderTabs(GuiGraphics gui, int mouseX, int mouseY) {
+        List<String> providers = MenuQuery.providers(AbilityDiscovery.entries());
+        if (providers.isEmpty()) {
+            return;
+        }
+        MenuStyle style = style();
+        int tabWidth = providerTabWidth(providers);
+        int x = LIST_LEFT;
+        for (int i = -1; i < providers.size(); i++) {
+            boolean all = i < 0;
+            String namespace = all ? null : providers.get(i);
+            boolean active = all ? providerFilter == null : namespace.equals(providerFilter);
+            boolean hovered = inside(mouseX, mouseY, x, STYLE_PILL_Y, tabWidth - 2, 14);
+            if (active) {
+                gui.fill(x, STYLE_PILL_Y, x + tabWidth - 2, STYLE_PILL_Y + 14,
+                        MenuStyle.alpha(style.accent(), 30));
+            } else if (hovered) {
+                gui.fill(x, STYLE_PILL_Y, x + tabWidth - 2, STYLE_PILL_Y + 14,
+                        MenuStyle.alpha(style.raised(), 55));
+            }
+            Component label = all
+                    ? Component.translatable("ability_hotbar.menu.provider_all")
+                    : MenuLabels.provider(namespace);
+            String text = this.font.plainSubstrByWidth(label.getString(), tabWidth - 6);
+            gui.drawString(this.font, text, x + 3, STYLE_PILL_Y + 3,
+                    active ? style.text() : hovered ? style.text() : style.muted());
+            x += tabWidth;
+        }
+    }
+
+    /** One provider tab's width: capped, floored, shrunk to fit beside the style pill. */
+    private int providerTabWidth(List<String> providers) {
+        int available = (this.width - 16)
+                - (styleCyclerVisible() ? STYLE_PILL_WIDTH + 4 : 0);
+        return Math.min(72, Math.max(24, available / (providers.size() + 1)));
     }
 
     /** The style cycler shows only for an assignable bar with registered styles. */
@@ -632,6 +702,20 @@ public final class AbilityMenuScreen extends Screen {
                 return true;
             }
         }
+        // provider tabs (header line 2, hotbar#142): All + one per provider
+        List<String> providers = MenuQuery.providers(AbilityDiscovery.entries());
+        if (!providers.isEmpty()) {
+            int tabWidth = providerTabWidth(providers);
+            int tabX = LIST_LEFT;
+            for (int i = -1; i < providers.size(); i++) {
+                if (inside(mouseX, mouseY, tabX, STYLE_PILL_Y, tabWidth - 2, 14)) {
+                    providerFilter = i < 0 ? null : providers.get(i);
+                    scrollOffset = 0;
+                    return true;
+                }
+                tabX += tabWidth;
+            }
+        }
         // category / tag chips cycle the filters
         int[] category = categoryChipRect();
         if (inside(mouseX, mouseY, category[0], FILTER_Y, category[1], CHIP_HEIGHT)) {
@@ -714,6 +798,8 @@ public final class AbilityMenuScreen extends Screen {
         // The remembered filters are CLIENT config; bar contents never are.
         HotbarClientConfig.MENU_CATEGORY.set(categoryFilter == null ? "" : categoryFilter.toString());
         HotbarClientConfig.MENU_TAG.set(tagFilter == null ? "" : tagFilter);
+        HotbarClientConfig.MENU_SUBCATEGORY.set(subCategoryFilter == null ? "" : subCategoryFilter);
+        HotbarClientConfig.MENU_PROVIDER.set(providerFilter == null ? "" : providerFilter);
         HotbarClientConfig.SPEC.save();
         super.onClose();
     }
@@ -745,13 +831,23 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     private void cycleCategory() {
-        List<ResourceLocation> categories = MenuQuery.categories(AbilityDiscovery.entries());
-        if (categories.isEmpty()) {
-            categoryFilter = null;
+        // the hierarchical cycle (#142): any -> category -> its subcategories
+        List<MenuQuery.CategoryStep> steps = MenuQuery.categorySteps(AbilityDiscovery.entries());
+        if (steps.isEmpty()) {
             return;
         }
-        int index = categoryFilter == null ? -1 : categories.indexOf(categoryFilter);
-        categoryFilter = index + 1 >= categories.size() ? null : categories.get(index + 1);
+        int index = -1; // a state no step matches (corrupt pref) resets to "any"
+        for (int i = 0; i < steps.size(); i++) {
+            MenuQuery.CategoryStep step = steps.get(i);
+            if (java.util.Objects.equals(step.category(), categoryFilter)
+                    && java.util.Objects.equals(step.subTag(), subCategoryFilter)) {
+                index = i;
+                break;
+            }
+        }
+        MenuQuery.CategoryStep next = steps.get((index + 1) % steps.size());
+        categoryFilter = next.category();
+        subCategoryFilter = next.subTag();
         scrollOffset = 0;
     }
 
@@ -772,7 +868,8 @@ public final class AbilityMenuScreen extends Screen {
 
     private List<MenuQuery.Entry> visibleRows() {
         return MenuQuery.visibleEntries(AbilityDiscovery.entries(), selectedBar,
-                searchBox == null ? "" : searchBox.getValue(), categoryFilter, tagFilter,
+                searchBox == null ? "" : searchBox.getValue(), categoryFilter, subCategoryFilter,
+                tagFilter, providerFilter,
                 definition -> Component.translatable(definition.displayNameKey()));
     }
 

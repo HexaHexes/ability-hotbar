@@ -23,9 +23,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * The menu's query layer (hotbar#27 AC1/AC7/AC8): which bars the screen
- * offers, and how one bar's pool narrows by scope, search, category and tag
- * across the open provider vocabulary.
+ * The menu's query layer (hotbar#27 AC1/AC7/AC8, hotbar#142): which bars
+ * the screen offers, and how one bar's pool narrows by scope, search,
+ * category, subcategory, tag and provider across the open vocabulary - and
+ * the deterministic default order (provider -> category -> tag -> id).
  */
 class MenuQueryTest {
 
@@ -48,6 +49,8 @@ class MenuQueryTest {
             ResourceLocation.fromNamespaceAndPath("pseudocore", "curios");
     private static final ResourceLocation EXTRA =
             ResourceLocation.fromNamespaceAndPath("otherpack", "extra");
+    private static final ResourceLocation RAGNAROK =
+            ResourceLocation.fromNamespaceAndPath("tensura", "ragnarok");
 
     private static AbilityDefinition def(String displayKey, ResourceLocation category, Set<String> tags) {
         return new AbilityDefinition(displayKey, null, category, ActivationType.INSTANT, java.util.List.of(),
@@ -80,6 +83,14 @@ class MenuQueryTest {
         entries.put(FLASH, def("tensura.magic.flash", MAGIC, Set.of("active")));
         entries.put(FIREBOLT, def("irons_spellbooks.firebolt", SPELL, Set.of()));
         entries.put(PRESS, def("pseudocore_curios.press", WILL, Set.of("active")));
+        return entries;
+    }
+
+    /** The pool plus one skill carrying a Tensura-style subcategory tag (#142). */
+    private static Map<ResourceLocation, AbilityDefinition> poolWithTypeTags() {
+        Map<ResourceLocation, AbilityDefinition> entries = pool();
+        entries.put(RAGNAROK, def("tensura.skill.ragnarok", SKILL,
+                Set.of("active", "type:unique")));
         return entries;
     }
 
@@ -118,21 +129,40 @@ class MenuQueryTest {
         Map<ResourceLocation, AbilityDefinition> entries = pool();
         ResourceLocation bar = HotbarRegistry.builtinBarId(0);
 
-        assertEquals(List.of(FIREBALL, FIREBOLT),
-                ids(MenuQuery.visibleEntries(entries, bar, "fire", null, null, NAMES)),
-                "search matches the resolved name case-insensitively");
+        assertEquals(List.of(FIREBOLT, FIREBALL),
+                ids(MenuQuery.visibleEntries(entries, bar, "fire", null, null, null, null, NAMES)),
+                "search matches the resolved name case-insensitively, in default order");
         assertEquals(List.of(FIREBALL, HEAL),
-                ids(MenuQuery.visibleEntries(entries, bar, null, SKILL, null, NAMES)),
+                ids(MenuQuery.visibleEntries(entries, bar, null, SKILL, null, null, null, NAMES)),
                 "category narrows to one kind");
         assertEquals(List.of(HEAL),
-                ids(MenuQuery.visibleEntries(entries, bar, null, SKILL, "passive", NAMES)),
+                ids(MenuQuery.visibleEntries(entries, bar, null, SKILL, null, "passive", null, NAMES)),
                 "tag narrows inside the category");
-        assertEquals(5, MenuQuery.visibleEntries(entries, bar, "", null, null, NAMES).size(),
+        assertEquals(5, MenuQuery.visibleEntries(entries, bar, "", null, null, null, null, NAMES).size(),
                 "blank text and null filters pass everything");
-        assertTrue(MenuQuery.visibleEntries(entries, bar, "zzz-nothing", null, null, NAMES).isEmpty(),
+        assertTrue(MenuQuery.visibleEntries(entries, bar, "zzz-nothing", null, null, null, null, NAMES).isEmpty(),
                 "a search with no match empties the list");
-        assertTrue(MenuQuery.visibleEntries(Map.of(), bar, null, null, null, NAMES).isEmpty(),
+        assertTrue(MenuQuery.visibleEntries(Map.of(), bar, null, null, null, null, null, NAMES).isEmpty(),
                 "an empty pool stays empty");
+    }
+
+    @Test
+    void visibleEntriesNarrowsByProviderAndSubcategory() {
+        // hotbar#142: the provider tab and the type: subdivision both narrow
+        Map<ResourceLocation, AbilityDefinition> entries = poolWithTypeTags();
+        ResourceLocation bar = HotbarRegistry.builtinBarId(0);
+
+        assertEquals(List.of(FIREBOLT),
+                ids(MenuQuery.visibleEntries(entries, bar, null, null, null, null,
+                        "irons_spellbooks", NAMES)),
+                "the provider filter keeps only that namespace");
+        assertEquals(4, MenuQuery.visibleEntries(entries, bar, null, null, null, null,
+                "tensura", NAMES).size(), "every tensura entry survives its tab");
+        assertEquals(List.of(RAGNAROK),
+                ids(MenuQuery.visibleEntries(entries, bar, null, SKILL, "type:unique", null, null, NAMES)),
+                "the subcategory narrows inside the category");
+        assertTrue(MenuQuery.visibleEntries(entries, bar, null, MAGIC, "type:unique", null, null, NAMES)
+                .isEmpty(), "a subcategory outside its category matches nothing");
     }
 
     @Test
@@ -145,22 +175,34 @@ class MenuQueryTest {
         Map<ResourceLocation, AbilityDefinition> entries = pool();
         ResourceLocation builtIn = HotbarRegistry.builtinBarId(0);
 
-        assertFalse(ids(MenuQuery.visibleEntries(entries, builtIn, null, null, null, NAMES))
+        assertFalse(ids(MenuQuery.visibleEntries(entries, builtIn, null, null, null, null, null, NAMES))
                 .contains(PRESS), "press is out of scope on a built-in bar");
-        assertTrue(ids(MenuQuery.visibleEntries(entries, CURIOS, null, null, null, NAMES))
+        assertTrue(ids(MenuQuery.visibleEntries(entries, CURIOS, null, null, null, null, null, NAMES))
                 .contains(PRESS), "its own bar keeps it");
-        assertEquals(4, MenuQuery.visibleEntries(entries, builtIn, null, null, null, NAMES).size(),
+        assertEquals(4, MenuQuery.visibleEntries(entries, builtIn, null, null, null, null, null, NAMES).size(),
                 "every unscoped ability is still listed");
     }
 
     @Test
-    void visibleEntriesPreservesInputOrder() {
+    void visibleEntriesShipsInTheDefaultOrderProviderCategoryTagId() {
+        // hotbar#142: deterministic regardless of registration/map order -
+        // namespace, then category, then lowest tag, then id.
         Map<ResourceLocation, AbilityDefinition> entries = pool();
         ResourceLocation bar = HotbarRegistry.builtinBarId(0);
 
-        assertEquals(List.of(FIREBALL, HEAL, FLASH, FIREBOLT, PRESS),
-                ids(MenuQuery.visibleEntries(entries, bar, null, null, null, NAMES)),
-                "the screen sorts only if it wants to - the query keeps discovery order");
+        assertEquals(List.of(FIREBOLT, PRESS, FLASH, FIREBALL, HEAL),
+                ids(MenuQuery.visibleEntries(entries, bar, null, null, null, null, null, NAMES)),
+                "irons < pseudocore < tensura; magic < skill; active < passive");
+
+        // same content, reversed insertion order -> identical output
+        Map<ResourceLocation, AbilityDefinition> reversed = new LinkedHashMap<>();
+        List<ResourceLocation> ids = List.copyOf(entries.keySet());
+        for (int i = ids.size() - 1; i >= 0; i--) {
+            reversed.put(ids.get(i), entries.get(ids.get(i)));
+        }
+        assertEquals(ids(MenuQuery.visibleEntries(entries, bar, null, null, null, null, null, NAMES)),
+                ids(MenuQuery.visibleEntries(reversed, bar, null, null, null, null, null, NAMES)),
+                "input order cannot leak into the list");
     }
 
     @Test
@@ -175,6 +217,49 @@ class MenuQueryTest {
                 "sorted distinct tags (FIREBOLT carries none)");
         assertTrue(MenuQuery.categories(Map.of()).isEmpty(), "an empty pool has no categories");
         assertTrue(MenuQuery.tags(Map.of()).isEmpty(), "an empty pool has no tags");
+        assertEquals(List.of("irons_spellbooks", "pseudocore_curios", "tensura"),
+                MenuQuery.providers(entries),
+                "the provider tabs in namespace order (plus All, screen-side)");
+        assertTrue(MenuQuery.providers(Map.of()).isEmpty(), "an empty pool has no providers");
+    }
+
+    @Test
+    void subcategoriesRideTheTypePrefixConvention() {
+        // hotbar#142: type: tags under one category; a pool without them
+        // answers empty (the cycle then behaves exactly as before).
+        Map<ResourceLocation, AbilityDefinition> entries = poolWithTypeTags();
+
+        assertEquals(List.of("type:unique"), MenuQuery.subCategories(entries, SKILL),
+                "the skill's type: tag, sorted");
+        assertTrue(MenuQuery.subCategories(entries, MAGIC).isEmpty(),
+                "categories without type: tags answer empty");
+        assertTrue(MenuQuery.subCategories(pool(), SKILL).isEmpty(),
+                "a pool without type: tags answers empty");
+        assertTrue(MenuQuery.subCategories(entries, EXTRA).isEmpty(),
+                "an unknown category answers empty");
+    }
+
+    @Test
+    void categoryStepsWalkAnyCategorySubcategory() {
+        // hotbar#142: the cycle reads any -> category -> its subs -> next
+        // category; a pool without type: tags gets the plain old cycle.
+        Map<ResourceLocation, AbilityDefinition> entries = poolWithTypeTags();
+
+        List<MenuQuery.CategoryStep> steps = MenuQuery.categorySteps(entries);
+        assertEquals(new MenuQuery.CategoryStep(null, null), steps.get(0), "any first");
+        assertEquals(new MenuQuery.CategoryStep(WILL, null), steps.get(1));
+        assertEquals(new MenuQuery.CategoryStep(MAGIC, null), steps.get(2));
+        assertEquals(new MenuQuery.CategoryStep(SKILL, null), steps.get(3));
+        assertEquals(new MenuQuery.CategoryStep(SKILL, "type:unique"), steps.get(4),
+                "the category's subcategory follows it");
+        assertEquals(new MenuQuery.CategoryStep(SPELL, null), steps.get(5), "then the next category");
+        assertEquals(6, steps.size(), "exactly any + 4 categories + 1 subcategory");
+
+        List<MenuQuery.CategoryStep> plain = MenuQuery.categorySteps(pool());
+        assertEquals(MenuQuery.categories(pool()).size() + 1, plain.size(),
+                "without type: tags the cycle is any + categories, as before");
+        assertEquals(new MenuQuery.CategoryStep(null, null),
+                MenuQuery.categorySteps(Map.of()).get(0), "an empty pool still offers any");
     }
 
     private static List<ResourceLocation> ids(List<MenuQuery.Entry> rows) {
