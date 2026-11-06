@@ -70,6 +70,15 @@ sits at the hint bar's right end (it once sat by the title; the #27
 rework moved it), visible once a second style is registered, and writes the
 preference.
 
+**Menu labels** (issue #139): the menu never shows a raw category id, tag
+or provider namespace. `MenuLabels` checks a convention translation key
+first - providers ship these in their own lang files:
+`ability_hotbar.category.<namespace>.<path>` (path separators become dots),
+`ability_hotbar.tag.<tag>` and `ability_hotbar.provider.<namespace>` -
+and falls back to the prettified raw value (separators to spaces, first
+letter capitalised: `tensura:magic` reads as "Magic"). A grep fixture keeps
+the raw sites out of the screen.
+
 **Menu layout** (issue #27): the screen follows the Tensura RPG System
 skill-menu geometry (the design comment on that issue): a header band with
 the title top-left and the target-bar selector top-right (chip + used/total
