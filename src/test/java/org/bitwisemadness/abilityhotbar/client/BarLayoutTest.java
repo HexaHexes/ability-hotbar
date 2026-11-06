@@ -300,6 +300,57 @@ class BarLayoutTest {
     }
 
     @Test
+    void segmentClipBoundsGrowByTheSpriteFrame() {
+        // hotbar#136: the scissor includes the sprite's outer frame on every
+        // side - the exact shave the cell-only box caused - at every scale.
+        for (double scale : new double[] {0.5, 1.0, 1.5, 2.0}) {
+            BarLayout bar = layout(9, 0, true, 0, 0, scale);
+            int border = Math.max(1, (int) Math.round(scale));
+            assertEquals(border, bar.spriteBorder(), "border follows scale " + scale);
+            int[] cells = bar.segmentCellBounds(0, 1920, 1080);
+            int[] clip = bar.segmentClipBounds(0, 1920, 1080);
+            assertEquals(border, cells[0] - clip[0], "left frame @ " + scale);
+            assertEquals(border, cells[1] - clip[1], "top frame @ " + scale);
+            assertEquals(border, clip[2] - cells[2], "right frame @ " + scale);
+            assertEquals(border, clip[3] - cells[3], "bottom frame @ " + scale);
+        }
+        // the clip box range-guards exactly like the cell bounds it grows
+        BarLayout single = layout(9, 0, true, 0, 0, 1.0);
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> single.segmentClipBounds(1, 1920, 1080));
+        assertThrows(IndexOutOfBoundsException.class,
+                () -> single.segmentClipBounds(-1, 1920, 1080));
+    }
+
+    @Test
+    void segmentClipBoundsStillCutBeforeGhostCells() {
+        // hotbar#136: the growth stays under half a cell, so a partial
+        // segment's ghost frames still clip away, and the seam between two
+        // segments shows both sprites' frames (2 * border) and nothing wider.
+        BarLayout partial = layout(12, 0, true, 0, 0, 1.0);
+        int[] clip = partial.segmentClipBounds(1, 1920, 1080);
+        int[] last = partial.slotRect(11, 1920, 1080);
+        int ghostStart = last[0] + last[2];
+        assertTrue(clip[2] - ghostStart >= 1,
+                "the closing edge (a divider sliver) still shows: " + clip[2]);
+        assertTrue(clip[2] - ghostStart < last[2] / 2,
+                "the clip ends before half a ghost cell, never past it: " + clip[2]);
+
+        BarLayout rows = layout(18, 0, true, 0, 0, 1.0);
+        int[] bottom = rows.segmentClipBounds(0, 1920, 1080);
+        int[] top = rows.segmentClipBounds(1, 1920, 1080);
+        int seam = Math.min(bottom[3], top[3]) - Math.max(bottom[1], top[1]);
+        assertEquals(2 * rows.spriteBorder(), seam,
+                "the stacked-row seam is exactly both frames");
+
+        BarLayout five = layout(5, 0, true, 0, 0, 1.0);
+        int[] cell0 = five.slotRect(0, 1920, 1080);
+        int[] only = five.segmentClipBounds(0, 1920, 1080);
+        assertEquals(cell0[0] - 1, only[0], "a five-slot bar keeps its left frame");
+        assertEquals(cell0[1] - 1, only[1], "and its top frame");
+    }
+
+    @Test
     void segmentOffsetsFollowTheGrowFromAnchorRule() {
         // #86: cell 0 nearest the anchor, segments grow outward - left = strip
         // to the right, right = mirrored strip, bottom = rows stacked upward,

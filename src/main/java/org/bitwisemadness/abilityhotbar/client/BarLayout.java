@@ -193,6 +193,39 @@ public record BarLayout(
         };
     }
 
+    /**
+     * The background sprite's frame width in pixels: the sprite draws at
+     * {@code origin - spriteBorder()} so its own cell grid aligns with the
+     * slot rects (the value the clip box must also grow by, hotbar#136).
+     *
+     * @return the scaled frame width, at least one pixel
+     */
+    public int spriteBorder() {
+        return Math.max(1, (int) Math.round(scale));
+    }
+
+    /**
+     * The scissor box for one segment's background sprite: the cell bounds
+     * grown by {@link #spriteBorder()} on every side, so the sprite's outer
+     * frame renders instead of being shaved off (hotbar#136 - the exact
+     * shave the cell-only box caused). The growth is clamped to half a
+     * scaled cell, so a partial segment's ghost cells - a full cell further
+     * in - still clip away, and adjacent segments' boxes overlap by at most
+     * twice the border (the seam where both frames draw).
+     *
+     * @param segment     the segment whose box to grow
+     * @param screenWidth  current screen width
+     * @param screenHeight current screen height
+     * @return the frame-inclusive {@code (x0, y0, x1, y1)} clip box
+     */
+    public int[] segmentClipBounds(int segment, int screenWidth, int screenHeight) {
+        int[] cells = segmentCellBounds(segment, screenWidth, screenHeight);
+        int grow = Math.min(spriteBorder(), Math.max(0, scaledSlotSize() / 2));
+        return new int[] {
+            cells[0] - grow, cells[1] - grow, cells[2] + grow, cells[3] + grow
+        };
+    }
+
     /** Bottom-of-screen anchors are the ones a bar grows away from. */
     private boolean isBottomAnchor() {
         return anchor != BarAnchor.LEFT_EDGE && anchor != BarAnchor.RIGHT_EDGE;
