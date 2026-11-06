@@ -29,6 +29,16 @@ toggleable equipped-spellbook hotbar (ISS only).
   charging, providers and consumers all live in `tensura-ability-core`'s
   pipeline. No resource imports or cost math here, ever.
 
+**Bar textures** (issue #125): a registered bar may optionally brand its two
+sprites via `HotbarRegistry.register(..., BarTextures)` or
+`HotbarContentProviders.registerContentBar(..., BarTextures)` - background
+and selection; null halves fall back to the vanilla `hud/hotbar` /
+`hud/hotbar_selection` (built-ins never register, so they always resolve
+vanilla). The ids must resolve in the GUI sprite atlas (`blitSprite`): ship
+`assets/<namespace>/gui/sprites/<path>.png` plus a directory source for your
+namespace in `assets/<namespace>/atlases/gui.json` - the data-driven
+registration vanilla's own sprites use.
+
 **Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
 
 **Test:** `./gradlew runGameTestServer` - `AbilityHotbarGameTests` (3 tests). `expectedTests = 3`
