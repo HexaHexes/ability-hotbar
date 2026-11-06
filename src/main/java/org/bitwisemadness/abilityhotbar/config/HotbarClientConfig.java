@@ -64,6 +64,15 @@ public final class HotbarClientConfig {
             BUILDER.comment("Last tag filter chosen in the ability menu (empty = no filter)")
                     .define("menu.lastTag", "");
 
+    /**
+     * The active menu style (issue #129): a registered style id, empty =
+     * the shipped built-in (the Tensura RPG System palette sync) - a CLIENT
+     * visual preference like the rest of the menu settings.
+     */
+    public static final ModConfigSpec.ConfigValue<String> MENU_STYLE =
+            BUILDER.comment("The ability menu's style id (empty = the built-in style)")
+                    .define("menu.style", "");
+
     /** Show the bar horizontally (true) or vertically (false). */
     public static final ModConfigSpec.BooleanValue HORIZONTAL =
             BUILDER.comment("Bar orientation: true = horizontal, false = vertical")
