@@ -129,6 +129,13 @@ triangle glyphs - the vanilla font covers no arrow characters
 pill (`barNavRects` shared by draw and hit-test, `cycleIndex` fixture-
 pinned); a single-bar list shows them dimmed and inert.
 
+**Wiki:** [HexaHexes/ability-hotbar/wiki](https://github.com/HexaHexes/ability-hotbar/wiki) -
+split audience: player/modpack-maker pages (menu, bar configuration, localising,
+styles) and developer pages (content bars, query layer, integration seams),
+plus the config reference. **The wiki is part of every feature change**: any PR
+that changes a documented feature updates the matching wiki page(s) in the same
+PR; this file and the code stay the source the wiki is written from.
+
 **Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
 
 **Test:** `./gradlew runGameTestServer` - `AbilityHotbarGameTests` (3 tests). `expectedTests = 3`
