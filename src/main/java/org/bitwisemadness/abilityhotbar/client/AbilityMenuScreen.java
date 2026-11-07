@@ -1,5 +1,6 @@
 package org.bitwisemadness.abilityhotbar.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -9,8 +10,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
@@ -379,17 +384,21 @@ public final class AbilityMenuScreen extends Screen {
     /**
      * The Icon/Item Stack half of a tab's identifier; returns the text's x.
      * Both forms draw through the SAME scaled 16px box (the owner's brief:
-     * one uniform size, like the bar's own icons), and an icon whose
-     * resource cannot be resolved - missing texture file or empty stack -
-     * draws nothing: the tab stays text-only, never a broken box.
+     * one uniform size, like the bar's own icons). The stack is the
+     * registration preference (#80) and the sprite its fallback: some baked
+     * models render nothing in any vanilla GUI context (skill books' study
+     * book empties ItemDisplayContext.GUI through its applyTransform), so
+     * the draw picks whichever identifier will actually produce pixels -
+     * and when neither does, the tab stays text-only, never a broken box.
      */
     private int drawTabIcon(GuiGraphics gui, MenuTabs.MenuTab tab, int x, int y) {
         ResourceLocation iconId = tab.iconId();
         ItemStack stack = tab.icon();
-        MenuTabs.IconTexture texture = iconId == null ? null
+        boolean stackRenders = stack != null && !stack.isEmpty() && stackRendersInGui(stack);
+        MenuTabs.IconTexture texture = stackRenders || iconId == null ? null
                 : MenuTabs.resolvedIconTexture(iconId, rl -> Minecraft.getInstance()
                         .getResourceManager().getResource(rl).isPresent()).orElse(null);
-        if (texture == null && (stack == null || stack.isEmpty())) {
+        if (!stackRenders && texture == null) {
             return x; // nothing resolves: text-only, same padding as no icon
         }
         var pose = gui.pose();
@@ -398,19 +407,45 @@ public final class AbilityMenuScreen extends Screen {
             pose.translate(x, y, 0.0);
             float scale = TAB_ICON / 16.0f;
             pose.scale(scale, scale, 1.0f);
-            if (texture != null) {
-                if (texture.sprite()) {
-                    gui.blitSprite(texture.drawWith(), 0, 0, 16, 16);
-                } else {
-                    gui.blit(texture.drawWith(), 0, 0, 0, 0, 16, 16, 16, 16);
-                }
-            } else {
+            if (stackRenders) {
                 gui.renderItem(stack, 0, 0);
+            } else if (texture.sprite()) {
+                gui.blitSprite(texture.drawWith(), 0, 0, 16, 16);
+            } else {
+                gui.blit(texture.drawWith(), 0, 0, 0, 0, 16, 16, 16, 16);
             }
         } finally {
             pose.popPose();
         }
         return x + TAB_ICON + 3;
+    }
+
+    /**
+     * Whether vanilla GUI rendering would emit pixels for this stack. The
+     * probe mirrors ItemRenderer.render exactly - the post-applyTransform
+     * model (the handleCameraTransforms swap), its custom-renderer branch
+     * and its quad lists - on a scratch pose the real render never sees.
+     * Skill books' study book returns an empty, non-custom model for every
+     * GUI context, so this is how the tab notices and falls back to its
+     * sprite instead of silently drawing nothing.
+     */
+    private static boolean stackRendersInGui(ItemStack stack) {
+        Minecraft mc = Minecraft.getInstance();
+        BakedModel model = mc.getItemRenderer().getModel(stack, mc.level, mc.player, 0);
+        BakedModel resolved = model.applyTransform(ItemDisplayContext.GUI, new PoseStack(), false);
+        if (resolved.isCustomRenderer()) {
+            return true; // ItemRenderer.render takes the renderByItem branch
+        }
+        RandomSource random = RandomSource.create();
+        if (!resolved.getQuads(null, null, random).isEmpty()) {
+            return true;
+        }
+        for (Direction direction : Direction.values()) {
+            if (!resolved.getQuads(null, direction, random).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** One registered tab's width: capped, floored, shrunk to fit beside the style pill. */

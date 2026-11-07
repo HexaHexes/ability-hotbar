@@ -22,8 +22,10 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Registered menu tabs (hotbar#154): loud ownership, the Icon/Item Stack +
- * Text identifier rules (never both, stored stacks are copies), registration
- * order as strip order, and the membership contract the screen filters with.
+ * Text identifier rules (both forms may ride together - the stack is the
+ * draw preference, the sprite the fallback for stacks that render nothing
+ * in a GUI; stored stacks are copies), registration order as strip order,
+ * and the membership contract the screen filters with.
  */
 class MenuTabsTest {
 
@@ -75,17 +77,23 @@ class MenuTabsTest {
     }
 
     @Test
-    void anIconAndAnItemStackNeverBoth() {
+    void anIconAndAnItemStackMayRideTogether() {
         // both identifier kinds register fine on their own ...
         MenuTabs.register(TAB, "tensura.tab.skills",
                 ResourceLocation.fromNamespaceAndPath("tensura", "gui/tab"), ALL);
         MenuTabs.register(OTHER_TAB, "tensura.tab.magic", new ItemStack(Items.BOOK), ALL);
         assertTrue(MenuTabs.get(TAB).orElseThrow().hasIcon());
         assertTrue(MenuTabs.get(OTHER_TAB).orElseThrow().hasIcon());
-        // ... but one tab declaring both is unconstructible (the record guards it)
-        assertThrows(IllegalArgumentException.class, () -> new MenuTabs.MenuTab(TAB, "k",
-                ResourceLocation.fromNamespaceAndPath("tensura", "gui/tab"),
-                new ItemStack(Items.BOOK), ALL));
+        // ... and so does one tab declaring both: the stack is the draw
+        // preference, the sprite the fallback for stacks whose model
+        // renders nothing in any vanilla GUI context (skill books' book).
+        MenuTabs.remove(TAB);
+        ResourceLocation sprite = ResourceLocation.fromNamespaceAndPath("tensura", "gui/tab");
+        MenuTabs.register(TAB, "tensura.tab.skills", sprite, new ItemStack(Items.BOOK), ALL);
+        MenuTabs.MenuTab both = MenuTabs.get(TAB).orElseThrow();
+        assertEquals(sprite, both.iconId());
+        assertEquals(Items.BOOK, both.icon().getItem(), "the stack keeps its draw preference");
+        assertTrue(both.hasIcon());
     }
 
     @Test
