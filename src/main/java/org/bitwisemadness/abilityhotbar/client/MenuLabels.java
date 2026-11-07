@@ -92,6 +92,18 @@ final class MenuLabels {
         return Component.literal(statFallback(labelKey));
     }
 
+    /**
+     * A localised registered-tab name (hotbar#154): the provider's own
+     * translation key when present, else its prettified last segment - the
+     * tab text never renders as a raw key.
+     */
+    static Component named(String displayNameKey) {
+        if (I18n.exists(displayNameKey)) {
+            return Component.translatable(displayNameKey);
+        }
+        return Component.literal(statFallback(displayNameKey));
+    }
+
     /** The untranslated fallback: the key's last segment, prettified. */
     static String statFallback(String labelKey) {
         int dot = labelKey == null ? -1 : labelKey.lastIndexOf('.');

@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.network.chat.Component;
@@ -222,6 +223,26 @@ public final class MenuQuery {
             @Nullable String tag, @Nullable String provider,
             Predicate<ResourceLocation> unlocked,
             Function<AbilityDefinition, Component> nameOf) {
+        return visibleEntries(entries, targetBar, searchText, category, subTag, tag, provider,
+                unlocked, null, nameOf);
+    }
+
+    /**
+     * The tab-filtered variant (hotbar#154): a registered tab's membership
+     * narrows the pool alongside every other filter - null = the All tab's
+     * "no filter". Composition stays AND across scope, visibility predicate,
+     * provider, tab, category, subcategory, tag and search.
+     *
+     * @param tabFilter the selected tab's membership, or null for All
+     * @return the visible rows, in the default order
+     */
+    public static List<Entry> visibleEntries(Map<ResourceLocation, AbilityDefinition> entries,
+            ResourceLocation targetBar, @Nullable String searchText,
+            @Nullable ResourceLocation category, @Nullable String subTag,
+            @Nullable String tag, @Nullable String provider,
+            Predicate<ResourceLocation> unlocked,
+            BiPredicate<ResourceLocation, AbilityDefinition> tabFilter,
+            Function<AbilityDefinition, Component> nameOf) {
         String needle = searchText == null ? "" : searchText.trim().toLowerCase(Locale.ROOT);
         List<Entry> out = new ArrayList<>(entries.size());
         for (Map.Entry<ResourceLocation, AbilityDefinition> candidate : entries.entrySet()) {
@@ -233,6 +254,9 @@ public final class MenuQuery {
                 continue;
             }
             if (provider != null && !candidate.getKey().getNamespace().equals(provider)) {
+                continue;
+            }
+            if (tabFilter != null && !tabFilter.test(candidate.getKey(), definition)) {
                 continue;
             }
             if (category != null && !definition.category().equals(category)) {

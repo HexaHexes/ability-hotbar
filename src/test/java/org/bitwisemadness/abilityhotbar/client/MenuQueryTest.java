@@ -207,6 +207,29 @@ class MenuQueryTest {
     }
 
     @Test
+    void tabMembershipNarrowsAlongsideEveryOtherFilter() {
+        // hotbar#154: a registered tab's predicate composes AND with the
+        // rest; null (the All tab) keeps the whole pool
+        Map<ResourceLocation, AbilityDefinition> entries = pool();
+        ResourceLocation bar = HotbarRegistry.builtinBarId(0);
+        java.util.function.BiPredicate<ResourceLocation, AbilityDefinition> tensuraOnly =
+                (id, definition) -> id.getNamespace().equals("tensura");
+
+        assertEquals(3, MenuQuery.visibleEntries(entries, bar, null, null, null, null, null,
+                        id -> true, tensuraOnly, NAMES).size(),
+                "the tab narrows to its membership");
+        assertEquals(2, MenuQuery.visibleEntries(entries, bar, null, SKILL, null, null, null,
+                        id -> true, tensuraOnly, NAMES).size(),
+                "tab membership and the category filter compose (both tensura skills)");
+        assertEquals(5, MenuQuery.visibleEntries(entries, bar, null, null, null, null, null,
+                        id -> true, null, NAMES).size(),
+                "null membership (All) passes everything - byte-for-byte the plain pool");
+        assertTrue(MenuQuery.visibleEntries(entries, bar, null, null, null, null, null,
+                        id -> true, (id, definition) -> false, NAMES).isEmpty(),
+                "reject-all membership empties the list");
+    }
+
+    @Test
     void visibleEntriesHidesIdsTheUnlockPredicateRejects() {
         // The predicate overload is generic narrowing (the never-guess
         // gate shape); the screen's listing decisions are visibility

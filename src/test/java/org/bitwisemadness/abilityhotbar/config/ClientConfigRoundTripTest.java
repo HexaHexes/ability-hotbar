@@ -80,8 +80,8 @@ class ClientConfigRoundTripTest {
             lastCategory = ""
             #Last tag filter chosen in the ability menu (empty = no filter)
             lastTag = ""
-            #Last provider tab chosen in the ability menu (empty = all providers)
-            lastProvider = ""
+            #Last menu tab chosen in the ability menu (empty = the All tab)
+            lastTab = ""
             #Last subcategory filter chosen in the ability menu (empty = no filter)
             lastSubCategory = ""
             #The ability menu's style id (empty = the built-in style)
