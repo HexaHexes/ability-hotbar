@@ -206,6 +206,28 @@ class MenuQueryTest {
     }
 
     @Test
+    void visibleEntriesHidesIdsTheUnlockPredicateRejects() {
+        // hotbar#135's owner call (filter, not dim): only unlocked abilities
+        // are visible - the predicate is the never-guess gate, the 8-arg
+        // overload is the unchanged show-everything behavior.
+        Map<ResourceLocation, AbilityDefinition> entries = pool();
+        ResourceLocation bar = HotbarRegistry.builtinBarId(0);
+
+        assertEquals(List.of(FIREBOLT, PRESS),
+                ids(MenuQuery.visibleEntries(entries, bar, null, null, null, null, null,
+                        id -> !id.getNamespace().equals("tensura"), NAMES)),
+                "rejected ids vanish; the rest keep their default order");
+        assertEquals(5, MenuQuery.visibleEntries(entries, bar, null, null, null, null, null,
+                id -> true, NAMES).size(), "an accept-all predicate matches the plain overload");
+        assertTrue(MenuQuery.visibleEntries(entries, bar, null, null, null, null, null,
+                id -> false, NAMES).isEmpty(), "reject-all empties the list");
+        assertEquals(ids(MenuQuery.visibleEntries(entries, bar, null, null, null, null, null, NAMES)),
+                ids(MenuQuery.visibleEntries(entries, bar, null, null, null, null, null,
+                        id -> true, NAMES)),
+                "the delegating overload is byte-for-byte the same list");
+    }
+
+    @Test
     void filterOptionsComeFromThePoolInStableOrder() {
         // The screen's cycle buttons step through these: distinct, sorted -
         // deterministic regardless of registration or iteration order.
