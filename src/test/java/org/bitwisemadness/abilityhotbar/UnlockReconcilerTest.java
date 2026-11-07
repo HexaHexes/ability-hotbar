@@ -55,7 +55,8 @@ class UnlockReconcilerTest {
     }
 
     private static BarState state(Bar... bars) {
-        return new BarState(bars, bars[0].id(), BarState.CURRENT_SCHEMA_VERSION);
+        return new BarState(bars, bars[0].id(), BarState.CURRENT_SCHEMA_VERSION,
+                new org.bitwisemadness.abilityhotbar.state.LoadoutPreset[0]);
     }
 
     @Test

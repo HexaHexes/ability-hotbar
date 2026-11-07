@@ -269,7 +269,8 @@ class BarStateTest {
                 new Bar[]{
                         Bar.empty(HotbarRegistry.builtinBarId(0), 3),
                         Bar.empty(orphanId, 3).withAssignment(1, FIREBALL)},
-                HotbarRegistry.builtinBarId(0), BarState.CURRENT_SCHEMA_VERSION);
+                HotbarRegistry.builtinBarId(0), BarState.CURRENT_SCHEMA_VERSION,
+                new LoadoutPreset[0]);
 
         BarState reconciled = stored.reconciledWith(List.of(
                 registration("newcomer:bar", true)));

@@ -143,6 +143,25 @@ belongs to the owner (ADR-012). The on-screen pass lives in
 
 Screenshots: _placeholder_.
 
+## Loadout presets
+
+Save a bar's current slots - per-slot modes and all - under a name, get
+them back later, or drop it: presets are per-player state stored alongside
+the bar schema (schema v4), names validated server-side (trimmed,
+length-limited). A recall writes the saved row through the same
+server-validated path as the menu: it **never casts and never drives mode
+machinery**, preserves inert (provider-absent) ids verbatim, and clamps
+with a note when the bar's slot count has changed since the save - entries
+that are locked right now are named in the recall's feedback rather than
+silently kept or silently dropped. The **mode lives on the slot pairing**:
+the same skill slotted twice holds two independent modes, no bar has a
+mode of its own, and at activation the stored mode is validated against
+the ability's own declared mode list before it ever reaches the server
+(stale values fall back to the declared default; modeless abilities send
+no mode context). The in-menu save/recall controls are follow-up UI work
+tracked on the originating issue; storage, validation and protocol are
+live now.
+
 ## Persistence
 
 Your assignments are per-player data, stored in a server-authoritative attachment

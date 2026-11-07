@@ -50,9 +50,9 @@ public final class CoreActivationCompat {
      *                  abilities - see {@code TargetHints})
      */
     public static void activate(ResourceLocation abilityId, ActivationSource source, int slot,
-            @Nullable UUID target) {
+            @Nullable UUID target, @Nullable String mode) {
         PacketDistributor.sendToServer(
-                payload(abilityId, source, slot, System.currentTimeMillis(), target));
+                payload(abilityId, source, slot, System.currentTimeMillis(), target, mode));
     }
 
     /**
@@ -61,12 +61,14 @@ public final class CoreActivationCompat {
      *
      * @param target the aim hint, or null: null writes blank kind/params,
      *               core's absent-hint wire form
+     * @param mode   the slot's validated mode setting (hotbar#29), or null:
+     *               blank writes core's no-mode-context wire form
      */
     static ActivateAbilityPayload payload(ResourceLocation abilityId, ActivationSource source,
-            int slot, long clientStamp, @Nullable UUID target) {
+            int slot, long clientStamp, @Nullable UUID target, @Nullable String mode) {
         String kind = target == null ? "" : "entity";
         String params = target == null ? "" : "entity=" + target;
         return new ActivateAbilityPayload(abilityId.toString(), source.wireName(), slot,
-                clientStamp, kind, params);
+                clientStamp, kind, params, mode != null ? mode : "");
     }
 }

@@ -1022,7 +1022,7 @@ public final class AbilityMenuScreen extends Screen {
     private void sendToggle(ResourceLocation abilityId) {
         if (CoreActivationCompat.isPresent()) {
             CoreActivationCompat.activate(abilityId, ActivationSource.MENU,
-                    ActivationRequest.NO_SLOT, null);
+                    ActivationRequest.NO_SLOT, null, null);
         }
     }
 

@@ -231,6 +231,6 @@ public final class HotbarInputHandler {
         ActivationResolver.resolve(state, slot, source)
                 .ifPresent(a -> CoreActivationCompat.activate(
                         a.abilityId(), a.source(), a.slot(),
-                        TargetHints.forActivation(a.abilityId())));
+                        TargetHints.forActivation(a.abilityId()), a.mode()));
     }
 }
