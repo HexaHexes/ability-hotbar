@@ -362,27 +362,44 @@ public final class AbilityMenuScreen extends Screen {
         }
     }
 
-    /** The Icon/Item Stack half of a tab's identifier; returns the text's x. */
+    /** Uniform tab icon box - every tab icon draws into this one size. */
+    private static final int TAB_ICON = 12;
+
+    /**
+     * The Icon/Item Stack half of a tab's identifier; returns the text's x.
+     * Both forms draw through the SAME scaled 16px box (the owner's brief:
+     * one uniform size, like the bar's own icons), and an icon whose
+     * resource cannot be resolved - missing texture file or empty stack -
+     * draws nothing: the tab stays text-only, never a broken box.
+     */
     private int drawTabIcon(GuiGraphics gui, MenuTabs.MenuTab tab, int x, int y) {
-        ResourceLocation sprite = tab.iconId();
-        if (sprite != null) {
-            gui.blitSprite(sprite, x, y + 1, 12, 12);
-            return x + 15;
-        }
+        ResourceLocation iconId = tab.iconId();
         ItemStack stack = tab.icon();
-        if (stack != null) {
-            var pose = gui.pose();
-            pose.pushPose();
-            try {
-                pose.translate(x, y, 0.0);
-                pose.scale(0.75f, 0.75f, 1.0f);
-                gui.renderItem(stack, 0, 0);
-            } finally {
-                pose.popPose();
-            }
-            return x + 15;
+        MenuTabs.IconTexture texture = iconId == null ? null
+                : MenuTabs.resolvedIconTexture(iconId, rl -> Minecraft.getInstance()
+                        .getResourceManager().getResource(rl).isPresent()).orElse(null);
+        if (texture == null && (stack == null || stack.isEmpty())) {
+            return x; // nothing resolves: text-only, same padding as no icon
         }
-        return x;
+        var pose = gui.pose();
+        pose.pushPose();
+        try {
+            pose.translate(x, y, 0.0);
+            float scale = TAB_ICON / 16.0f;
+            pose.scale(scale, scale, 1.0f);
+            if (texture != null) {
+                if (texture.sprite()) {
+                    gui.blitSprite(texture.drawWith(), 0, 0, 16, 16);
+                } else {
+                    gui.blit(texture.drawWith(), 0, 0, 0, 0, 16, 16, 16, 16);
+                }
+            } else {
+                gui.renderItem(stack, 0, 0);
+            }
+        } finally {
+            pose.popPose();
+        }
+        return x + TAB_ICON + 3;
     }
 
     /** One registered tab's width: capped, floored, shrunk to fit beside the style pill. */
