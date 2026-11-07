@@ -65,6 +65,22 @@ final class MenuChrome {
     }
 
     /**
+     * The tooltip panel's surface (hotbar#155): an opaque-strength fill so
+     * covered rows cannot bleed through and interleave with the panel's own
+     * lines. The decorative glass (background at 60%) left them legible
+     * underneath - verified on the owner's screenshots by the covered
+     * icon's crushed saturation (245 -> 161 proves the fill covered; the
+     * remaining legibility is the alpha) - while the style's hairline
+     * outline keeps the chrome.
+     */
+    static void tooltip(GuiGraphics gui, int x, int y, int w, int h, MenuStyle style) {
+        int outline = MenuStyle.alpha(style.accent(), 40);
+        chamferFill(gui, x, y, w, h, CHAMFER, outline);
+        chamferFill(gui, x + 1, y + 1, w - 2, h - 2, Math.max(0, CHAMFER - 1),
+                MenuStyle.alpha(style.background(), 94));
+    }
+
+    /**
      * A chamfered glass surface: cyan hairline outline over a translucent
      * fill; {@code highlight} raises both to the accent (selection/hover).
      */
