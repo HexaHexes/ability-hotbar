@@ -42,6 +42,12 @@ against a world with `ability_core` + `ability-hotbar` installed.
 - [ ] Register a test bar (or remove a registering mod), relog, and confirm the
       save reconciles: a new assignable bar is appended with fresh state, a
       deregistered bar's data is kept but inert, and the log names what changed.
+- [ ] Edit a current save down to the **v3 shape**: set `schema_version` to `3`,
+      delete the `preset_count` root key, and delete every `mode_N` key inside
+      `bar_N` compounds. Relog.
+- [ ] Values are retained under the upgrade line - slots load modeless and the
+      preset list is empty: hotbar#29's v4 step is key-absence based, so no
+      value conversion ever runs (modes and presets only appear when written).
 
 ## Snapshot flows (REQ-HOT-14, with core#18)
 

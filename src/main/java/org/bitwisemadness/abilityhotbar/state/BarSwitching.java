@@ -99,7 +99,8 @@ public final class BarSwitching {
             }
         }
         return grew
-                ? new BarState(bars.toArray(new Bar[0]), state.activeBarId(), state.schemaVersion())
+                ? new BarState(bars.toArray(new Bar[0]), state.activeBarId(), state.schemaVersion(),
+                        state.presets())
                 : state;
     }
 }

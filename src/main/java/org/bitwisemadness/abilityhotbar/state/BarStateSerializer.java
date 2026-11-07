@@ -15,10 +15,16 @@ import org.slf4j.Logger;
  * Serialises {@link BarState} to/from player NBT with a forward-only
  * schema-version upgrade ladder (ADR-004, ADR-011/012).
  *
- * <p>Schema v3 layout: {@code schema_version}, {@code active_bar} (the active
+ * <p>Schema v4 layout: {@code schema_version}, {@code active_bar} (the active
  * bar's <b>id</b>, not an index) and {@code bar_count} at the root, with each
  * bar in its own {@code bar_N} compound carrying that bar's {@code bar_id},
- * {@code slot_count}, {@code selected_slot} and {@code slot_M} keys.</p>
+ * {@code slot_count}, {@code selected_slot} and {@code slot_M} keys (plus the
+ * optional per-slot {@code mode_M} added by v4, hotbar#29). v4 also stores the
+ * root {@code preset_count} and {@code preset_N} compounds (name, bar_id,
+ * slot row) for named loadout presets. Upgrades are key-absence based: data
+ * written before v4 simply has no mode or preset keys, so it loads with
+ * modeless slots and an empty preset list under the generic upgrade log -
+ * no per-version value conversion.</p>
  *
  * <p>Data-preservation rules:</p>
  * <ul>
@@ -68,6 +74,10 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
     private static final String KEY_SLOT_COUNT = "slot_count";
     private static final String KEY_SELECTED = "selected_slot";
     private static final String KEY_SLOT_PREFIX = "slot_";
+    private static final String KEY_MODE_PREFIX = "mode_";
+    private static final String KEY_PRESET_COUNT = "preset_count";
+    private static final String KEY_PRESET_PREFIX = "preset_";
+    private static final String KEY_NAME = "name";
 
     @Override
     public BarState read(IAttachmentHolder holder, CompoundTag tag, HolderLookup.Provider provider) {
@@ -105,7 +115,8 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
     /** Reads the pre-v2 flat layout as built-in bar 0. */
     private static BarState readFlat(CompoundTag tag) {
         Bar bar = readBar(tag, HotbarRegistry.builtinBarId(0));
-        return new BarState(new Bar[]{bar}, bar.id(), BarState.CURRENT_SCHEMA_VERSION);
+        return new BarState(new Bar[]{bar}, bar.id(), BarState.CURRENT_SCHEMA_VERSION,
+                readPresets(tag));
     }
 
     /** Reads the schema-v2 layout: nested bars, integer active bar, no bar_id. */
@@ -127,7 +138,8 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
             activeIndex = 0;
         }
 
-        return new BarState(bars, bars[activeIndex].id(), BarState.CURRENT_SCHEMA_VERSION);
+        return new BarState(bars, bars[activeIndex].id(), BarState.CURRENT_SCHEMA_VERSION,
+                readPresets(tag));
     }
 
     /** Reads the schema-v3 layout: per-bar {@code bar_id} and an id active bar. */
@@ -138,7 +150,35 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
             CompoundTag barTag = tag.getCompound(KEY_BAR_PREFIX + i);
             bars[i] = readBar(barTag, readBarId(barTag, i));
         }
-        return new BarState(bars, readActiveId(tag, bars), BarState.CURRENT_SCHEMA_VERSION);
+        return new BarState(bars, readActiveId(tag, bars), BarState.CURRENT_SCHEMA_VERSION,
+                readPresets(tag));
+    }
+
+    /**
+     * Reads the v4 preset list from the root (hotbar#29); pre-v4 data has no
+     * preset keys and loads an empty list - the generic upgrade log covers it.
+     * A malformed preset is skipped with a log line (corrupt data fails
+     * closed, never crashes the load - ADR-004).
+     */
+    private static LoadoutPreset[] readPresets(CompoundTag tag) {
+        if (!tag.contains(KEY_PRESET_COUNT)) {
+            return new LoadoutPreset[0];
+        }
+        int count = Math.max(0, tag.getInt(KEY_PRESET_COUNT));
+        List<LoadoutPreset> presets = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            CompoundTag presetTag = tag.getCompound(KEY_PRESET_PREFIX + i);
+            String name = presetTag.getString(KEY_NAME);
+            try {
+                ResourceLocation barId = ResourceLocation.parse(presetTag.getString(KEY_BAR_ID));
+                SlotAssignment[] row = readRow(presetTag, resolveSlotCount(presetTag),
+                        "preset " + name);
+                presets.add(new LoadoutPreset(name, barId, row));
+            } catch (Exception e) {
+                LOGGER.warn("BarState preset {} ({}) unreadable - skipped: {}", i, name, e.toString());
+            }
+        }
+        return presets.toArray(new LoadoutPreset[0]);
     }
 
     /**
@@ -195,30 +235,44 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
      * @param barId  the bar's resolved identity
      */
     private static Bar readBar(CompoundTag barTag, ResourceLocation barId) {
-        int slotCount = resolveSlotCount(barTag);
-
-        List<SlotAssignment> assignmentList = new ArrayList<>(slotCount);
-        for (int i = 0; i < slotCount; i++) {
-            String raw = barTag.getString(KEY_SLOT_PREFIX + i);
-            if (raw.isBlank()) {
-                assignmentList.add(SlotAssignment.empty());
-                continue;
-            }
-            try {
-                assignmentList.add(new SlotAssignment(ResourceLocation.parse(raw)));
-            } catch (Exception e) {
-                LOGGER.warn("BarState bar {} slot {}: unparseable ability id '{}' - leaving slot empty",
-                        barId, i, raw);
-                assignmentList.add(SlotAssignment.empty());
-            }
-        }
+        SlotAssignment[] row = readRow(barTag, resolveSlotCount(barTag), "bar " + barId);
+        int slotCount = row.length;
 
         int selectedSlot = barTag.contains(KEY_SELECTED) ? barTag.getInt(KEY_SELECTED) : 0;
         if (selectedSlot < 0 || selectedSlot >= slotCount) {
             selectedSlot = 0;
         }
 
-        return new Bar(barId, assignmentList.toArray(new SlotAssignment[0]), selectedSlot);
+        return new Bar(barId, row, selectedSlot);
+    }
+
+    /**
+     * Reads a {@code slot_i} (+ v4 {@code mode_i}) row - bars and presets
+     * share the layout; a missing mode key is pre-v4 data (mode = null).
+     *
+     * @param tag       the compound holding the row's keys
+     * @param slotCount how many slots to read
+     * @param where     log context naming the owner (bar/preset)
+     */
+    private static SlotAssignment[] readRow(CompoundTag tag, int slotCount, String where) {
+        List<SlotAssignment> assignmentList = new ArrayList<>(slotCount);
+        for (int i = 0; i < slotCount; i++) {
+            String raw = tag.getString(KEY_SLOT_PREFIX + i);
+            if (raw.isBlank()) {
+                assignmentList.add(SlotAssignment.empty());
+                continue;
+            }
+            try {
+                String mode = tag.getString(KEY_MODE_PREFIX + i);
+                assignmentList.add(new SlotAssignment(ResourceLocation.parse(raw),
+                        mode.isBlank() ? null : mode));
+            } catch (Exception e) {
+                LOGGER.warn("BarState {} slot {}: unparseable ability id '{}' - leaving slot empty",
+                        where, i, raw);
+                assignmentList.add(SlotAssignment.empty());
+            }
+        }
+        return assignmentList.toArray(new SlotAssignment[0]);
     }
 
     /**
@@ -282,17 +336,39 @@ public final class BarStateSerializer implements IAttachmentSerializer<CompoundT
             Bar bar = bars[i];
             CompoundTag barTag = new CompoundTag();
             barTag.putString(KEY_BAR_ID, bar.id().toString());
-            SlotAssignment[] slots = bar.assignments();
-            barTag.putInt(KEY_SLOT_COUNT, slots.length);
             barTag.putInt(KEY_SELECTED, bar.selectedSlot());
-            for (int s = 0; s < slots.length; s++) {
-                ResourceLocation id = slots[s].abilityId();
-                if (id != null) {
-                    barTag.putString(KEY_SLOT_PREFIX + s, id.toString());
-                }
-            }
+            writeRow(barTag, bar.assignments());
             tag.put(KEY_BAR_PREFIX + i, barTag);
         }
+
+        LoadoutPreset[] presets = state.presets();
+        tag.putInt(KEY_PRESET_COUNT, presets.length);
+        for (int i = 0; i < presets.length; i++) {
+            CompoundTag presetTag = new CompoundTag();
+            presetTag.putString(KEY_NAME, presets[i].name());
+            presetTag.putString(KEY_BAR_ID, presets[i].barId().toString());
+            writeRow(presetTag, presets[i].assignments());
+            tag.put(KEY_PRESET_PREFIX + i, presetTag);
+        }
         return tag;
+    }
+
+    /**
+     * Writes a row's {@code slot_i} (+ v4 {@code mode_i}) keys - bars and
+     * presets share the layout. Absent keys mean empty/none, exactly as all
+     * pre-v4 readers expect.
+     */
+    private static void writeRow(CompoundTag parent, SlotAssignment[] row) {
+        parent.putInt(KEY_SLOT_COUNT, row.length);
+        for (int s = 0; s < row.length; s++) {
+            ResourceLocation id = row[s].abilityId();
+            if (id != null) {
+                parent.putString(KEY_SLOT_PREFIX + s, id.toString());
+            }
+            String mode = row[s].mode();
+            if (mode != null) {
+                parent.putString(KEY_MODE_PREFIX + s, mode);
+            }
+        }
     }
 }

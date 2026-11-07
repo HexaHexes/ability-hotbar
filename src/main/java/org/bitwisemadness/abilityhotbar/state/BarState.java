@@ -36,10 +36,12 @@ import org.slf4j.Logger;
  * @param activeBarId   id of the active bar (server-owned; may be unregistered or
  *                      registered-non-assignable, in which case the views fail closed)
  * @param schemaVersion format version for forward migration
+ * @param presets       named per-player loadout snapshots (hotbar#29, v4)
  */
-public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersion) {
+public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersion,
+        LoadoutPreset[] presets) {
 
-    public static final int CURRENT_SCHEMA_VERSION = 3;
+    public static final int CURRENT_SCHEMA_VERSION = 4;
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -49,7 +51,9 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
             BARS_CODEC.fieldOf("bars").forGetter(BarState::barsList),
             ResourceLocation.CODEC.fieldOf("active_bar").forGetter(BarState::activeBarId),
             Codec.INT.optionalFieldOf("schema_version", CURRENT_SCHEMA_VERSION)
-                    .forGetter(BarState::schemaVersion)
+                    .forGetter(BarState::schemaVersion),
+            LoadoutPreset.CODEC.listOf().optionalFieldOf("presets", java.util.List.of())
+                    .forGetter(BarState::presetsList)
     ).apply(instance, BarState::fromParts));
 
     /** Network codec for snapshot/delta sync (ADR-003). */
@@ -57,6 +61,7 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
             Bar.STREAM_CODEC.apply(ByteBufCodecs.list()), BarState::barsList,
             ResourceLocation.STREAM_CODEC, BarState::activeBarId,
             ByteBufCodecs.VAR_INT, BarState::schemaVersion,
+            LoadoutPreset.STREAM_CODEC.apply(ByteBufCodecs.list()), BarState::presetsList,
             BarState::fromParts
     );
 
@@ -65,10 +70,16 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
         return Arrays.asList(state.bars());
     }
 
+    /** Codec adapter: array -> List. */
+    private static List<LoadoutPreset> presetsList(BarState state) {
+        return Arrays.asList(state.presets());
+    }
+
     /** Codec adapter: List -> BarState. */
     private static BarState fromParts(List<Bar> bars, ResourceLocation activeBarId,
-            int schemaVersion) {
-        return new BarState(bars.toArray(new Bar[0]), activeBarId, schemaVersion);
+            int schemaVersion, List<LoadoutPreset> presets) {
+        return new BarState(bars.toArray(new Bar[0]), activeBarId, schemaVersion,
+                presets.toArray(new LoadoutPreset[0]));
     }
 
     public BarState {
@@ -81,12 +92,16 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
         if (schemaVersion < 1) {
             throw new IllegalArgumentException("schemaVersion must be >= 1, got " + schemaVersion);
         }
+        if (presets == null) {
+            throw new IllegalArgumentException("presets must not be null");
+        }
         for (int i = 0; i < bars.length; i++) {
             if (bars[i] == null) {
                 throw new IllegalArgumentException("bars[" + i + "] must not be null");
             }
         }
         bars = bars.clone();
+        presets = presets.clone();
     }
 
     /**
@@ -207,14 +222,64 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
         if (barId == null) {
             throw new IllegalArgumentException("activeBarId must not be null");
         }
-        return new BarState(bars, barId, schemaVersion);
+        return new BarState(bars, barId, schemaVersion, presets);
     }
 
     /** Replaces one bar in storage, keeping position, active id and version. */
     private BarState withBar(int index, Bar next) {
         Bar[] copy = bars.clone();
         copy[index] = next;
-        return new BarState(copy, activeBarId, schemaVersion);
+        return new BarState(copy, activeBarId, schemaVersion, presets);
+    }
+
+    /** Defensive copy on access - the array is mutable, the record must not hand it out. */
+    @Override
+    public LoadoutPreset[] presets() {
+        return presets.clone();
+    }
+
+    /** The named preset, or null (the caller maps an unknown name to a refusal). */
+    @Nullable
+    public LoadoutPreset presetNamed(String name) {
+        for (LoadoutPreset preset : presets) {
+            if (preset.name().equals(name)) {
+                return preset;
+            }
+        }
+        return null;
+    }
+
+    /** The stored assignment row of a named bar, or null when it is not stored. */
+    @Nullable
+    public SlotAssignment[] assignmentsOf(ResourceLocation barId) {
+        int index = indexOf(barId);
+        return index < 0 ? null : bars[index].assignments();
+    }
+
+    /**
+     * The state with only its preset list replaced (hotbar#29's save/delete)
+     * - bars, selection and active id untouched.
+     */
+    public BarState withPresets(LoadoutPreset[] next) {
+        if (next == null) {
+            throw new IllegalArgumentException("presets must not be null");
+        }
+        return new BarState(bars, activeBarId, schemaVersion, next);
+    }
+
+    /**
+     * The state with a <b>stored</b> bar's whole assignment row replaced
+     * (preset recall's write); an unstored bar or null row is a no-op (the
+     * caller validated assignability and slot shape first).
+     */
+    public BarState withRow(ResourceLocation barId, SlotAssignment[] row) {
+        int index = indexOf(barId);
+        if (index < 0 || row == null) {
+            return this;
+        }
+        Bar[] copy = bars.clone();
+        copy[index] = new Bar(copy[index].id(), row, copy[index].selectedSlot());
+        return new BarState(copy, activeBarId, schemaVersion, presets);
     }
 
     /**
@@ -242,7 +307,7 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
             return this;
         }
         return new BarState(grown != null ? grown.toArray(new Bar[0]) : bars,
-                active, schemaVersion);
+                active, schemaVersion, presets);
     }
 
     /** Appends a fresh empty bar for each assignable registration not yet stored. */
@@ -286,6 +351,7 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
         for (int i = 0; i < barCount; i++) {
             bars[i] = Bar.empty(HotbarRegistry.builtinBarId(i), slotCount);
         }
-        return new BarState(bars, HotbarRegistry.builtinBarId(0), CURRENT_SCHEMA_VERSION);
+        return new BarState(bars, HotbarRegistry.builtinBarId(0), CURRENT_SCHEMA_VERSION,
+                new LoadoutPreset[0]);
     }
 }

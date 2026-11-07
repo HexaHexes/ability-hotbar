@@ -71,6 +71,7 @@ public final class UnlockReconciler {
             LOGGER.info("Removed unlearned ability {} from the player's hotbar (hotbar#147)",
                     abilityId);
         }
-        return Optional.of(new BarState(rebuilt, current.activeBarId(), current.schemaVersion()));
+        return Optional.of(new BarState(rebuilt, current.activeBarId(), current.schemaVersion(),
+                current.presets()));
     }
 }
