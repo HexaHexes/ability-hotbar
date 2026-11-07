@@ -2,6 +2,7 @@ package org.bitwisemadness.abilityhotbar.client;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -9,7 +10,9 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
+import org.bitwisemadness.abilitycore.api.VisibilityHandlers;
 import org.bitwisemadness.abilityhotbar.registry.AbilityBarScopes;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
@@ -205,10 +208,10 @@ public final class MenuQuery {
     }
 
     /**
-     * The unlock-filtered variant (hotbar#135, owner call: filter, not dim):
-     * ids the predicate rejects never reach the list - the screen maps
-     * {@code UnlockRule.provenUnlearned(AbilityUnlocks.isLearned(...))}, so
-     * only a proven-unlearned ability hides and unknown always shows.
+     * The predicate-filtered variant: ids the predicate rejects never
+     * reach the list (generic narrowing; the menu's listing decisions are
+     * visibility via {@link #visiblePool} and the draw-time unlock grey -
+     * never this gate).
      *
      * @param unlocked whether an id may appear at all (the never-guess gate)
      * @return the visible rows, in the default order
@@ -258,4 +261,22 @@ public final class MenuQuery {
             .thenComparing(entry -> entry.definition().tags().stream().sorted()
                     .findFirst().orElse(""))
             .thenComparing(Entry::id);
+
+    /**
+     * The pool after core's menu-visibility contract (core#124,
+     * hotbar#153): ids whose handler hides them drop out, undeclared ids
+     * stay (unknown never hides). The screen feeds this to every menu
+     * query - rows and the category/tag/provider chips can then never
+     * disagree about what exists.
+     */
+    public static Map<ResourceLocation, AbilityDefinition> visiblePool(
+            Map<ResourceLocation, AbilityDefinition> entries, @Nullable Player player) {
+        Map<ResourceLocation, AbilityDefinition> out = new LinkedHashMap<>(entries.size());
+        entries.forEach((id, definition) -> {
+            if (VisibilityHandlers.visible(player, id)) {
+                out.put(id, definition);
+            }
+        });
+        return out;
+    }
 }

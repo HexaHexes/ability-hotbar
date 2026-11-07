@@ -15,6 +15,7 @@ import org.bitwisemadness.abilitycore.api.AbilityDefinition;
 import org.bitwisemadness.abilitycore.api.ActivationType;
 import org.bitwisemadness.abilitycore.api.AmountResolvers;
 import org.bitwisemadness.abilitycore.api.ConsumptionStrategies;
+import org.bitwisemadness.abilitycore.api.VisibilityHandlers;
 import org.bitwisemadness.abilityhotbar.registry.AbilityBarScopes;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
@@ -207,9 +208,9 @@ class MenuQueryTest {
 
     @Test
     void visibleEntriesHidesIdsTheUnlockPredicateRejects() {
-        // hotbar#135's owner call (filter, not dim): only unlocked abilities
-        // are visible - the predicate is the never-guess gate, the 8-arg
-        // overload is the unchanged show-everything behavior.
+        // The predicate overload is generic narrowing (the never-guess
+        // gate shape); the screen's listing decisions are visibility
+        // (visiblePool) and the draw-time unlock grey, not this gate.
         Map<ResourceLocation, AbilityDefinition> entries = pool();
         ResourceLocation bar = HotbarRegistry.builtinBarId(0);
 
@@ -225,6 +226,25 @@ class MenuQueryTest {
                 ids(MenuQuery.visibleEntries(entries, bar, null, null, null, null, null,
                         id -> true, NAMES)),
                 "the delegating overload is byte-for-byte the same list");
+    }
+
+    @Test
+    void visiblePoolAppliesTheMenuVisibilityContract() {
+        // core#124 / hotbar#153: a declared NEVER id drops out of the
+        // pool every menu query reads; an undeclared id stays - unknown
+        // never hides.
+        var hidden = ResourceLocation.fromNamespaceAndPath("tensura", "hidden_probe");
+        Map<ResourceLocation, AbilityDefinition> entries = new LinkedHashMap<>();
+        entries.put(SKILL, def("tensura.skill.a", SKILL, Set.of()));
+        entries.put(hidden, def("tensura.skill.b", SKILL, Set.of()));
+        VisibilityHandlers.declare(hidden, VisibilityHandlers.NEVER);
+        try {
+            Map<ResourceLocation, AbilityDefinition> visible = MenuQuery.visiblePool(entries, null);
+            assertFalse(visible.containsKey(hidden), "a NEVER id must drop out of the pool");
+            assertTrue(visible.containsKey(SKILL), "an undeclared id must stay - unknown never hides");
+        } finally {
+            VisibilityHandlers.remove(hidden);
+        }
     }
 
     @Test

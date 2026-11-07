@@ -131,8 +131,11 @@ category and tag filters narrow the list and are remembered as client
 preferences (`menu.*`), while the bar's contents themselves stay server
 data. Every change is a server-validated request naming the target bar,
 so a stale click is rejected and the screen repaints from the server's
-answer. Abilities the player has provably not unlocked wear the
-unavailable tint and cannot be slotted (per core's unlock contract);
+answer. Abilities core's visibility contract hides never list at all -
+provider-bar-exclusive ones (the spellbook bar's cast, the curios bar's
+press) among them - and the category/tag chips agree with the rows.
+Among what lists, abilities the player has provably not unlocked wear
+the unavailable tint and cannot be slotted (per core's unlock contract);
 *unknown* answers neither hide nor block - the menu never guesses
 (REQ-HOT-08). Registered non-assignable bars are never listed - their content
 belongs to the owner (ADR-012). The on-screen pass lives in
