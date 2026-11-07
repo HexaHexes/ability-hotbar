@@ -116,7 +116,11 @@ sidebar), and a bottom stack of chamfered slot cells over the hint bar.
 `MenuChrome` (client) owns the drawing primitives - backdrop, chamfered
 glass capsules/cells, meters - all fed by the active `MenuStyle`; the row
 hit-test, slot width and meter math are pure and fixture-pinned
-(`MenuGeometryTest`).
+(`MenuGeometryTest`). Each slot cell with an assigned ability draws that
+ability's `iconId` (issue #156: the rows' resolution, the item cells' 2px
+padding) before its number; empty, unresolvable or icon-less cells - and
+`display.showIcons = false` - keep the number-only cell (icon needs 16px
+of cell width, the number 12 more; also fixture-pinned).
 
 **Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
 
