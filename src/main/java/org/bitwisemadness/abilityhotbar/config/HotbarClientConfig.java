@@ -51,25 +51,15 @@ public final class HotbarClientConfig {
                     .define("display.switchToast", true);
 
     /**
-     * The ability menu's last category filter (hotbar#27): a persisted
-     * CLIENT preference - search/filter state only, bar contents stay
-     * server data.
+     * The ability menu's last registered tab; a persisted CLIENT
+     * preference - search/filter state only, bar contents stay server
+     * data.
      */
-    public static final ModConfigSpec.ConfigValue<String> MENU_CATEGORY =
-            BUILDER.comment("Last category filter chosen in the ability menu (empty = no filter)")
-                    .define("menu.lastCategory", "");
-
-    /** The ability menu's last tag filter; same rules as {@link #MENU_CATEGORY}. */
-    public static final ModConfigSpec.ConfigValue<String> MENU_TAG =
-            BUILDER.comment("Last tag filter chosen in the ability menu (empty = no filter)")
-                    .define("menu.lastTag", "");
-
-    /** The ability menu's last registered tab; same rules as {@link #MENU_CATEGORY}. */
     public static final ModConfigSpec.ConfigValue<String> MENU_TAB =
             BUILDER.comment("Last menu tab chosen in the ability menu (empty = the All tab)")
                     .define("menu.lastTab", "");
 
-    /** The ability menu's last subcategory filter; same rules as {@link #MENU_CATEGORY}. */
+    /** The last subcategory tab; same rules as {@link #MENU_TAB}. */
     public static final ModConfigSpec.ConfigValue<String> MENU_SUBCATEGORY =
             BUILDER.comment("Last subcategory filter chosen in the ability menu (empty = no filter)")
                     .define("menu.lastSubCategory", "");

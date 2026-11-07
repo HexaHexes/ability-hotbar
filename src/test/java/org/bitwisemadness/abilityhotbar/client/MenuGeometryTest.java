@@ -45,8 +45,9 @@ class MenuGeometryTest {
 
     @Test
     void slotWidthIsCappedFlooredAndNeverZero() {
-        assertEquals(40, AbilityMenuScreen.slotWidth(9, 400), "the 40px cap");
-        assertEquals(15, AbilityMenuScreen.slotWidth(18, 300), "the plain division");
+        assertEquals(80, AbilityMenuScreen.slotWidth(4, 400), "the 80px cap");
+        assertEquals(42, AbilityMenuScreen.slotWidth(9, 400), "the plain division");
+        assertEquals(15, AbilityMenuScreen.slotWidth(18, 300), "wide slots divide");
         assertEquals(5, AbilityMenuScreen.slotWidth(9, 64), "narrow windows shrink cells");
         assertEquals(1, AbilityMenuScreen.slotWidth(60, 64), "the 1px floor");
         assertEquals(0, AbilityMenuScreen.slotWidth(0, 400), "no slots, no cells");
@@ -54,17 +55,18 @@ class MenuGeometryTest {
 
     @Test
     void footerSlotIconsFitThenYieldToTheNumberByWidth() {
-        // hotbar#156: the 12px icon at 2px pad needs 16px; the number needs
-        // 12 more beside it. Icon-less cells always keep the plain number.
+        // hotbar#156 doubled: the 24px icon at 2px pad needs 28px; the
+        // number needs ~8 more beside it (threshold 36). Icon-less cells
+        // always keep the plain number.
         assertEquals(true, AbilityMenuScreen.slotIconFits(40), "a normal cell");
-        assertEquals(true, AbilityMenuScreen.slotIconFits(16), "the icon's own width");
-        assertEquals(false, AbilityMenuScreen.slotIconFits(15), "one pixel short");
+        assertEquals(true, AbilityMenuScreen.slotIconFits(28), "the icon's own width");
+        assertEquals(false, AbilityMenuScreen.slotIconFits(27), "one pixel short");
         assertEquals(false, AbilityMenuScreen.slotIconFits(1), "the 1px floor cell");
 
-        assertEquals(16, AbilityMenuScreen.slotLabelX(40, true), "icon + number");
-        assertEquals(16, AbilityMenuScreen.slotLabelX(28, true), "both still fit at 28");
-        assertEquals(-1, AbilityMenuScreen.slotLabelX(27, true), "icon-only cell");
-        assertEquals(-1, AbilityMenuScreen.slotLabelX(16, true), "icon-only at the floor");
+        assertEquals(28, AbilityMenuScreen.slotLabelX(40, true), "icon + number");
+        assertEquals(28, AbilityMenuScreen.slotLabelX(36, true), "both still fit at 36");
+        assertEquals(-1, AbilityMenuScreen.slotLabelX(35, true), "icon-only cell");
+        assertEquals(-1, AbilityMenuScreen.slotLabelX(28, true), "icon-only below the fit");
         assertEquals(3, AbilityMenuScreen.slotLabelX(40, false), "no icon: today's number");
         assertEquals(3, AbilityMenuScreen.slotLabelX(1, false), "even the 1px cell");
     }

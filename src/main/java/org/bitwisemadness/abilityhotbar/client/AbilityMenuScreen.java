@@ -71,7 +71,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class AbilityMenuScreen extends Screen {
 
-    private static final int ROW_HEIGHT = 18;
+    private static final int ROW_HEIGHT = 36;
     private static final int LIST_LEFT = 8;
     /** The list starts 6px under the collapsed filter strip (#141). */
     private static final int LIST_TOP = 64;
@@ -93,7 +93,7 @@ public final class AbilityMenuScreen extends Screen {
     private static final int STYLE_PILL_Y = 21;
     /** The menu-style cycler pill (issue #129), hint-bar right end. */
     private static final int MENU_STYLE_PILL_WIDTH = 120;
-    private static final int SLOT_HEIGHT = 16;
+    private static final int SLOT_HEIGHT = 32;
     /** The hint-bar prev/next bar buttons (issue #157): 14px cells, 2px gap. */
     private static final int BAR_NAV_SIZE = 14;
     private static final int BAR_NAV_GAP = 2;
@@ -101,39 +101,38 @@ public final class AbilityMenuScreen extends Screen {
     private ResourceLocation selectedBar;
     private int selectedSlot;
     @Nullable
-    private ResourceLocation categoryFilter;
-    @Nullable
-    private String tagFilter;
-    @Nullable
     private String subCategoryFilter;
     @Nullable
     private ResourceLocation selectedTab;
     private int scrollOffset;
     private EditBox searchBox;
+    // The hovered row's meta panel, stashed by the list pass and drawn
+    // LAST in render() so list chrome can never paint over it (brief).
+    @Nullable
+    private MenuQuery.Entry metaRow;
+    private int metaRowY;
+    private int metaListWidth;
+    private int metaListBottom;
 
     public AbilityMenuScreen() {
         super(Component.translatable("ability_hotbar.menu.title"));
         // Loaded once per open (a resize re-runs init, not this constructor),
         // so mid-session filters are not clobbered by the last saved pair.
-        categoryFilter = parseFilter(HotbarClientConfig.MENU_CATEGORY.get());
-        tagFilter = emptyToNull(HotbarClientConfig.MENU_TAG.get());
         subCategoryFilter = emptyToNull(HotbarClientConfig.MENU_SUBCATEGORY.get());
         selectedTab = parseFilter(HotbarClientConfig.MENU_TAB.get());
-        // A corrupt pref must never blank the menu (the parseFilter posture):
-        // filters that name nothing drop to "no filter".
-        var pool = menuPool();
-        if (selectedTab != null && MenuTabs.get(selectedTab).isEmpty()) {
-            selectedTab = null; // a removed or unknown tab id falls back to All
-        }
-        if (subCategoryFilter != null && (categoryFilter == null
-                || !MenuQuery.subCategories(pool, categoryFilter).contains(subCategoryFilter))) {
-            subCategoryFilter = null;
-        }
         BarState state = ClientBarState.get();
         List<ResourceLocation> bars = manageableBars();
         ResourceLocation active = state == null ? null : state.activeBarId();
         selectedBar = active != null && bars.contains(active) ? active
                 : bars.isEmpty() ? null : bars.get(0);
+        if (selectedTab != null && MenuTabs.get(selectedTab).isEmpty()) {
+            selectedTab = null; // a removed or unknown tab id falls back to All
+        }
+        // A corrupt pref must never blank the menu (the parseFilter posture):
+        // a subcategory naming nothing under the selected tab drops to All.
+        if (subCategoryFilter != null && !subTypeTags().contains(subCategoryFilter)) {
+            subCategoryFilter = null;
+        }
     }
 
     @Override
@@ -196,12 +195,18 @@ public final class AbilityMenuScreen extends Screen {
         if (styleCyclerVisible()) {
             drawStylePill(gui, mouseX, mouseY);
         }
-        drawFilterChips(gui, mouseX, mouseY);
+        drawSubcategoryTabs(gui, mouseX, mouseY);
         drawAbilityList(gui, mouseX, mouseY, state);
         drawSlotCells(gui, mouseX, mouseY, target);
         drawSlotDetail(gui, mouseX, mouseY, target);
         drawHintBar(gui);
         drawBarNav(gui, mouseX, mouseY);
+        if (metaRow != null) {
+            // The meta panel draws last: list chrome (and everything else)
+            // can never paint over the tooltip (the owner's layering brief).
+            gui.flush();
+            drawRowMeta(gui, metaRow, metaRowY, metaListWidth, metaListBottom);
+        }
     }
 
     /** The header's right cluster: target-bar chip, used/total, slot meter. */
@@ -262,62 +267,68 @@ public final class AbilityMenuScreen extends Screen {
         return used;
     }
 
-    /** The collapsed filter strip: category and tag cycle chips (#27). */
-    private void drawFilterChips(GuiGraphics gui, int mouseX, int mouseY) {
+    /**
+     * The subcategory tab strip beside the search bar (the owner's brief):
+     * "All" plus only the subcategories with entries under the CURRENT tab -
+     * clicking one sets the subcategory filter directly (the category and
+     * tag cycle chips are gone). No subtypes, no strip.
+     */
+    private void drawSubcategoryTabs(GuiGraphics gui, int mouseX, int mouseY) {
+        List<String> types = subTypeTags();
+        if (types.isEmpty()) {
+            return;
+        }
         MenuStyle style = style();
-        int[] category = categoryChipRect();
-        boolean categoryHover = inside(mouseX, mouseY,
-                category[0], FILTER_Y, category[1], CHIP_HEIGHT);
-        MenuChrome.glass(gui, category[0], FILTER_Y, category[1], CHIP_HEIGHT,
-                style, categoryHover);
-        gui.drawString(this.font, categoryChipLabel(), category[0] + 6, FILTER_Y + 4,
-                categoryHover ? style.text() : style.action());
-        int[] tag = tagChipRect();
-        boolean tagHover = inside(mouseX, mouseY, tag[0], FILTER_Y, tag[1], CHIP_HEIGHT);
-        MenuChrome.glass(gui, tag[0], FILTER_Y, tag[1], CHIP_HEIGHT, style, tagHover);
-        gui.drawString(this.font, tagChipLabel(), tag[0] + 6, FILTER_Y + 4,
-                tagHover ? style.text() : style.action());
-    }
-
-    /** The category chip's rect for the current label (shared with hits). */
-    private int[] categoryChipRect() {
-        int width = Math.min(this.font.width(categoryChipLabel()) + 12,
-                Math.max(20, this.width - 8 - 156));
-        return new int[] {156, width};
-    }
-
-    /** The tag chip's rect, right of the category chip (shared with hits). */
-    private int[] tagChipRect() {
-        int x = categoryChipRect()[0] + categoryChipRect()[1] + 6;
-        int width = Math.min(this.font.width(tagChipLabel()) + 12,
-                Math.max(20, this.width - 8 - x));
-        return new int[] {x, width};
-    }
-
-    private Component categoryChipLabel() {
-        if (categoryFilter == null) {
-            return withChevron(Component.translatable("ability_hotbar.menu.category_any"));
+        int count = types.size() + 1;
+        for (int i = 0; i < count; i++) {
+            boolean all = i == 0;
+            String typeTag = all ? null : types.get(i - 1);
+            int[] rect = subTypeRect(i, count);
+            boolean active = all ? subCategoryFilter == null : typeTag.equals(subCategoryFilter);
+            boolean hovered = inside(mouseX, mouseY, rect[0], FILTER_Y, rect[1], CHIP_HEIGHT);
+            MenuChrome.glass(gui, rect[0], FILTER_Y, rect[1], CHIP_HEIGHT, style, active || hovered);
+            Component label = all
+                    ? Component.translatable("ability_hotbar.menu.subcategory_any")
+                    : MenuLabels.subcategory(typeTag);
+            gui.drawString(this.font,
+                    this.font.plainSubstrByWidth(label.getString(), Math.max(4, rect[1] - 6)),
+                    rect[0] + 4, FILTER_Y + 4,
+                    active ? style.action() : hovered ? style.text() : style.muted());
         }
-        String name = MenuLabels.category(categoryFilter).getString();
-        if (subCategoryFilter != null) {
-            // the hierarchical cycle's composite label: "Skill / Unique" (#142)
-            name = name + " / " + MenuLabels.subcategory(subCategoryFilter).getString();
+    }
+
+    /** One subcategory tab's rect (draw and hit share it): sized to fit the row. */
+    private int[] subTypeRect(int index, int count) {
+        int x = SEARCH_X + SEARCH_WIDTH + 6;
+        int available = this.width - 8 - x;
+        int width = Math.max(16, Math.min(64, available / count));
+        return new int[] {x + index * width, width - 2};
+    }
+
+    /**
+     * The tab-filtered pool (what the subcategory strip keys on): the
+     * visibility pool narrowed by the selected provider tab's membership,
+     * or the whole pool under the permanent All tab.
+     */
+    private Map<ResourceLocation, AbilityDefinition> tabPool() {
+        MenuTabs.MenuTab selected = selectedTab == null ? null
+                : MenuTabs.get(selectedTab).orElse(null);
+        Map<ResourceLocation, AbilityDefinition> pool = menuPool();
+        if (selected == null) {
+            return pool;
         }
-        return withChevron(Component.translatable("ability_hotbar.menu.category_fmt",
-                Component.literal(name)));
+        Map<ResourceLocation, AbilityDefinition> out = new java.util.HashMap<>(pool.size());
+        pool.forEach((id, definition) -> {
+            if (selected.accepts().test(id, definition)) {
+                out.put(id, definition);
+            }
+        });
+        return out;
     }
 
-    private Component tagChipLabel() {
-        Component base = tagFilter == null
-                ? Component.translatable("ability_hotbar.menu.tag_any")
-                : Component.translatable("ability_hotbar.menu.tag_fmt",
-                        MenuLabels.tag(tagFilter));
-        return withChevron(base);
-    }
-
-    /** The cycle affordance on every filter chip (the chip owns a click). */
-    private static Component withChevron(Component base) {
-        return Component.literal(base.getString() + " >");
+    /** The subcategory tags with entries under the current tab (the strip's tabs). */
+    private List<String> subTypeTags() {
+        return MenuQuery.subTypeTags(tabPool());
     }
 
     /**
@@ -551,11 +562,13 @@ public final class AbilityMenuScreen extends Screen {
             boolean iconDrawn = icon != null && HotbarClientConfig.SHOW_ICONS.get()
                     && slotIconFits(cellWidth);
             if (iconDrawn) {
-                gui.blit(icon, x + 2, y + 2, 0, 0, 12, 12, 12, 12);
+                // The brief's doubled cell icon: whole texture in the
+                // doubled box (the rows' technique, 24 of 28+ cells).
+                gui.blit(icon, x + 2, y + 2, 0, 0, 24, 24, 24, 24);
             }
             int labelX = slotLabelX(cellWidth, iconDrawn);
             if (labelX >= 0) {
-                gui.drawString(this.font, slotLabel(i + 1), x + labelX, y + 4,
+                gui.drawString(this.font, slotLabel(i + 1), x + labelX, y + 11,
                         selected ? style.text() : style.muted());
             }
         }
@@ -570,14 +583,15 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The width of one slot cell: capped at 40px, floored at 1px.
-     * Package-private for the geometry fixture (draw and hit-test share it).
+     * The width of one slot cell: capped at 80px (the doubled size),
+     * floored at 1px. Package-private for the geometry fixture (draw and
+     * hit-test share it).
      */
     static int slotWidth(int slotCount, int screenWidth) {
         if (slotCount <= 0) {
             return 0;
         }
-        return Math.min(40, Math.max(1, (screenWidth - 16) / slotCount));
+        return Math.min(80, Math.max(1, (screenWidth - 16) / slotCount));
     }
 
     /**
@@ -586,18 +600,18 @@ public final class AbilityMenuScreen extends Screen {
      * Package-private for the geometry fixture.
      */
     static boolean slotIconFits(int cellWidth) {
-        return cellWidth >= 16;
+        return cellWidth >= 28;
     }
 
     /**
-     * The footer cell's slot-number x offset (hotbar#156): 16 when the icon
-     * draws and the number still fits beside it (icon at 2..14), -1 for an
-     * icon-only cell (16..27 wide), 3 for the plain number cell. Package-
-     * private for the geometry fixture (draw shares it).
+     * The footer cell's slot-number x offset (hotbar#156): 28 when the icon
+     * draws (doubled, at 2..26) and the number still fits beside it, -1 for
+     * an icon-only cell (under 36 wide), 3 for the plain number cell.
+     * Package-private for the geometry fixture (draw shares it).
      */
     static int slotLabelX(int cellWidth, boolean iconDrawn) {
         if (iconDrawn) {
-            return cellWidth >= 28 ? 16 : -1;
+            return cellWidth >= 36 ? 28 : -1;
         }
         return 3;
     }
@@ -677,6 +691,7 @@ public final class AbilityMenuScreen extends Screen {
 
     private void drawAbilityList(GuiGraphics gui, int mouseX, int mouseY, BarState state) {
         List<MenuQuery.Entry> rows = visibleRows();
+        metaRow = null; // reset per frame; drawn last from render()
         MenuStyle style = style();
         int listWidth = this.width - 16;
         int listBottom = this.height - LIST_BOTTOM_PAD;
@@ -705,18 +720,20 @@ public final class AbilityMenuScreen extends Screen {
             }
             ResourceLocation icon = row.definition().iconId();
             if (icon != null && HotbarClientConfig.SHOW_ICONS.get()) {
-                gui.blit(icon, LIST_LEFT + 2, y, 0, 0, 16, 16, 16, 16);
+                // The brief's doubled size: the whole texture squeezed into
+                // the one doubled box, exactly the bar-icons technique.
+                gui.blit(icon, LIST_LEFT + 2, y, 0, 0, 32, 32, 32, 32);
             }
             Component displayName = Component.translatable(row.definition().displayNameKey());
             String name = displayName.getString();
-            gui.drawString(this.font, name, LIST_LEFT + 22, y + 5, style.text());
+            int textY = y + (ROW_HEIGHT - 9) / 2;
+            gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
             String cost = costText(row.definition());
             if (!cost.isEmpty()) {
                 gui.drawString(this.font, cost,
-                        LIST_LEFT + listWidth - this.font.width(cost), y + 5,
+                        LIST_LEFT + listWidth - this.font.width(cost), textY,
                         style.action());
             }
-            drawValueStrip(gui, row, name, cost, y, listWidth, style);
             // The unlock grey (#135's rule, the second state): a listed
             // ability the player is provably unlearned for wears the
             // unavailable tint; unknown stays undimmed (never-guess).
@@ -730,44 +747,13 @@ public final class AbilityMenuScreen extends Screen {
                     MenuStyle.alpha(style.accent(), 45));
         }
         if (hoveredIndex >= 0) {
-            // Drain the rows' queued batches before the overlay: fills, icon
-            // blits and text flush per render type, so row content still in
-            // flight would paint over the panel's background (hotbar#140).
-            gui.flush();
-            drawRowMeta(gui, rows.get(hoveredIndex), hoveredY, listWidth, listBottom);
+            // Stash the hovered row's meta; render() draws the panel LAST
+            // so the list chrome can never paint over the tooltip (brief).
+            metaRow = rows.get(hoveredIndex);
+            metaRowY = hoveredY;
+            metaListWidth = listWidth;
+            metaListBottom = listBottom;
         }
-    }
-
-    /**
-     * The row's at-a-glance live value (issue #148): the first PROGRESS
-     * field's value text + a mini meter, drawn between the name and the
-     * cost — and only when it fits, so long names never collide (the full
-     * presentation always shows in the tooltip).
-     */
-    private void drawValueStrip(GuiGraphics gui, MenuQuery.Entry row, String name, String cost,
-            int y, int listWidth, MenuStyle style) {
-        PresentationField progress = presentationOf(row.id())
-                .flatMap(present -> present.fields().stream()
-                        .filter(field -> field.kind() == PresentationField.Kind.PROGRESS)
-                        .findFirst())
-                .orElse(null);
-        if (progress == null) {
-            return;
-        }
-        int costLeft = cost.isEmpty() ? LIST_LEFT + listWidth
-                : LIST_LEFT + listWidth - this.font.width(cost) - 6;
-        int meterWidth = 24;
-        int meterX = costLeft - meterWidth;
-        int valueWidth = progress.value().isEmpty() ? 0 : this.font.width(progress.value()) + 4;
-        int startX = LIST_LEFT + 22 + this.font.width(name) + 6;
-        if (meterX - valueWidth < startX) {
-            return; // no room: the tooltip carries the full presentation
-        }
-        if (!progress.value().isEmpty()) {
-            gui.drawString(this.font, progress.value(), meterX - valueWidth, y + 5,
-                    style.muted());
-        }
-        MenuChrome.meter(gui, meterX, y + 7, meterWidth, 5, progress.progress(), style);
     }
 
     /**
@@ -994,16 +980,18 @@ public final class AbilityMenuScreen extends Screen {
                 tabX += tabWidth;
             }
         }
-        // category / tag chips cycle the filters
-        int[] category = categoryChipRect();
-        if (inside(mouseX, mouseY, category[0], FILTER_Y, category[1], CHIP_HEIGHT)) {
-            cycleCategory();
-            return true;
-        }
-        int[] tag = tagChipRect();
-        if (inside(mouseX, mouseY, tag[0], FILTER_Y, tag[1], CHIP_HEIGHT)) {
-            cycleTag();
-            return true;
+        // subcategory tabs (beside the search bar) select the subfilter
+        List<String> subTypes = subTypeTags();
+        if (!subTypes.isEmpty()) {
+            int count = subTypes.size() + 1;
+            for (int i = 0; i < count; i++) {
+                int[] rect = subTypeRect(i, count);
+                if (inside(mouseX, mouseY, rect[0], FILTER_Y, rect[1], CHIP_HEIGHT)) {
+                    subCategoryFilter = i == 0 ? null : subTypes.get(i - 1);
+                    scrollOffset = 0;
+                    return true;
+                }
+            }
         }
         // bar texture-style cycler (issue #127): header line 2 right
         if (styleCyclerVisible()) {
@@ -1136,8 +1124,6 @@ public final class AbilityMenuScreen extends Screen {
     @Override
     public void onClose() {
         // The remembered filters are CLIENT config; bar contents never are.
-        HotbarClientConfig.MENU_CATEGORY.set(categoryFilter == null ? "" : categoryFilter.toString());
-        HotbarClientConfig.MENU_TAG.set(tagFilter == null ? "" : tagFilter);
         HotbarClientConfig.MENU_SUBCATEGORY.set(subCategoryFilter == null ? "" : subCategoryFilter);
         HotbarClientConfig.MENU_TAB.set(selectedTab == null ? "" : selectedTab.toString());
         HotbarClientConfig.SPEC.save();
@@ -1204,43 +1190,10 @@ public final class AbilityMenuScreen extends Screen {
         scrollOffset = 0;
     }
 
-    private void cycleCategory() {
-        // the hierarchical cycle (#142): any -> category -> its subcategories
-        List<MenuQuery.CategoryStep> steps = MenuQuery.categorySteps(menuPool());
-        if (steps.isEmpty()) {
-            return;
-        }
-        int index = -1; // a state no step matches (corrupt pref) resets to "any"
-        for (int i = 0; i < steps.size(); i++) {
-            MenuQuery.CategoryStep step = steps.get(i);
-            if (java.util.Objects.equals(step.category(), categoryFilter)
-                    && java.util.Objects.equals(step.subTag(), subCategoryFilter)) {
-                index = i;
-                break;
-            }
-        }
-        MenuQuery.CategoryStep next = steps.get((index + 1) % steps.size());
-        categoryFilter = next.category();
-        subCategoryFilter = next.subTag();
-        scrollOffset = 0;
-    }
-
-    private void cycleTag() {
-        List<String> tags = MenuQuery.tags(menuPool());
-        if (tags.isEmpty()) {
-            tagFilter = null;
-            return;
-        }
-        int index = tagFilter == null ? -1 : tags.indexOf(tagFilter);
-        tagFilter = index + 1 >= tags.size() ? null : tags.get(index + 1);
-        scrollOffset = 0;
-    }
-
     private List<ResourceLocation> manageableBars() {
         return MenuQuery.manageableBars(HotbarConfig.effectiveHotbarCount(), HotbarRegistry.all());
     }
 
-    /** The pool after core's visibility contract (core#124, hotbar#153). */
     /**
      * The pool after core's visibility contract (core#124, hotbar#153).
      * Reads Minecraft.getInstance() because the constructor calls this
@@ -1259,8 +1212,8 @@ public final class AbilityMenuScreen extends Screen {
         MenuTabs.MenuTab tab = selectedTab == null ? null
                 : MenuTabs.get(selectedTab).orElse(null);
         return MenuQuery.visibleEntries(menuPool(), selectedBar,
-                searchBox == null ? "" : searchBox.getValue(), categoryFilter, subCategoryFilter,
-                tagFilter, null,
+                searchBox == null ? "" : searchBox.getValue(), null, subCategoryFilter,
+                null, null,
                 id -> true,
                 tab == null ? null : tab.accepts(),
                 definition -> Component.translatable(definition.displayNameKey()));
@@ -1281,7 +1234,7 @@ public final class AbilityMenuScreen extends Screen {
 
     /** The bottom stack's slot-cell row top (shared with hit-testing). */
     private int slotY() {
-        return this.height - 32;
+        return this.height - 48;
     }
 
     /**
