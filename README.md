@@ -34,6 +34,7 @@ category. Defaults (from SPIKE-hot-3):
 | Activate slot 01..09 | **Ctrl + 1..9** | Activates that slot directly. Plain 1..9 still switches the vanilla hotbar. Also moves the selected-slot cursor to that slot, like the vanilla number keys (hotbar#108). |
 | Switch to bar 1..10 | **Alt + 1..9, Alt + 0** | Selects a bar directly (never skips). Plain digits still drive the vanilla hotbar; a digit beyond the cycle set does nothing. |
 | Activate selected slot | **G** | Fires the ability in the selected slot. |
+| Cycle ability mode | **Unbound** | Advances the selected slot's ability one mode step, server-validated through Ability Core's mode-change contract (REQ-HOT-16). **Unbound by default**: Tensura's own next-mode key is Right Ctrl and stays native - binding this onto Right Ctrl would advance twice per press, so give it its own key (or rely on the native one, which drives the same server-side mode state). |
 | Open ability menu | **Grave** (left of 1) | Opens the ability management menu (rebindable; see below). Does nothing when no mod has registered any ability - there would be nothing to manage (hotbar#107). |
 | Toggle ability mode | **Right Ctrl** | Aligned with Tensura's native mode key. |
 

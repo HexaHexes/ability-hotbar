@@ -283,6 +283,20 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
     }
 
     /**
+     * Sets one slot's mode on the <b>active</b> bar (the ability-mode
+     * keybind's server-side echo, hotbar#29 + tensura-iss-integration#51):
+     * the pairing keeps its ability; an unstored active bar or an
+     * out-of-range/unassigned slot is a no-op.
+     */
+    public BarState withSlotMode(int slot, String mode) {
+        int index = indexOf(activeBarId);
+        if (index < 0) {
+            return this;
+        }
+        return withBar(index, bars[index].withMode(slot, mode));
+    }
+
+    /**
      * Reconciles this state with the live hotbar registry (ADR-012): appends a
      * fresh empty bar for every <b>assignable</b> registration not yet stored
      * (sized like this state's own first bar - the serializer reads no config),

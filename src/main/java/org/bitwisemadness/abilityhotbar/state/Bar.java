@@ -126,4 +126,21 @@ public record Bar(ResourceLocation id, SlotAssignment[] assignments, int selecte
     public Bar withSelectedSlot(int slot) {
         return new Bar(id, assignments, slot);
     }
+
+    /**
+     * Replaces one slot's mode, keeping its pairing (hotbar#29/#51's
+     * server-side echo): an out-of-range slot or an unassigned pairing is a
+     * no-op - a mode never conjures an assignment.
+     *
+     * @param slot the slot index
+     * @param mode the new mode value (blank clears the context)
+     */
+    public Bar withMode(int slot, String mode) {
+        if (slot < 0 || slot >= assignments.length || assignments[slot].abilityId() == null) {
+            return this;
+        }
+        SlotAssignment[] copy = assignments.clone();
+        copy[slot] = copy[slot].withMode(mode);
+        return new Bar(id, copy, selectedSlot);
+    }
 }

@@ -22,11 +22,11 @@ public final class HotbarNetwork {
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        // v2 (hotbar#27): assign payload gained the target bar id; v3
-        // (hotbar#29): snapshot gained slot modes + presets and three
-        // preset payloads - codec changes ship to both sides together.
+        // v2 (hotbar#27) assign bar id; v3 (hotbar#29) modes+presets+
+        // preset payloads; v4 (REQ-HOT-16) cycle_mode - every set or
+        // codec change ships to both sides together.
         PayloadRegistrar registrar = event.registrar(AbilityHotbar.MOD_ID)
-                .versioned("3")
+                .versioned("4")
                 .optional();
 
         registrar.playToClient(
@@ -63,6 +63,11 @@ public final class HotbarNetwork {
                 DeletePresetPayload.TYPE,
                 DeletePresetPayload.STREAM_CODEC,
                 DeletePresetPayload::handle
+        );
+        registrar.playToServer(
+                CycleModePayload.TYPE,
+                CycleModePayload.STREAM_CODEC,
+                CycleModePayload::handle
         );
     }
 }

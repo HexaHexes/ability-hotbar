@@ -101,10 +101,13 @@ public final class HotbarKeybinds {
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_GRAVE_ACCENT,
                 CATEGORY);
+        // Unbound by default (tensura-iss-integration#51's conflict
+        // ruling): Tensura's native next-mode key IS Right Ctrl (GLFW
+        // 342) - sharing it would advance twice per press; ours is rebindable.
         ABILITY_MODE = new KeyMapping(
                 "key.abilityhotbar.ability_mode",
                 InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_RIGHT_CONTROL,
+                GLFW.GLFW_KEY_UNKNOWN,
                 CATEGORY);
     }
 
