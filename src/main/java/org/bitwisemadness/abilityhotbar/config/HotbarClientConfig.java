@@ -64,10 +64,10 @@ public final class HotbarClientConfig {
             BUILDER.comment("Last tag filter chosen in the ability menu (empty = no filter)")
                     .define("menu.lastTag", "");
 
-    /** The ability menu's last provider tab (id namespace); same rules as {@link #MENU_CATEGORY}. */
-    public static final ModConfigSpec.ConfigValue<String> MENU_PROVIDER =
-            BUILDER.comment("Last provider tab chosen in the ability menu (empty = all providers)")
-                    .define("menu.lastProvider", "");
+    /** The ability menu's last registered tab; same rules as {@link #MENU_CATEGORY}. */
+    public static final ModConfigSpec.ConfigValue<String> MENU_TAB =
+            BUILDER.comment("Last menu tab chosen in the ability menu (empty = the All tab)")
+                    .define("menu.lastTab", "");
 
     /** The ability menu's last subcategory filter; same rules as {@link #MENU_CATEGORY}. */
     public static final ModConfigSpec.ConfigValue<String> MENU_SUBCATEGORY =
