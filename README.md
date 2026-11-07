@@ -128,9 +128,11 @@ Press the **grave accent** key - the one left of `1`, below Esc (rebindable)
 from its tabs (every assignable hotbar - the built-in window plus
 registered ones - and never an empty one hidden), pick a slot, then click
 an ability to assign or replace it; **Clear slot** removes it. Search,
-category and tag filters narrow the list and are remembered as client
-preferences (`menu.*`), while the bar's contents themselves stay server
-data. Every change is a server-validated request naming the target bar,
+and the subcategory tabs beside it (only subcategories with entries for
+the current tab - e.g. All / Common / Extra / Intrinsic / Resistances /
+Unique), narrow the list; the subcategory and the selected tab are
+remembered as client preferences (`menu.*`), while the bar's contents
+themselves stay server data. Every change is a server-validated request naming the target bar,
 so a stale click is rejected and the screen repaints from the server's
 answer. Abilities core's visibility contract hides never list at all -
 provider-bar-exclusive ones (the spellbook bar's cast, the curios bar's

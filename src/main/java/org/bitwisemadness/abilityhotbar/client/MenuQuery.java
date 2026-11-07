@@ -82,6 +82,24 @@ public final class MenuQuery {
     }
 
     /**
+     * Every {@code type:} subcategory with entries in the given pool -
+     * the subcategory tab strip keys on this (the owner's brief: only
+     * subcategories with valid entries for the current tab; the caller
+     * pre-filters the pool by that tab).
+     *
+     * @param entries the already tab-filtered pool
+     * @return the raw subcategory tags in sorted order
+     */
+    public static List<String> subTypeTags(Map<ResourceLocation, AbilityDefinition> entries) {
+        return entries.values().stream()
+                .flatMap(definition -> definition.tags().stream())
+                .filter(tag -> tag.startsWith(SUBCATEGORY_PREFIX))
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    /**
      * One step of the hierarchical category cycle (hotbar#142): {@code null}
      * (no filter), then each category, then each of its {@code type:}
      * subcategories before the next category begins - so the cycle reads

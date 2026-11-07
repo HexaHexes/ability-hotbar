@@ -76,10 +76,6 @@ class ClientConfigRoundTripTest {
             #Allowed Values: FIXED, DYNAMIC
             statusAnchorMode = "DYNAMIC"
             [menu]
-            #Last category filter chosen in the ability menu (empty = no filter)
-            lastCategory = ""
-            #Last tag filter chosen in the ability menu (empty = no filter)
-            lastTag = ""
             #Last menu tab chosen in the ability menu (empty = the All tab)
             lastTab = ""
             #Last subcategory filter chosen in the ability menu (empty = no filter)

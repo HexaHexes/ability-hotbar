@@ -80,12 +80,12 @@ class MenuLabelsTest {
                 "abilityhotbar", "client", "AbilityMenuScreen.java");
         assertTrue(Files.exists(source), "run from the project root (gradle does)");
         String text = Files.readString(source);
-        assertTrue(text.contains("MenuLabels.category(categoryFilter)"),
-                "the category chip labels through MenuLabels");
-        assertTrue(text.contains("MenuLabels.tag(tagFilter)"),
-                "the tag chip labels through MenuLabels");
+        assertTrue(text.contains("MenuLabels.subcategory(typeTag)"),
+                "the subcategory tabs label through MenuLabels");
         assertTrue(text.contains("MenuLabels.category(definition.category())"),
                 "the meta line labels the category through MenuLabels");
+        assertTrue(text.contains("MenuLabels.tag(tag)"),
+                "the meta line labels tags through MenuLabels");
         assertFalse(text.contains("meta.append(definition.category())"),
                 "the meta line never appends the raw id");
         assertFalse(text.contains("String.join(\", \", definition.tags())"),
