@@ -89,6 +89,15 @@ adopts `type:`-prefixed tags to subdivide its categories (Tensura's eight
 skill/magic types are the first consumers). A pool without `type:` tags
 behaves exactly as before.
 
+**Unlock gating and reconciliation** (issues #135/#147): the menu shows
+**only unlocked abilities** - proven-unlearned ids filter out and unknown
+always shows (`UnlockRule.provenUnlearned`, the never-guess map over core's
+`AbilityUnlocks`); the server refuses slotting a proven-unlearned id while
+still echoing state. Losing a unlock **clears the slot server-side**:
+`UnlockReconciler` sweeps every snapshot and accepted apply in
+`BarStateSync` (saved + echoed, no tick loop, one log line per cleared id,
+unknown never touched); no client write exists for any of it.
+
 **Menu layout** (issue #27): the screen follows the Tensura RPG System
 skill-menu geometry (the design comment on that issue): a header band with
 the title top-left and the target-bar selector top-right (chip + used/total
