@@ -131,4 +131,46 @@ class MenuTabsTest {
         assertTrue(tab.accepts().test(ABILITY, definition), "its member passes");
         assertFalse(tab.accepts().test(OTHER_ABILITY, definition), "others are out");
     }
+
+    @Test
+    void resolvedIconTexturePrefersTextureFormAndNeverGuesses() {
+        // Path without .png resolves to the suffixed file (the bar's own
+        // texture convention) and draws with blit - like hotbar icons.
+        var texture = MenuTabs.resolvedIconTexture(
+                ResourceLocation.fromNamespaceAndPath("tensura",
+                        "textures/gui/skill/skill_tab_icon"),
+                rl -> rl.getPath().endsWith(".png"));
+        assertTrue(texture.isPresent(), "an existing texture file resolves");
+        assertEquals("textures/gui/skill/skill_tab_icon.png",
+                texture.get().drawWith().getPath());
+        assertFalse(texture.get().sprite(), "path form draws with blit");
+
+        // an explicit .png passes through unchanged
+        assertEquals("textures/x.png", MenuTabs.resolvedIconTexture(
+                        ResourceLocation.fromNamespaceAndPath("tensura", "textures/x.png"),
+                        rl -> true).orElseThrow().drawWith().getPath(),
+                "an explicit suffix is kept");
+
+        // a bare name resolves against the sprite folder, draws as sprite
+        var sprite = MenuTabs.resolvedIconTexture(
+                ResourceLocation.fromNamespaceAndPath("hotbar", "spark"),
+                rl -> rl.getPath().equals("textures/gui/sprites/spark.png"));
+        assertTrue(sprite.isPresent(), "an existing sprite resolves");
+        assertTrue(sprite.get().sprite(), "bare name form draws with blitSprite");
+        assertEquals("spark", sprite.get().drawWith().getPath());
+    }
+
+    @Test
+    void unresolvableIconsResolveToNothing() {
+        assertFalse(MenuTabs.resolvedIconTexture(
+                        ResourceLocation.fromNamespaceAndPath("tensura", "textures/missing.png"),
+                        rl -> false).isPresent(),
+                "a missing texture resolves to nothing (text-only tab)");
+        assertFalse(MenuTabs.resolvedIconTexture(
+                        ResourceLocation.fromNamespaceAndPath("hotbar", "absent_sprite"),
+                        rl -> false).isPresent(),
+                "a missing sprite resolves to nothing (text-only tab)");
+        assertFalse(MenuTabs.resolvedIconTexture(null, rl -> true).isPresent(),
+                "a null icon resolves to nothing");
+    }
 }

@@ -33,7 +33,9 @@ public final class MenuTabs {
      *
      * @param id             stable namespaced tab id (the registering mod's namespace)
      * @param displayNameKey translation key for the tab's text
-     * @param iconId         optional sprite icon, or null
+     * @param iconId         optional texture/sprite icon, or null - drawn only
+     *                       when its resource resolves (see
+     *                       {@link #resolvedIconTexture}); otherwise text-only
      * @param icon           optional item-stack icon, or null (never both)
      * @param accepts        membership: may this entry appear under the tab?
      */
@@ -114,5 +116,40 @@ public final class MenuTabs {
     /** Test isolation / future reload paths. */
     public static boolean remove(ResourceLocation id) {
         return TABS.removeIf(tab -> tab.id().equals(id));
+    }
+
+    /**
+     * How a resolved icon draws - the render side's "do not display what
+     * cannot be resolved" rule (owner's brief): a <b>texture</b> form (a
+     * path, with or without {@code .png}; drawn like the bar's own icons)
+     * or a <b>sprite</b> form (a bare GUI-sprite name), or empty when the
+     * underlying resource does not exist - callers then render the tab
+     * text-only, never a missing-texture box.
+     *
+     * @param iconId         the registered icon location (nullable)
+     * @param resourceExists whether the candidate resource file is present
+     * @return the draw form, or empty when nothing resolves
+     */
+    public static Optional<IconTexture> resolvedIconTexture(@Nullable ResourceLocation iconId,
+            java.util.function.Predicate<ResourceLocation> resourceExists) {
+        if (iconId == null) {
+            return Optional.empty();
+        }
+        String path = iconId.getPath();
+        if (path.contains("/") || path.endsWith(".png")) {
+            ResourceLocation file = path.endsWith(".png")
+                    ? iconId
+                    : ResourceLocation.fromNamespaceAndPath(iconId.getNamespace(), path + ".png");
+            return resourceExists.test(file) ? Optional.of(new IconTexture(file, false))
+                    : Optional.empty();
+        }
+        ResourceLocation spriteFile = ResourceLocation.fromNamespaceAndPath(
+                iconId.getNamespace(), "textures/gui/sprites/" + path + ".png");
+        return resourceExists.test(spriteFile) ? Optional.of(new IconTexture(iconId, true))
+                : Optional.empty();
+    }
+
+    /** A resolved icon: the value to draw and which draw call takes it. */
+    public record IconTexture(ResourceLocation drawWith, boolean sprite) {
     }
 }
