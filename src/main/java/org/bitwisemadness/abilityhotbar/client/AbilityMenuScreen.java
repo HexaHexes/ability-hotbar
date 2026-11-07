@@ -522,8 +522,20 @@ public final class AbilityMenuScreen extends Screen {
                         Math.max(0, MenuChrome.CHAMFER - 1),
                         MenuStyle.alpha(style.raised(), 55));
             }
-            gui.drawString(this.font, slotLabel(i + 1), x + 3, y + 4,
-                    selected ? style.text() : style.muted());
+            // Assigned-ability icon (#156): the rows' resolution with the
+            // item cells' 2px padding; empty/unresolvable/icon-less cells
+            // and showIcons = false keep the plain number.
+            ResourceLocation icon = slotIcon(target, i);
+            boolean iconDrawn = icon != null && HotbarClientConfig.SHOW_ICONS.get()
+                    && slotIconFits(cellWidth);
+            if (iconDrawn) {
+                gui.blit(icon, x + 2, y + 2, 0, 0, 12, 12, 12, 12);
+            }
+            int labelX = slotLabelX(cellWidth, iconDrawn);
+            if (labelX >= 0) {
+                gui.drawString(this.font, slotLabel(i + 1), x + labelX, y + 4,
+                        selected ? style.text() : style.muted());
+            }
         }
     }
 
@@ -544,6 +556,45 @@ public final class AbilityMenuScreen extends Screen {
             return 0;
         }
         return Math.min(40, Math.max(1, (screenWidth - 16) / slotCount));
+    }
+
+    /**
+     * Whether an assigned-ability icon fits a footer cell (hotbar#156):
+     * the 12px icon at the item cells' 2px padding needs 16px of width.
+     * Package-private for the geometry fixture.
+     */
+    static boolean slotIconFits(int cellWidth) {
+        return cellWidth >= 16;
+    }
+
+    /**
+     * The footer cell's slot-number x offset (hotbar#156): 16 when the icon
+     * draws and the number still fits beside it (icon at 2..14), -1 for an
+     * icon-only cell (16..27 wide), 3 for the plain number cell. Package-
+     * private for the geometry fixture (draw shares it).
+     */
+    static int slotLabelX(int cellWidth, boolean iconDrawn) {
+        if (iconDrawn) {
+            return cellWidth >= 28 ? 16 : -1;
+        }
+        return 3;
+    }
+
+    /**
+     * A footer cell's assigned-ability icon (hotbar#156): the rows'
+     * resolution - the definition's own {@code iconId} - or null for an
+     * empty slot, an id that no longer resolves, or an icon-less
+     * definition (never a guessed glyph).
+     */
+    @Nullable
+    private static ResourceLocation slotIcon(Bar target, int slot) {
+        SlotAssignment assignment = target.assignment(slot);
+        if (assignment == null || !assignment.isAssigned() || assignment.abilityId() == null) {
+            return null;
+        }
+        return AbilityDiscovery.get(assignment.abilityId())
+                .map(AbilityDefinition::iconId)
+                .orElse(null);
     }
 
     /**
