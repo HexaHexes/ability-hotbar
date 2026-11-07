@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -1223,8 +1224,15 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /** The pool after core's visibility contract (core#124, hotbar#153). */
+    /**
+     * The pool after core's visibility contract (core#124, hotbar#153).
+     * Reads Minecraft.getInstance() because the constructor calls this
+     * before Screen.minecraft exists (alpha.72's crash: the saved-filter
+     * validation ran against a null field the moment the menu opened).
+     */
     private Map<ResourceLocation, AbilityDefinition> menuPool() {
-        return MenuQuery.visiblePool(AbilityDiscovery.entries(), this.minecraft.player);
+        return MenuQuery.visiblePool(AbilityDiscovery.entries(),
+                Minecraft.getInstance().player);
     }
 
     private List<MenuQuery.Entry> visibleRows() {
