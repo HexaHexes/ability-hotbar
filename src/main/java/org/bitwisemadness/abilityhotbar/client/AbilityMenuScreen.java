@@ -678,7 +678,9 @@ public final class AbilityMenuScreen extends Screen {
         Toggle toggle = presentation.map(AbilityPresentation::toggle).orElse(null);
         int panelH = panelHeight(hasStats, fieldLines, toggle != null, hasDescription);
         int panelY = panelYFor(rowY, panelH, listBottom);
-        MenuChrome.glass(gui, LIST_LEFT, panelY, listWidth, panelH, style, false);
+        // hotbar#155: the opaque panel fill keeps covered rows from
+        // bleeding through and interleaving with the panel's own lines
+        MenuChrome.tooltip(gui, LIST_LEFT, panelY, listWidth, panelH, style);
         gui.drawString(this.font, metaText(definition), LIST_LEFT + 5, panelY + 3,
                 style.muted());
         int lineY = panelY + 13;
