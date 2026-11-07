@@ -7,8 +7,7 @@ alongside the vanilla one, never on top of it.
 
 ## What it does
 
-*(Design phase, no release yet. The open issues on this repository hold the
-full plan, research tables and open design decisions.)*
+*(Ships as alpha pre-releases - see [Releases](https://github.com/HexaHexes/ability-hotbar/releases); the [wiki](https://github.com/HexaHexes/ability-hotbar/wiki) documents the bar, the menu and the provider API.)*
 
 - **Nine-slot ability bar** - vanilla-style slots with dynamic ability icons,
   cooldown and resource overlays, and both direct-slot and selected-slot
