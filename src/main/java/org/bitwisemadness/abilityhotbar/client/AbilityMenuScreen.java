@@ -10,6 +10,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
 import org.bitwisemadness.abilitycore.api.AbilityPresentation;
@@ -30,6 +31,7 @@ import org.bitwisemadness.abilityhotbar.registry.HotbarStyle;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
 import org.bitwisemadness.abilityhotbar.registry.MenuStyle;
 import org.bitwisemadness.abilityhotbar.registry.MenuStyles;
+import org.bitwisemadness.abilityhotbar.registry.MenuTabs;
 import org.bitwisemadness.abilityhotbar.state.Bar;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
@@ -101,7 +103,7 @@ public final class AbilityMenuScreen extends Screen {
     @Nullable
     private String subCategoryFilter;
     @Nullable
-    private String providerFilter;
+    private ResourceLocation selectedTab;
     private int scrollOffset;
     private EditBox searchBox;
 
@@ -112,12 +114,12 @@ public final class AbilityMenuScreen extends Screen {
         categoryFilter = parseFilter(HotbarClientConfig.MENU_CATEGORY.get());
         tagFilter = emptyToNull(HotbarClientConfig.MENU_TAG.get());
         subCategoryFilter = emptyToNull(HotbarClientConfig.MENU_SUBCATEGORY.get());
-        providerFilter = emptyToNull(HotbarClientConfig.MENU_PROVIDER.get());
+        selectedTab = parseFilter(HotbarClientConfig.MENU_TAB.get());
         // A corrupt pref must never blank the menu (the parseFilter posture):
-        // filters that name nothing in the pool drop to "no filter".
+        // filters that name nothing drop to "no filter".
         var pool = menuPool();
-        if (providerFilter != null && !MenuQuery.providers(pool).contains(providerFilter)) {
-            providerFilter = null;
+        if (selectedTab != null && MenuTabs.get(selectedTab).isEmpty()) {
+            selectedTab = null; // a removed or unknown tab id falls back to All
         }
         if (subCategoryFilter != null && (categoryFilter == null
                 || !MenuQuery.subCategories(pool, categoryFilter).contains(subCategoryFilter))) {
@@ -314,23 +316,24 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The header's provider tab strip (hotbar#142): {@code All} plus one tab
-     * per provider namespace, on the style pill's row - the menu splits its
-     * pool per provider without a fourth filter chip. Tabs shrink to fit
-     * beside the pill; the active tab is the current provider filter.
+     * The header's registered-tab strip (hotbar#154): the permanent All tab
+     * plus every tab a provider registered - drawn as **Icon/Item Stack +
+     * Text** (the owner's identifier format), each shrinking to fit beside
+     * the style pill. A registry with no tabs draws nothing and the pool
+     * stays unfiltered.
      */
     private void drawProviderTabs(GuiGraphics gui, int mouseX, int mouseY) {
-        List<String> providers = MenuQuery.providers(menuPool());
-        if (providers.isEmpty()) {
+        List<MenuTabs.MenuTab> tabs = MenuTabs.all();
+        if (tabs.isEmpty()) {
             return;
         }
         MenuStyle style = style();
-        int tabWidth = providerTabWidth(providers);
+        int tabWidth = providerTabWidth(tabs);
         int x = LIST_LEFT;
-        for (int i = -1; i < providers.size(); i++) {
+        for (int i = -1; i < tabs.size(); i++) {
             boolean all = i < 0;
-            String namespace = all ? null : providers.get(i);
-            boolean active = all ? providerFilter == null : namespace.equals(providerFilter);
+            MenuTabs.MenuTab tab = all ? null : tabs.get(i);
+            boolean active = all ? selectedTab == null : tab.id().equals(selectedTab);
             boolean hovered = inside(mouseX, mouseY, x, STYLE_PILL_Y, tabWidth - 2, 14);
             if (active) {
                 gui.fill(x, STYLE_PILL_Y, x + tabWidth - 2, STYLE_PILL_Y + 14,
@@ -339,21 +342,49 @@ public final class AbilityMenuScreen extends Screen {
                 gui.fill(x, STYLE_PILL_Y, x + tabWidth - 2, STYLE_PILL_Y + 14,
                         MenuStyle.alpha(style.raised(), 55));
             }
+            int textX = x + 3;
+            if (!all && tab.hasIcon()) {
+                textX = drawTabIcon(gui, tab, x + 3, STYLE_PILL_Y + 1);
+            }
             Component label = all
-                    ? Component.translatable("ability_hotbar.menu.provider_all")
-                    : MenuLabels.provider(namespace);
-            String text = this.font.plainSubstrByWidth(label.getString(), tabWidth - 6);
-            gui.drawString(this.font, text, x + 3, STYLE_PILL_Y + 3,
+                    ? Component.translatable("ability_hotbar.menu.tab_all")
+                    : MenuLabels.named(tab.displayNameKey());
+            String text = this.font.plainSubstrByWidth(label.getString(),
+                    x + tabWidth - 4 - textX);
+            gui.drawString(this.font, text, textX, STYLE_PILL_Y + 3,
                     active ? style.text() : hovered ? style.text() : style.muted());
             x += tabWidth;
         }
     }
 
-    /** One provider tab's width: capped, floored, shrunk to fit beside the style pill. */
-    private int providerTabWidth(List<String> providers) {
+    /** The Icon/Item Stack half of a tab's identifier; returns the text's x. */
+    private int drawTabIcon(GuiGraphics gui, MenuTabs.MenuTab tab, int x, int y) {
+        ResourceLocation sprite = tab.iconId();
+        if (sprite != null) {
+            gui.blitSprite(sprite, x, y + 1, 12, 12);
+            return x + 15;
+        }
+        ItemStack stack = tab.icon();
+        if (stack != null) {
+            var pose = gui.pose();
+            pose.pushPose();
+            try {
+                pose.translate(x, y, 0.0);
+                pose.scale(0.75f, 0.75f, 1.0f);
+                gui.renderItem(stack, 0, 0);
+            } finally {
+                pose.popPose();
+            }
+            return x + 15;
+        }
+        return x;
+    }
+
+    /** One registered tab's width: capped, floored, shrunk to fit beside the style pill. */
+    private int providerTabWidth(List<MenuTabs.MenuTab> tabs) {
         int available = (this.width - 16)
                 - (styleCyclerVisible() ? STYLE_PILL_WIDTH + 4 : 0);
-        return Math.min(72, Math.max(24, available / (providers.size() + 1)));
+        return Math.min(72, Math.max(24, available / (tabs.size() + 1)));
     }
 
     /** The style cycler shows only for an assignable bar with registered styles. */
@@ -687,7 +718,9 @@ public final class AbilityMenuScreen extends Screen {
         Toggle toggle = presentation.map(AbilityPresentation::toggle).orElse(null);
         int panelH = panelHeight(hasStats, fieldLines, toggle != null, hasDescription);
         int panelY = panelYFor(rowY, panelH, listBottom);
-        MenuChrome.glass(gui, LIST_LEFT, panelY, listWidth, panelH, style, false);
+        // hotbar#155: the opaque panel fill keeps covered rows from
+        // bleeding through and interleaving with the panel's own lines
+        MenuChrome.tooltip(gui, LIST_LEFT, panelY, listWidth, panelH, style);
         gui.drawString(this.font, metaText(definition), LIST_LEFT + 5, panelY + 3,
                 style.muted());
         int lineY = panelY + 13;
@@ -833,14 +866,14 @@ public final class AbilityMenuScreen extends Screen {
                 return true;
             }
         }
-        // provider tabs (header line 2, hotbar#142): All + one per provider
-        List<String> providers = MenuQuery.providers(menuPool());
-        if (!providers.isEmpty()) {
-            int tabWidth = providerTabWidth(providers);
+        // registered tabs (header line 2, hotbar#154): All + one per registration
+        List<MenuTabs.MenuTab> tabs = MenuTabs.all();
+        if (!tabs.isEmpty()) {
+            int tabWidth = providerTabWidth(tabs);
             int tabX = LIST_LEFT;
-            for (int i = -1; i < providers.size(); i++) {
+            for (int i = -1; i < tabs.size(); i++) {
                 if (inside(mouseX, mouseY, tabX, STYLE_PILL_Y, tabWidth - 2, 14)) {
-                    providerFilter = i < 0 ? null : providers.get(i);
+                    selectedTab = i < 0 ? null : tabs.get(i).id();
                     scrollOffset = 0;
                     return true;
                 }
@@ -973,7 +1006,7 @@ public final class AbilityMenuScreen extends Screen {
         HotbarClientConfig.MENU_CATEGORY.set(categoryFilter == null ? "" : categoryFilter.toString());
         HotbarClientConfig.MENU_TAG.set(tagFilter == null ? "" : tagFilter);
         HotbarClientConfig.MENU_SUBCATEGORY.set(subCategoryFilter == null ? "" : subCategoryFilter);
-        HotbarClientConfig.MENU_PROVIDER.set(providerFilter == null ? "" : providerFilter);
+        HotbarClientConfig.MENU_TAB.set(selectedTab == null ? "" : selectedTab.toString());
         HotbarClientConfig.SPEC.save();
         super.onClose();
     }
@@ -1046,12 +1079,16 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     private List<MenuQuery.Entry> visibleRows() {
-        // Listing only decides visibility (core#124 via menuPool); unlock
-        // state greys the listed rows at draw (the #135 rule) - it never
-        // filters here, so two states stay two mechanics.
+        // Visibility comes from core's contract via menuPool; unlock greys at
+        // draw (#135); the selected tab narrows here (#154) - namespace
+        // filtering moved into registered tabs, so that parameter is null.
+        MenuTabs.MenuTab tab = selectedTab == null ? null
+                : MenuTabs.get(selectedTab).orElse(null);
         return MenuQuery.visibleEntries(menuPool(), selectedBar,
                 searchBox == null ? "" : searchBox.getValue(), categoryFilter, subCategoryFilter,
-                tagFilter, providerFilter,
+                tagFilter, null,
+                id -> true,
+                tab == null ? null : tab.accepts(),
                 definition -> Component.translatable(definition.displayNameKey()));
     }
 
