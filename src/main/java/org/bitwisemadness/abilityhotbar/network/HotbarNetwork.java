@@ -22,9 +22,11 @@ public final class HotbarNetwork {
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        // Version 2 (hotbar#27): AssignAbilityPayload gained the target bar id.
+        // v2 (hotbar#27): assign payload gained the target bar id; v3
+        // (hotbar#29): snapshot gained slot modes + presets and three
+        // preset payloads - codec changes ship to both sides together.
         PayloadRegistrar registrar = event.registrar(AbilityHotbar.MOD_ID)
-                .versioned("2")
+                .versioned("3")
                 .optional();
 
         registrar.playToClient(
@@ -46,6 +48,21 @@ public final class HotbarNetwork {
                 SwitchBarPayload.TYPE,
                 SwitchBarPayload.STREAM_CODEC,
                 SwitchBarPayload::handle
+        );
+        registrar.playToServer(
+                SavePresetPayload.TYPE,
+                SavePresetPayload.STREAM_CODEC,
+                SavePresetPayload::handle
+        );
+        registrar.playToServer(
+                RecallPresetPayload.TYPE,
+                RecallPresetPayload.STREAM_CODEC,
+                RecallPresetPayload::handle
+        );
+        registrar.playToServer(
+                DeletePresetPayload.TYPE,
+                DeletePresetPayload.STREAM_CODEC,
+                DeletePresetPayload::handle
         );
     }
 }

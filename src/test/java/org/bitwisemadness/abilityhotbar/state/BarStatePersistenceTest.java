@@ -2,6 +2,7 @@ package org.bitwisemadness.abilityhotbar.state;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import net.minecraft.nbt.CompoundTag;
@@ -374,7 +375,8 @@ class BarStatePersistenceTest {
                 new Bar[]{
                         Bar.empty(HotbarRegistry.builtinBarId(0), 3),
                         Bar.empty(orphanId, 3).withAssignment(1, FIREBALL)},
-                HotbarRegistry.builtinBarId(0), BarState.CURRENT_SCHEMA_VERSION);
+                HotbarRegistry.builtinBarId(0), BarState.CURRENT_SCHEMA_VERSION,
+                new LoadoutPreset[0]);
         CompoundTag tag = serializer.write(saved, null);
 
         HotbarRegistry.register(ResourceLocation.fromNamespaceAndPath("newcomer", "bar"),
@@ -389,5 +391,64 @@ class BarStatePersistenceTest {
         assertEquals(ResourceLocation.fromNamespaceAndPath("newcomer", "bar"),
                 loaded.bars()[2].id());
         assertTrue(loaded.bars()[2].assignment(1).isEmpty());
+    }
+
+    @Test
+    void versionThreeCompoundUpgradesToV4WithoutValueConversion() {
+        // hotbar#29's ladder step: v3 data has no mode keys and no preset
+        // keys - it must load as schema 4 with modeless slots and an empty
+        // preset list, values retained, no per-version conversion.
+        CompoundTag v3 = new CompoundTag();
+        v3.putInt("schema_version", 3);
+        v3.putInt("bar_count", 1);
+        CompoundTag bar = new CompoundTag();
+        bar.putString("bar_id", HotbarRegistry.builtinBarId(0).toString());
+        bar.putInt("slot_count", 2);
+        bar.putInt("selected_slot", 1);
+        bar.putString("slot_0", FIREBALL.toString());
+        v3.put("bar_0", bar);
+
+        BarState loaded = serializer.read(null, v3, null);
+
+        assertEquals(BarState.CURRENT_SCHEMA_VERSION, loaded.schemaVersion(),
+                "v3 must upgrade to the current schema in memory");
+        assertEquals(0, loaded.presets().length, "pre-v4 data has no presets");
+        assertEquals(FIREBALL, loaded.assignment(0).abilityId());
+        assertNull(loaded.assignment(0).mode(), "pre-v4 slots are modeless");
+        assertTrue(loaded.assignment(1).isEmpty());
+        assertEquals(1, loaded.selectedSlot());
+    }
+
+    @Test
+    void roundTripsPerSlotModesAndPresetsAtV4() {
+        SlotAssignment[] row = {
+            new SlotAssignment(FIREBALL, "fire"),
+            SlotAssignment.empty(),
+            new SlotAssignment(HEAL, null),
+        };
+        BarState original = BarState.empty(3, 1)
+                .withRow(HotbarRegistry.builtinBarId(0), row)
+                .withPresets(new LoadoutPreset[]{
+                        new LoadoutPreset("pvp", HotbarRegistry.builtinBarId(0), row)});
+
+        CompoundTag tag = serializer.write(original, null);
+        assertEquals(4, tag.getInt("schema_version"));
+        assertEquals("fire", tag.getCompound("bar_0").getString("mode_0"), "mode rides mode_i");
+        assertEquals(1, tag.getInt("preset_count"));
+        assertEquals("pvp", tag.getCompound("preset_0").getString("name"));
+
+        BarState restored = serializer.read(null, tag, null);
+
+        SlotAssignment[] back = restored.assignmentsOf(HotbarRegistry.builtinBarId(0));
+        assertEquals("fire", back[0].mode());
+        assertTrue(back[1].isEmpty());
+        assertNull(back[2].mode());
+        assertEquals(FIREBALL, back[0].abilityId());
+        assertEquals(1, restored.presets().length);
+        LoadoutPreset preset = restored.presets()[0];
+        assertEquals("pvp", preset.name());
+        assertEquals(HotbarRegistry.builtinBarId(0), preset.barId());
+        assertEquals("fire", preset.assignments()[0].mode());
+        assertTrue(preset.assignments()[1].isEmpty());
     }
 }

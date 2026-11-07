@@ -31,7 +31,7 @@ class CoreActivationCompatTest {
     @Test
     void aimedActivationCarriesTheEntityWireForm() {
         var payload = CoreActivationCompat.payload(
-                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, AIMED);
+                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, AIMED, null);
 
         assertEquals("entity", payload.targetKind());
         assertEquals("entity=" + AIMED, payload.targetParams());
@@ -46,7 +46,7 @@ class CoreActivationCompatTest {
     @Test
     void noHintPayloadIsTheAbsentHintForm() {
         var payload = CoreActivationCompat.payload(
-                FIREBALL, ActivationSource.SELECTED_SLOT, -1, 0L, null);
+                FIREBALL, ActivationSource.SELECTED_SLOT, -1, 0L, null, null);
 
         assertEquals("", payload.targetKind(), "no aim must write a blank kind");
         assertEquals("", payload.targetParams(), "no aim must write blank params");
@@ -58,7 +58,7 @@ class CoreActivationCompatTest {
         // mod sent before hotbar#94 - blank hint fields read as "no target
         // intent", i.e. the legacy four-arg fromWire.
         var payload = CoreActivationCompat.payload(
-                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, null);
+                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, null, null);
         var legacy = ActivateAbilityPayload.toRequest(payload);
         var preHint = ActivationRequest.fromWire(
                 FIREBALL.toString(), "direct_slot", 3, 12345L);
@@ -71,7 +71,7 @@ class CoreActivationCompatTest {
     @Test
     void hintedPayloadSurvivesTheWireCodec() {
         var original = CoreActivationCompat.payload(
-                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, AIMED);
+                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, AIMED, null);
         var buf = io.netty.buffer.Unpooled.buffer();
         try {
             ActivateAbilityPayload.STREAM_CODEC.encode(buf, original);
@@ -79,5 +79,22 @@ class CoreActivationCompatTest {
         } finally {
             buf.release();
         }
+    }
+
+    @Test
+    void modeContextRidesTheWireAndTheRequest() {
+        var payload = CoreActivationCompat.payload(
+                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, null, "fire");
+        assertEquals("fire", payload.mode(), "the slot's mode lands on the wire");
+
+        var request = ActivateAbilityPayload.toRequest(payload);
+        assertEquals("fire", request.modeContext(),
+                "the server reads it as the advisory mode context");
+
+        var none = CoreActivationCompat.payload(
+                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, null, null);
+        assertEquals("", none.mode(), "null writes core's no-mode wire form");
+        assertEquals(null, ActivateAbilityPayload.toRequest(none).modeContext(),
+                "no mode stays no mode - byte-identical to pre-#29 activations");
     }
 }

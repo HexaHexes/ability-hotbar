@@ -1,22 +1,21 @@
 package org.bitwisemadness.abilityhotbar.state;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilitycore.api.AbilityModes;
 import org.bitwisemadness.abilitycore.api.ActivationSource;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Client-side activation resolution (REQ-HOT-11/19/20): an assigned slot resolves
- * to an activation intent, while an empty or out-of-range slot resolves to nothing
- * so the client never sends a request for it.
- *
- * <p>Multi-bar (REQ-HOT-22): the slot is always read from the <b>active</b>
- * bar's view - another bar's assignment never resolves, and an unstored active
- * bar resolves to nothing at all.</p>
+ * Per-slot mode resolution at activation (hotbar#29): the stored mode is
+ * validated against the ability's own declared list before it ever reaches
+ * the wire - a stale value falls back to the default, a modeless ability
+ * gets no context, and an unmodeled pairing invents nothing.
  */
 class ActivationResolverTest {
 
@@ -24,90 +23,67 @@ class ActivationResolverTest {
             ResourceLocation.fromNamespaceAndPath("tensura", "fireball");
     private static final ResourceLocation HEAL =
             ResourceLocation.fromNamespaceAndPath("tensura", "heal");
-    private static final ResourceLocation CURIOS =
-            ResourceLocation.fromNamespaceAndPath("pseudocore", "curios");
 
-    @Test
-    void emptySlotResolvesToNothing() {
-        BarState base = BarState.empty(3);
+    @AfterEach
+    void tearDown() {
+        AbilityModes.remove(FIREBALL);
+        AbilityModes.remove(HEAL);
+    }
 
-        assertTrue(ActivationResolver.resolve(base, 1, ActivationSource.DIRECT_SLOT).isEmpty());
+    private static BarState stateWithMode(ResourceLocation id, String mode) {
+        return BarState.empty(3, 1)
+                .withRow(HotbarRegistry.builtinBarId(0), new SlotAssignment[]{
+                        new SlotAssignment(id, mode), SlotAssignment.empty(), SlotAssignment.empty()});
     }
 
     @Test
-    void assignedSlotResolvesToItsAbility() {
-        BarState base = BarState.empty(3).withAssignment(1, FIREBALL);
+    void declaredStoredModeTravelsVerbatim() {
+        AbilityModes.declare(FIREBALL, List.of(
+                new AbilityModes.Mode("basic", "tensura.mode.basic"),
+                new AbilityModes.Mode("fire", "tensura.mode.fire")));
 
-        ActivationResolver.Activation a =
-                ActivationResolver.resolve(base, 1, ActivationSource.DIRECT_SLOT).orElseThrow();
-        assertEquals(FIREBALL, a.abilityId());
-        assertEquals(ActivationSource.DIRECT_SLOT, a.source());
-        assertEquals(1, a.slot());
+        var activation = ActivationResolver.resolve(
+                stateWithMode(FIREBALL, "fire"), 0, ActivationSource.DIRECT_SLOT);
+
+        assertTrue(activation.isPresent());
+        assertEquals("fire", activation.get().mode(),
+                "a declared stored mode travels as the mode context");
     }
 
     @Test
-    void selectedSlotSourceIsPreserved() {
-        BarState base = BarState.empty(2).withAssignment(0, FIREBALL);
+    void staleStoredModeFallsBackToTheDeclaredDefault() {
+        AbilityModes.declare(FIREBALL, List.of(
+                new AbilityModes.Mode("basic", "tensura.mode.basic"),
+                new AbilityModes.Mode("fire", "tensura.mode.fire")));
 
-        ActivationResolver.Activation a =
-                ActivationResolver.resolve(base, 0, ActivationSource.SELECTED_SLOT).orElseThrow();
-        assertEquals(ActivationSource.SELECTED_SLOT, a.source());
+        var activation = ActivationResolver.resolve(
+                stateWithMode(FIREBALL, "removed_mode"), 0, ActivationSource.DIRECT_SLOT);
+
+        assertTrue(activation.isPresent());
+        assertEquals("basic", activation.get().mode(),
+                "a stale mode falls back to the ability's first declared mode");
     }
 
     @Test
-    void outOfRangeSlotResolvesToNothing() {
-        BarState base = BarState.empty(2).withAssignment(0, FIREBALL);
+    void modelessAbilityGetsNoModeContext() {
+        AbilityModes.declare(FIREBALL, List.of(
+                new AbilityModes.Mode("basic", "tensura.mode.basic")));
 
-        assertFalse(ActivationResolver.resolve(base, 2, ActivationSource.DIRECT_SLOT).isPresent());
-        assertFalse(ActivationResolver.resolve(base, -1, ActivationSource.DIRECT_SLOT).isPresent());
+        var activation = ActivationResolver.resolve(
+                stateWithMode(FIREBALL, null), 0, ActivationSource.DIRECT_SLOT);
+
+        assertTrue(activation.isPresent());
+        assertEquals(null, activation.get().mode(), "a modeless pairing invents nothing");
     }
 
     @Test
-    void resolveTargetsTheActiveBar() {
-        // #28: slot lookups read the active bar's view - bar 0's assignment must
-        // not resolve while another bar is active, and an active bar this state
-        // does not store resolves nothing at all.
-        BarState state = BarState.empty(3, 3)
-                .withAssignment(0, FIREBALL)
-                .withActiveBar(HotbarRegistry.builtinBarId(1));
+    void undeclaredAbilityNeverSendsStoredContext() {
+        // HEAL declares no modes: even a stored value must not reach the wire
+        // (not cycleable - the design's own ruling).
+        var activation = ActivationResolver.resolve(
+                stateWithMode(HEAL, "stale"), 0, ActivationSource.DIRECT_SLOT);
 
-        assertTrue(ActivationResolver.resolve(state, 0, ActivationSource.DIRECT_SLOT).isEmpty(),
-                "bar 0's assignment must not resolve while another bar is active");
-
-        // the active bar's own assignment resolves
-        BarState activeAssigned = state.withAssignment(1, HEAL);
-        ActivationResolver.Activation a = ActivationResolver
-                .resolve(activeAssigned, 1, ActivationSource.DIRECT_SLOT).orElseThrow();
-        assertEquals(HEAL, a.abilityId());
-
-        // an unstored (non-assignable) active bar fails closed
-        BarState unstored = BarState.empty(3)
-                .withActiveBar(ResourceLocation.fromNamespaceAndPath("pseudocore", "curios"));
-        assertTrue(ActivationResolver.resolve(unstored, 0, ActivationSource.DIRECT_SLOT).isEmpty());
-    }
-
-    @Test
-    void seededAssignmentResolvesWithItsCellIndex() {
-        // #89 AC2: a seeded cell activates through the normal path with
-        // slotContext = the cell index, exactly like a stored assignment.
-        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
-        BarState seeded = SeededAssignments.seed(BarState.empty(3), CURIOS, 2,
-                        "pseudocore_curios:press")
-                .withActiveBar(CURIOS);
-
-        ActivationResolver.Activation a = ActivationResolver
-                .resolve(seeded, 2, ActivationSource.DIRECT_SLOT).orElseThrow();
-
-        assertEquals(ResourceLocation.fromNamespaceAndPath("pseudocore_curios", "press"),
-                a.abilityId());
-        assertEquals(2, a.slot(), "slotContext is the cell index");
-        assertEquals(ActivationSource.DIRECT_SLOT, a.source());
-        // an unseeded cell of the same bar resolves to nothing (no verb, no request)
-        assertTrue(ActivationResolver.resolve(seeded, 0, ActivationSource.DIRECT_SLOT).isEmpty());
-    }
-
-    @Test
-    void nullStateResolvesToNothing() {
-        assertFalse(ActivationResolver.resolve(null, 0, ActivationSource.DIRECT_SLOT).isPresent());
+        assertTrue(activation.isPresent());
+        assertEquals(null, activation.get().mode());
     }
 }

@@ -111,7 +111,7 @@ public final class SeededAssignments {
         }
         LOGGER.debug("Seeded bar {} slot {} with {}", barId, slot,
                 rawAbilityId == null ? "<cleared>" : rawAbilityId);
-        return new BarState(bars, current.activeBarId(), current.schemaVersion());
+        return new BarState(bars, current.activeBarId(), current.schemaVersion(), current.presets());
     }
 
     /**
