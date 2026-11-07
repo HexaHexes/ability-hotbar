@@ -618,15 +618,19 @@ public final class AbilityMenuScreen extends Screen {
 
     /**
      * The hovered row's metadata, inline directly under (or above) the row -
-     * no detail pane, no sidebar (the owner's exclusion on #27).
+     * no detail pane, no sidebar (the owner's exclusion on #27). Lines run
+     * meta -> stats -> description (issue #119), 12px apart, and the panel
+     * grows with what the ability declares; a description alone renders
+     * byte-identically to the pre-#119 panel.
      */
     private void drawRowMeta(GuiGraphics gui, MenuQuery.Entry entry, int rowY,
             int listWidth, int listBottom) {
         MenuStyle style = style();
         AbilityDefinition definition = entry.definition();
-        String description = definition.data().get("description");
-        boolean hasDescription = description != null && !description.isBlank();
-        int panelHeight = hasDescription ? 26 : 14;
+        String description = definition.description().orElse(null);
+        boolean hasStats = !definition.stats().isEmpty();
+        boolean hasDescription = description != null;
+        int panelHeight = 14 + (hasStats ? 12 : 0) + (hasDescription ? 12 : 0);
         int panelY = rowY + ROW_HEIGHT;
         if (panelY + panelHeight > listBottom) {
             panelY = rowY - panelHeight; // last row: open upward instead
@@ -634,10 +638,22 @@ public final class AbilityMenuScreen extends Screen {
         MenuChrome.glass(gui, LIST_LEFT, panelY, listWidth, panelHeight, style, false);
         gui.drawString(this.font, metaText(definition), LIST_LEFT + 5, panelY + 3,
                 style.muted());
+        int lineY = panelY + 13;
+        if (hasStats) {
+            // issue #119: declared stats in declaration order, in the
+            // value-bearing action colour (the cost badge's language);
+            // labels are provider keys resolved through MenuLabels
+            String stats = definition.stats().stream()
+                    .map(stat -> MenuLabels.stat(stat.labelKey()).getString() + ": " + stat.value())
+                    .collect(Collectors.joining("   "));
+            gui.drawString(this.font, this.font.plainSubstrByWidth(stats, listWidth - 10),
+                    LIST_LEFT + 5, lineY, style.action());
+            lineY += 12;
+        }
         if (hasDescription) {
             var parts = this.font.split(Component.literal(description), listWidth - 10);
             if (!parts.isEmpty()) {
-                gui.drawString(this.font, parts.get(0), LIST_LEFT + 5, panelY + 13,
+                gui.drawString(this.font, parts.get(0), LIST_LEFT + 5, lineY,
                         MenuStyle.alpha(style.muted(), 70));
             }
         }

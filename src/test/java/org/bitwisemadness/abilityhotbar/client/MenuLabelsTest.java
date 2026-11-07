@@ -60,6 +60,18 @@ class MenuLabelsTest {
     }
 
     @Test
+    void statLabelsFallBackToTheirPrettifiedTail() {
+        // issue #119: the provider's key is checked first (I18n, client-side);
+        // the pure fallback shows the last segment prettified
+        assertEquals("Xp", MenuLabels.statFallback("tensura.stat.xp"),
+                "the key's tail, capitalised");
+        assertEquals("Mastery", MenuLabels.statFallback("Mastery"),
+                "a bare key prettifies as-is");
+        assertEquals("Power level", MenuLabels.statFallback("power_level"));
+        assertEquals("", MenuLabels.statFallback(null));
+    }
+
+    @Test
     void theScreenNeverRendersRawVocabularyIds() throws Exception {
         // every id reaches the player through MenuLabels (issue #139) - the
         // raw sites the issue lists must not come back. Persisting the raw

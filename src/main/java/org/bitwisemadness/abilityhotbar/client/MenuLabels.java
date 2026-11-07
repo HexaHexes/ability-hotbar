@@ -81,6 +81,25 @@ final class MenuLabels {
     }
 
     /**
+     * A localised stat label (issue #119): the provider's own translation
+     * key wins when translated (stat keys are provider-owned, like
+     * displayNameKey), else the prettified last segment shows.
+     */
+    static Component stat(String labelKey) {
+        if (I18n.exists(labelKey)) {
+            return Component.translatable(labelKey);
+        }
+        return Component.literal(statFallback(labelKey));
+    }
+
+    /** The untranslated fallback: the key's last segment, prettified. */
+    static String statFallback(String labelKey) {
+        int dot = labelKey == null ? -1 : labelKey.lastIndexOf('.');
+        String tail = dot >= 0 ? labelKey.substring(dot + 1) : labelKey;
+        return prettify(tail == null ? "" : tail);
+    }
+
+    /**
      * A localised subcategory name (hotbar#142): {@code type:unique} reads
      * as "Unique" - the convention key (reused from the tag vocabulary, so
      * one provider translation covers the tag chip and the category cycle)
