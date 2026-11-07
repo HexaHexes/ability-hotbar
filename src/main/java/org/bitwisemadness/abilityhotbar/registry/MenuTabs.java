@@ -33,10 +33,12 @@ public final class MenuTabs {
      *
      * @param id             stable namespaced tab id (the registering mod's namespace)
      * @param displayNameKey translation key for the tab's text
-     * @param iconId         optional texture/sprite icon, or null - drawn only
-     *                       when its resource resolves (see
-     *                       {@link #resolvedIconTexture}); otherwise text-only
-     * @param icon           optional item-stack icon, or null (never both)
+     * @param iconId         optional texture/sprite fallback, or null - drawn
+     *                       when the stack renders nothing in a GUI context
+     *                       (see {@link #resolvedIconTexture}) or when no
+     *                       stack is declared
+     * @param icon           optional item-stack icon, or null - the draw
+     *                       preference when declared
      * @param accepts        membership: may this entry appear under the tab?
      */
     public record MenuTab(ResourceLocation id, String displayNameKey,
@@ -52,10 +54,6 @@ public final class MenuTabs {
             }
             if (accepts == null) {
                 throw new IllegalArgumentException("tab membership must not be null for " + id);
-            }
-            if (iconId != null && icon != null) {
-                throw new IllegalArgumentException(
-                        "tab " + id + " declares an icon and an ItemStack - pick one");
             }
             if (icon != null) {
                 icon = icon.copy(); // stored stacks are ours; callers may mutate theirs
@@ -91,7 +89,13 @@ public final class MenuTabs {
         register(id, displayNameKey, null, icon, accepts);
     }
 
-    private static void register(ResourceLocation id, String displayNameKey,
+    /**
+     * Declares a tab carrying both identifier forms: the stack is the draw
+     * preference and the sprite the fallback for stacks whose baked model
+     * renders nothing in any vanilla GUI context (the screen's
+     * resolve-or-hide rule extends to items, not just textures).
+     */
+    public static void register(ResourceLocation id, String displayNameKey,
             @Nullable ResourceLocation iconId, @Nullable ItemStack icon,
             BiPredicate<ResourceLocation, AbilityDefinition> accepts) {
         MenuTab tab = new MenuTab(id, displayNameKey, iconId, icon, accepts); // validates loudly
