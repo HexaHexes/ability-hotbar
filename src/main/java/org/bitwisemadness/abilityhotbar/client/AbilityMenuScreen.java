@@ -93,6 +93,9 @@ public final class AbilityMenuScreen extends Screen {
     /** The menu-style cycler pill (issue #129), hint-bar right end. */
     private static final int MENU_STYLE_PILL_WIDTH = 120;
     private static final int SLOT_HEIGHT = 16;
+    /** The hint-bar prev/next bar buttons (issue #157): 14px cells, 2px gap. */
+    private static final int BAR_NAV_SIZE = 14;
+    private static final int BAR_NAV_GAP = 2;
 
     private ResourceLocation selectedBar;
     private int selectedSlot;
@@ -197,6 +200,7 @@ public final class AbilityMenuScreen extends Screen {
         drawSlotCells(gui, mouseX, mouseY, target);
         drawSlotDetail(gui, mouseX, mouseY, target);
         drawHintBar(gui);
+        drawBarNav(gui, mouseX, mouseY);
     }
 
     /** The header's right cluster: target-bar chip, used/total, slot meter. */
@@ -887,6 +891,47 @@ public final class AbilityMenuScreen extends Screen {
                 LIST_LEFT, this.height - 13, style().muted());
     }
 
+    /**
+     * The hint-bar line's prev/next bar buttons (issue #157): style-coloured
+     * triangle glyphs (the vanilla font ships no arrow characters - verified
+     * against font/default.json), glass chrome left of the menu-style pill.
+     * A single-bar list draws them dimmed and inert; no bar at all draws
+     * nothing (the header chip's own rule).
+     */
+    private void drawBarNav(GuiGraphics gui, int mouseX, int mouseY) {
+        List<ResourceLocation> bars = manageableBars();
+        if (bars.isEmpty()) {
+            return;
+        }
+        boolean enabled = bars.size() >= 2;
+        MenuStyle style = style();
+        int[][] navs = barNavRects(this.width, this.height, menuStylePillVisible());
+        for (int i = 0; i < navs.length; i++) {
+            int[] rect = navs[i];
+            boolean hovered = enabled
+                    && inside(mouseX, mouseY, rect[0], rect[1], rect[2], rect[3]);
+            MenuChrome.glass(gui, rect[0], rect[1], rect[2], rect[3], style, hovered);
+            if (!enabled) {
+                gui.fill(rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3],
+                        MenuStyle.alpha(style.raised(), 60));
+            }
+            int glyph = !enabled ? MenuStyle.alpha(style.muted(), 140)
+                    : hovered ? MenuStyle.alpha(style.text(), 255)
+                    : MenuStyle.alpha(style.muted(), 255);
+            drawBarNavGlyph(gui, rect[0], rect[1], i == 0, glyph);
+        }
+    }
+
+    /** Nine style-coloured rows: flat edge outward, apex inward (◀ / ▶). */
+    private static void drawBarNavGlyph(GuiGraphics gui, int x, int y, boolean left, int color) {
+        for (int row = 0; row < 9; row++) {
+            int inset = Math.abs(row - 4);
+            int x0 = left ? x + 3 + inset : x + 3;
+            int x1 = left ? x + 11 : x + 11 - inset;
+            gui.fill(x0, y + 2 + row, x1, y + 3 + row, color);
+        }
+    }
+
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (super.mouseClicked(mouseX, mouseY, button)) {
@@ -967,6 +1012,25 @@ public final class AbilityMenuScreen extends Screen {
             if (inside(mouseX, mouseY, clear[0], clear[1], clear[2], clear[3])) {
                 sendAssignment("");
                 return true;
+            }
+        }
+        // prev/next bar buttons (issue #157): the hint-bar line, same list
+        // as the header chip; a single-bar pair stays inert but owns its rects
+        List<ResourceLocation> navBars = manageableBars();
+        if (!navBars.isEmpty()) {
+            int[][] navs = barNavRects(this.width, this.height, menuStylePillVisible());
+            for (int i = 0; i < navs.length; i++) {
+                int[] rect = navs[i];
+                if (inside(mouseX, mouseY, rect[0], rect[1], rect[2], rect[3])) {
+                    if (navBars.size() >= 2) {
+                        if (i == 0) {
+                            previousBar();
+                        } else {
+                            cycleBar();
+                        }
+                    }
+                    return true;
+                }
             }
         }
         // ability rows
@@ -1076,14 +1140,48 @@ public final class AbilityMenuScreen extends Screen {
                 new AssignAbilityPayload(selectedSlot, abilityId, selectedBar));
     }
 
-    /** Cycles the header's target-bar chip through every manageable bar. */
+    /**
+     * One step through the manageable list (issue #157): a missing or
+     * stale selection enters forward at the first bar, backward at the
+     * last; otherwise floor-mod wrap. -1 for an empty list. Package-
+     * private for the fixture.
+     */
+    static int cycleIndex(int current, int size, int delta) {
+        if (size <= 0) {
+            return -1;
+        }
+        if (current < 0 || current >= size) {
+            return delta >= 0 ? 0 : size - 1;
+        }
+        return Math.floorMod(current + delta, size);
+    }
+
+    /** Cycles the target bar forward (the header chip and the ▶ button). */
     private void cycleBar() {
+        cycleBarBy(1);
+    }
+
+    /** Cycles the target bar backward with wrap-around (the ◀ button). */
+    private void previousBar() {
+        cycleBarBy(-1);
+    }
+
+    /** The shared cycle step: chip and buttons reset slot/scroll identically. */
+    private void cycleBarBy(int delta) {
         List<ResourceLocation> bars = manageableBars();
         if (bars.isEmpty()) {
             return;
         }
-        int index = selectedBar == null ? -1 : bars.indexOf(selectedBar);
-        selectedBar = bars.get((index + 1) % bars.size());
+        int current = selectedBar == null ? -1 : bars.indexOf(selectedBar);
+        int index = cycleIndex(current, bars.size(), delta);
+        if (index >= 0) {
+            selectBar(bars.get(index));
+        }
+    }
+
+    /** Selects a target bar exactly as the chip always has: reset slot+scroll. */
+    private void selectBar(ResourceLocation bar) {
+        selectedBar = bar;
         selectedSlot = 0;
         scrollOffset = 0;
     }
@@ -1159,6 +1257,23 @@ public final class AbilityMenuScreen extends Screen {
     /** The bottom stack's slot-cell row top (shared with hit-testing). */
     private int slotY() {
         return this.height - 32;
+    }
+
+    /**
+     * The hint-bar line's prev/next bar-button rects (issue #157): right
+     * side, immediately left of the menu-style pill when it shows. Draw and
+     * hit-test share it so they cannot drift. Package-private for the
+     * geometry fixture.
+     */
+    static int[][] barNavRects(int screenWidth, int screenHeight, boolean stylePillVisible) {
+        int rightEdge = stylePillVisible
+                ? screenWidth - 8 - MENU_STYLE_PILL_WIDTH - 4
+                : screenWidth - 8;
+        int prevX = rightEdge - (BAR_NAV_SIZE * 2 + BAR_NAV_GAP);
+        int y = screenHeight - 15;
+        return new int[][] {
+                {prevX, y, BAR_NAV_SIZE, BAR_NAV_SIZE},
+                {prevX + BAR_NAV_SIZE + BAR_NAV_GAP, y, BAR_NAV_SIZE, BAR_NAV_SIZE}};
     }
 
     private static boolean inside(double mouseX, double mouseY, int x, int y, int w, int h) {

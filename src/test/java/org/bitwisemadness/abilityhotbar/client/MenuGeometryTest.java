@@ -1,6 +1,7 @@
 package org.bitwisemadness.abilityhotbar.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -66,6 +67,40 @@ class MenuGeometryTest {
         assertEquals(-1, AbilityMenuScreen.slotLabelX(16, true), "icon-only at the floor");
         assertEquals(3, AbilityMenuScreen.slotLabelX(40, false), "no icon: today's number");
         assertEquals(3, AbilityMenuScreen.slotLabelX(1, false), "even the 1px cell");
+    }
+
+    @Test
+    void barNavRectsSitOnTheHintLineLeftOfTheStylePill() {
+        // hotbar#157: the pair hugs the right edge - 14px cells, 2px gap
+        int[][] navs = AbilityMenuScreen.barNavRects(640, 480, false);
+        assertEquals(14, navs[0][2], "prev cell width");
+        assertEquals(14, navs[0][3], "prev cell height");
+        assertEquals(640 - 8 - 30, navs[0][0], "prev sits 30px left of the edge");
+        assertEquals(navs[0][0] + 16, navs[1][0], "2px gap between the pair");
+        assertEquals(640 - 8, navs[1][0] + navs[1][2], "next ends at the right edge");
+        assertEquals(480 - 15, navs[0][1], "the hint-bar line (same row as the pill)");
+
+        // with the menu-style pill (120 wide) the pair stops 4px short of it
+        int[][] withPill = AbilityMenuScreen.barNavRects(640, 480, true);
+        int pillX = 640 - 8 - 120;
+        assertEquals(pillX - 4, withPill[1][0] + withPill[1][2], "clear of the pill");
+
+        // never the clear line (h-49..h-35) nor the slot row (h-32..h-16)
+        assertTrue(withPill[0][1] >= 480 - 32 + 16, "below the slot cells");
+        assertTrue(withPill[0][1] + withPill[0][3] <= 480 - 1, "inside the screen");
+    }
+
+    @Test
+    void barCycleIndexWrapsBothWays() {
+        // hotbar#157: the chip's forward step and the buttons' backward step
+        // share one wrap rule; an empty list never cycles
+        assertEquals(0, AbilityMenuScreen.cycleIndex(-1, 3, 1), "no selection enters forward");
+        assertEquals(2, AbilityMenuScreen.cycleIndex(-1, 3, -1), "enters at the last going back");
+        assertEquals(1, AbilityMenuScreen.cycleIndex(0, 3, 1), "forward one");
+        assertEquals(0, AbilityMenuScreen.cycleIndex(2, 3, 1), "forward wraps to the first");
+        assertEquals(2, AbilityMenuScreen.cycleIndex(0, 3, -1), "backward wraps to the last");
+        assertEquals(1, AbilityMenuScreen.cycleIndex(2, 3, -1), "backward one");
+        assertEquals(-1, AbilityMenuScreen.cycleIndex(0, 0, 1), "no bars, no cycle");
     }
 
     @Test
