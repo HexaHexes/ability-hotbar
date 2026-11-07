@@ -120,7 +120,14 @@ hit-test, slot width and meter math are pure and fixture-pinned
 ability's `iconId` (issue #156: the rows' resolution, the item cells' 2px
 padding) before its number; empty, unresolvable or icon-less cells - and
 `display.showIcons = false` - keep the number-only cell (icon needs 16px
-of cell width, the number 12 more; also fixture-pinned).
+of cell width, the number 12 more; also fixture-pinned). The hint-bar
+line carries the ◀/▶ prev/next bar buttons (issue #157): one shared
+`selectBar` step through `MenuQuery.manageableBars` (wrap-around, the
+same slot/scroll reset as the header chip), drawn as style-coloured
+triangle glyphs - the vanilla font covers no arrow characters
+(`font/default.json`, verified) - immediately left of the menu-style
+pill (`barNavRects` shared by draw and hit-test, `cycleIndex` fixture-
+pinned); a single-bar list shows them dimmed and inert.
 
 **Release plan:** [docs/release-plan.md](https://github.com/HexaHexes/ability-core/blob/main/docs/release-plan.md) - the release train, per-repo checklist, core-before-consumers sequencing and ALPHA_RELEASES state (hub: ability-core).
 
