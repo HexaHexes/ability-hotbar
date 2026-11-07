@@ -2,6 +2,7 @@ package org.bitwisemadness.abilityhotbar.client;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import net.minecraft.client.gui.GuiGraphics;
@@ -114,7 +115,7 @@ public final class AbilityMenuScreen extends Screen {
         providerFilter = emptyToNull(HotbarClientConfig.MENU_PROVIDER.get());
         // A corrupt pref must never blank the menu (the parseFilter posture):
         // filters that name nothing in the pool drop to "no filter".
-        var pool = AbilityDiscovery.entries();
+        var pool = menuPool();
         if (providerFilter != null && !MenuQuery.providers(pool).contains(providerFilter)) {
             providerFilter = null;
         }
@@ -319,7 +320,7 @@ public final class AbilityMenuScreen extends Screen {
      * beside the pill; the active tab is the current provider filter.
      */
     private void drawProviderTabs(GuiGraphics gui, int mouseX, int mouseY) {
-        List<String> providers = MenuQuery.providers(AbilityDiscovery.entries());
+        List<String> providers = MenuQuery.providers(menuPool());
         if (providers.isEmpty()) {
             return;
         }
@@ -612,6 +613,14 @@ public final class AbilityMenuScreen extends Screen {
                         style.action());
             }
             drawValueStrip(gui, row, name, cost, y, listWidth, style);
+            // The unlock grey (#135's rule, the second state): a listed
+            // ability the player is provably unlearned for wears the
+            // unavailable tint; unknown stays undimmed (never-guess).
+            if (UnlockRule.provenUnlearned(
+                    AbilityUnlocks.isLearned(this.minecraft.player, row.id()))) {
+                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
+                        AbilityBarLayer.UNAVAILABLE_TINT);
+            }
             // the cyan row underline (their list chrome)
             gui.fill(LIST_LEFT, y + ROW_HEIGHT - 2, LIST_LEFT + listWidth, y + ROW_HEIGHT - 1,
                     MenuStyle.alpha(style.accent(), 45));
@@ -825,7 +834,7 @@ public final class AbilityMenuScreen extends Screen {
             }
         }
         // provider tabs (header line 2, hotbar#142): All + one per provider
-        List<String> providers = MenuQuery.providers(AbilityDiscovery.entries());
+        List<String> providers = MenuQuery.providers(menuPool());
         if (!providers.isEmpty()) {
             int tabWidth = providerTabWidth(providers);
             int tabX = LIST_LEFT;
@@ -997,7 +1006,7 @@ public final class AbilityMenuScreen extends Screen {
 
     private void cycleCategory() {
         // the hierarchical cycle (#142): any -> category -> its subcategories
-        List<MenuQuery.CategoryStep> steps = MenuQuery.categorySteps(AbilityDiscovery.entries());
+        List<MenuQuery.CategoryStep> steps = MenuQuery.categorySteps(menuPool());
         if (steps.isEmpty()) {
             return;
         }
@@ -1017,7 +1026,7 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     private void cycleTag() {
-        List<String> tags = MenuQuery.tags(AbilityDiscovery.entries());
+        List<String> tags = MenuQuery.tags(menuPool());
         if (tags.isEmpty()) {
             tagFilter = null;
             return;
@@ -1031,14 +1040,18 @@ public final class AbilityMenuScreen extends Screen {
         return MenuQuery.manageableBars(HotbarConfig.effectiveHotbarCount(), HotbarRegistry.all());
     }
 
+    /** The pool after core's visibility contract (core#124, hotbar#153). */
+    private Map<ResourceLocation, AbilityDefinition> menuPool() {
+        return MenuQuery.visiblePool(AbilityDiscovery.entries(), this.minecraft.player);
+    }
+
     private List<MenuQuery.Entry> visibleRows() {
-        // hotbar#135's owner call: only unlocked abilities are visible -
-        // proven-unlearned ids filter out, unknown always shows (UnlockRule).
-        return MenuQuery.visibleEntries(AbilityDiscovery.entries(), selectedBar,
+        // Listing only decides visibility (core#124 via menuPool); unlock
+        // state greys the listed rows at draw (the #135 rule) - it never
+        // filters here, so two states stay two mechanics.
+        return MenuQuery.visibleEntries(menuPool(), selectedBar,
                 searchBox == null ? "" : searchBox.getValue(), categoryFilter, subCategoryFilter,
                 tagFilter, providerFilter,
-                id -> !UnlockRule.provenUnlearned(
-                        AbilityUnlocks.isLearned(this.minecraft.player, id)),
                 definition -> Component.translatable(definition.displayNameKey()));
     }
 
