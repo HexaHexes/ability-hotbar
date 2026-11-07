@@ -2,6 +2,7 @@ package org.bitwisemadness.abilityhotbar.client;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -10,9 +11,16 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
+import org.bitwisemadness.abilitycore.api.AbilityPresentation;
 import org.bitwisemadness.abilitycore.api.AbilityUnlocks;
+import org.bitwisemadness.abilitycore.api.ActivationRequest;
+import org.bitwisemadness.abilitycore.api.ActivationSource;
+import org.bitwisemadness.abilitycore.api.PresentationField;
+import org.bitwisemadness.abilitycore.api.PresentationProviders;
+import org.bitwisemadness.abilitycore.api.Toggle;
 import org.bitwisemadness.abilitycore.discovery.AbilityDiscovery;
 import org.bitwisemadness.abilityhotbar.UnlockRule;
+import org.bitwisemadness.abilityhotbar.compat.CoreActivationCompat;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
 import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
@@ -595,14 +603,15 @@ public final class AbilityMenuScreen extends Screen {
                 gui.blit(icon, LIST_LEFT + 2, y, 0, 0, 16, 16, 16, 16);
             }
             Component displayName = Component.translatable(row.definition().displayNameKey());
-            gui.drawString(this.font, displayName.getString(), LIST_LEFT + 22, y + 5,
-                    style.text());
+            String name = displayName.getString();
+            gui.drawString(this.font, name, LIST_LEFT + 22, y + 5, style.text());
             String cost = costText(row.definition());
             if (!cost.isEmpty()) {
                 gui.drawString(this.font, cost,
                         LIST_LEFT + listWidth - this.font.width(cost), y + 5,
                         style.action());
             }
+            drawValueStrip(gui, row, name, cost, y, listWidth, style);
             // the cyan row underline (their list chrome)
             gui.fill(LIST_LEFT, y + ROW_HEIGHT - 2, LIST_LEFT + listWidth, y + ROW_HEIGHT - 1,
                     MenuStyle.alpha(style.accent(), 45));
@@ -617,11 +626,45 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
+     * The row's at-a-glance live value (issue #148): the first PROGRESS
+     * field's value text + a mini meter, drawn between the name and the
+     * cost — and only when it fits, so long names never collide (the full
+     * presentation always shows in the tooltip).
+     */
+    private void drawValueStrip(GuiGraphics gui, MenuQuery.Entry row, String name, String cost,
+            int y, int listWidth, MenuStyle style) {
+        PresentationField progress = presentationOf(row.id())
+                .flatMap(present -> present.fields().stream()
+                        .filter(field -> field.kind() == PresentationField.Kind.PROGRESS)
+                        .findFirst())
+                .orElse(null);
+        if (progress == null) {
+            return;
+        }
+        int costLeft = cost.isEmpty() ? LIST_LEFT + listWidth
+                : LIST_LEFT + listWidth - this.font.width(cost) - 6;
+        int meterWidth = 24;
+        int meterX = costLeft - meterWidth;
+        int valueWidth = progress.value().isEmpty() ? 0 : this.font.width(progress.value()) + 4;
+        int startX = LIST_LEFT + 22 + this.font.width(name) + 6;
+        if (meterX - valueWidth < startX) {
+            return; // no room: the tooltip carries the full presentation
+        }
+        if (!progress.value().isEmpty()) {
+            gui.drawString(this.font, progress.value(), meterX - valueWidth, y + 5,
+                    style.muted());
+        }
+        MenuChrome.meter(gui, meterX, y + 7, meterWidth, 5, progress.progress(), style);
+    }
+
+    /**
      * The hovered row's metadata, inline directly under (or above) the row -
      * no detail pane, no sidebar (the owner's exclusion on #27). Lines run
-     * meta -> stats -> description (issue #119), 12px apart, and the panel
-     * grows with what the ability declares; a description alone renders
-     * byte-identically to the pre-#119 panel.
+     * meta -> stats -> live presentation fields -> toggle -> description
+     * (issues #119/#148), 12px apart; the height and toggle-line helpers
+     * are shared with the button's hit test, so draw and click can never
+     * disagree. A description alone renders byte-identically to the
+     * pre-#119 panel.
      */
     private void drawRowMeta(GuiGraphics gui, MenuQuery.Entry entry, int rowY,
             int listWidth, int listBottom) {
@@ -630,12 +673,12 @@ public final class AbilityMenuScreen extends Screen {
         String description = definition.description().orElse(null);
         boolean hasStats = !definition.stats().isEmpty();
         boolean hasDescription = description != null;
-        int panelHeight = 14 + (hasStats ? 12 : 0) + (hasDescription ? 12 : 0);
-        int panelY = rowY + ROW_HEIGHT;
-        if (panelY + panelHeight > listBottom) {
-            panelY = rowY - panelHeight; // last row: open upward instead
-        }
-        MenuChrome.glass(gui, LIST_LEFT, panelY, listWidth, panelHeight, style, false);
+        Optional<AbilityPresentation> presentation = presentationOf(entry.id());
+        int fieldLines = presentation.map(present -> present.fields().size()).orElse(0);
+        Toggle toggle = presentation.map(AbilityPresentation::toggle).orElse(null);
+        int panelH = panelHeight(hasStats, fieldLines, toggle != null, hasDescription);
+        int panelY = panelYFor(rowY, panelH, listBottom);
+        MenuChrome.glass(gui, LIST_LEFT, panelY, listWidth, panelH, style, false);
         gui.drawString(this.font, metaText(definition), LIST_LEFT + 5, panelY + 3,
                 style.muted());
         int lineY = panelY + 13;
@@ -650,6 +693,16 @@ public final class AbilityMenuScreen extends Screen {
                     LIST_LEFT + 5, lineY, style.action());
             lineY += 12;
         }
+        if (presentation.isPresent()) {
+            for (PresentationField field : presentation.get().fields()) {
+                drawField(gui, field, lineY, listWidth, style);
+                lineY += 12;
+            }
+        }
+        if (toggle != null) {
+            drawToggleRow(gui, toggle, panelY, listWidth, hasStats, fieldLines, style);
+            lineY += 12;
+        }
         if (hasDescription) {
             var parts = this.font.split(Component.literal(description), listWidth - 10);
             if (!parts.isEmpty()) {
@@ -657,6 +710,66 @@ public final class AbilityMenuScreen extends Screen {
                         MenuStyle.alpha(style.muted(), 70));
             }
         }
+    }
+
+    /** One live presentation field in the tooltip panel (issue #148). */
+    private void drawField(GuiGraphics gui, PresentationField field, int y, int listWidth,
+            MenuStyle style) {
+        String label = MenuLabels.stat(field.labelKey()).getString() + ": ";
+        int x = LIST_LEFT + 5;
+        int labelWidth = Math.min(this.font.width(label), listWidth / 2);
+        gui.drawString(this.font, this.font.plainSubstrByWidth(label, labelWidth), x, y,
+                style.muted());
+        int valueX = x + labelWidth + 2;
+        if (field.kind() == PresentationField.Kind.PROGRESS) {
+            MenuChrome.meter(gui, valueX, y + 1, 40, 6, field.progress(), style);
+            valueX += 44;
+        }
+        if (!field.value().isEmpty()) {
+            gui.drawString(this.font,
+                    this.font.plainSubstrByWidth(field.value(),
+                            LIST_LEFT + listWidth - valueX - 4),
+                    valueX, y, style.text());
+        }
+    }
+
+    /** The toggle state line + Enable/Disable button inside the panel (issue #148). */
+    private void drawToggleRow(GuiGraphics gui, Toggle toggle,
+            int panelY, int listWidth, boolean stats, int fieldLines, MenuStyle style) {
+        int y = panelY + toggleLineOffset(stats, fieldLines);
+        gui.drawString(this.font,
+                Component.translatable(toggle.enabled()
+                        ? "ability_hotbar.menu.toggle_on" : "ability_hotbar.menu.toggle_off"),
+                LIST_LEFT + 5, y, toggle.enabled() ? style.text() : style.muted());
+        int[] button = toggleButtonRect(panelY, listWidth, stats, fieldLines);
+        MenuChrome.glass(gui, button[0], button[1], button[2], button[3], style, true);
+        Component label = Component.translatable(toggle.enabled()
+                ? "ability_hotbar.menu.toggle_disable" : "ability_hotbar.menu.toggle_enable");
+        gui.drawString(this.font, label,
+                button[0] + (button[2] - this.font.width(label)) / 2, button[1] + 2,
+                style.action());
+    }
+
+    /** The tooltip panel's height: 14px base + 12 per extra line (issues #119/#148). */
+    static int panelHeight(boolean stats, int fieldLines, boolean toggle, boolean description) {
+        return 14 + (stats ? 12 : 0) + fieldLines * 12 + (toggle ? 12 : 0)
+                + (description ? 12 : 0);
+    }
+
+    /** The toggle line's offset from the panel top (draw and hit share it). */
+    static int toggleLineOffset(boolean stats, int fieldLines) {
+        return 13 + (stats ? 12 : 0) + fieldLines * 12;
+    }
+
+    /** The panel's top for a hovered row: under it, flipped above for the last (#27). */
+    private static int panelYFor(int rowY, int panelH, int listBottom) {
+        int panelY = rowY + ROW_HEIGHT;
+        return panelY + panelH > listBottom ? rowY - panelH : panelY;
+    }
+
+    /** The live presentation for one ability (core's contract, issue #148). */
+    private Optional<AbilityPresentation> presentationOf(ResourceLocation id) {
+        return PresentationProviders.present(this.minecraft.player, id);
     }
 
     /** The category/tags/cost line shared by the inline meta panel. */
@@ -765,16 +878,59 @@ public final class AbilityMenuScreen extends Screen {
         }
         // ability rows
         List<MenuQuery.Entry> rows = visibleRows();
-        int relative = rowIndexAt((int) mouseY, LIST_TOP,
-                this.height - LIST_BOTTOM_PAD, ROW_HEIGHT);
+        int listBottom = this.height - LIST_BOTTOM_PAD;
+        int relative = rowIndexAt((int) mouseY, LIST_TOP, listBottom, ROW_HEIGHT);
         if (relative >= 0) {
             int offset = relative + scrollOffset;
             if (offset < rows.size()) {
-                sendAssignment(rows.get(offset).id().toString());
+                MenuQuery.Entry row = rows.get(offset);
+                // the tooltip's Enable/Disable button owns its rect first
+                // (issue #148): pressing it must never also assign the row
+                int rowY = LIST_TOP + relative * ROW_HEIGHT;
+                int[] toggleButton = toggleButtonHit(row, rowY, listBottom);
+                if (toggleButton != null && inside(mouseX, mouseY, toggleButton[0],
+                        toggleButton[1], toggleButton[2], toggleButton[3])) {
+                    sendToggle(row.id());
+                    return true;
+                }
+                sendAssignment(row.id().toString());
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * The Enable/Disable button's screen rect for a hovered row, or null
+     * when the row presents no toggle - the shared geometry (panel height,
+     * flip and toggle line) guarantees the hit matches what was drawn.
+     */
+    @Nullable
+    private int[] toggleButtonHit(MenuQuery.Entry row, int rowY, int listBottom) {
+        Optional<AbilityPresentation> presentation = presentationOf(row.id());
+        if (presentation.isEmpty() || presentation.get().toggle() == null) {
+            return null;
+        }
+        boolean stats = !row.definition().stats().isEmpty();
+        int fieldLines = presentation.get().fields().size();
+        boolean description = row.definition().description().isPresent();
+        int panelY = panelYFor(rowY,
+                panelHeight(stats, fieldLines, true, description), listBottom);
+        return toggleButtonRect(panelY, this.width - 16, stats, fieldLines);
+    }
+
+    /** The Enable/Disable button's rect inside the panel (draw and hit share it). */
+    private int[] toggleButtonRect(int panelY, int listWidth, boolean stats, int fieldLines) {
+        return new int[] {LIST_LEFT + listWidth - 60,
+                panelY + toggleLineOffset(stats, fieldLines), 56, 12};
+    }
+
+    /** The panel's Enable/Disable button: a MENU-source activation, no slot (#148). */
+    private void sendToggle(ResourceLocation abilityId) {
+        if (CoreActivationCompat.isPresent()) {
+            CoreActivationCompat.activate(abilityId, ActivationSource.MENU,
+                    ActivationRequest.NO_SLOT, null);
+        }
     }
 
     @Override

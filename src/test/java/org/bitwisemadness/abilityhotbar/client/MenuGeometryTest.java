@@ -61,4 +61,22 @@ class MenuGeometryTest {
         assertEquals(0, MenuChrome.meterFillWidth(44, -1f), "under-empty clamps");
         assertEquals(0, MenuChrome.meterFillWidth(1, 1f), "a track too thin to fill");
     }
+
+    @Test
+    void tooltipPanelHeightCountsItsLines() {
+        // issues #119/#148: 14px base + 12 per extra line - draw and the
+        // toggle button's hit test share this exact arithmetic
+        assertEquals(14, AbilityMenuScreen.panelHeight(false, 0, false, false),
+                "meta only keeps the original one-liner");
+        assertEquals(26, AbilityMenuScreen.panelHeight(false, 0, false, true),
+                "description alone matches the pre-#119 panel exactly");
+        assertEquals(26, AbilityMenuScreen.panelHeight(true, 0, false, false),
+                "stats alone takes one extra line");
+        assertEquals(74, AbilityMenuScreen.panelHeight(true, 2, true, true),
+                "stats + two fields + toggle + description");
+        assertEquals(13, AbilityMenuScreen.toggleLineOffset(false, 0),
+                "the toggle line sits under meta");
+        assertEquals(49, AbilityMenuScreen.toggleLineOffset(true, 2),
+                "stats and two fields push it down by their lines");
+    }
 }
