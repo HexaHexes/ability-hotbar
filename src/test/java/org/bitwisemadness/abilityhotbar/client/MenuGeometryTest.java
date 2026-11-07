@@ -52,6 +52,23 @@ class MenuGeometryTest {
     }
 
     @Test
+    void footerSlotIconsFitThenYieldToTheNumberByWidth() {
+        // hotbar#156: the 12px icon at 2px pad needs 16px; the number needs
+        // 12 more beside it. Icon-less cells always keep the plain number.
+        assertEquals(true, AbilityMenuScreen.slotIconFits(40), "a normal cell");
+        assertEquals(true, AbilityMenuScreen.slotIconFits(16), "the icon's own width");
+        assertEquals(false, AbilityMenuScreen.slotIconFits(15), "one pixel short");
+        assertEquals(false, AbilityMenuScreen.slotIconFits(1), "the 1px floor cell");
+
+        assertEquals(16, AbilityMenuScreen.slotLabelX(40, true), "icon + number");
+        assertEquals(16, AbilityMenuScreen.slotLabelX(28, true), "both still fit at 28");
+        assertEquals(-1, AbilityMenuScreen.slotLabelX(27, true), "icon-only cell");
+        assertEquals(-1, AbilityMenuScreen.slotLabelX(16, true), "icon-only at the floor");
+        assertEquals(3, AbilityMenuScreen.slotLabelX(40, false), "no icon: today's number");
+        assertEquals(3, AbilityMenuScreen.slotLabelX(1, false), "even the 1px cell");
+    }
+
+    @Test
     void meterFillWidthScalesAndClamps() {
         assertEquals(0, MenuChrome.meterFillWidth(44, 0f), "empty track");
         assertEquals(42, MenuChrome.meterFillWidth(44, 1f), "full track keeps its 1px border");
