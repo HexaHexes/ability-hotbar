@@ -81,13 +81,21 @@ the raw sites out of the screen.
 
 **Menu filtering and order** (issue #142): rows ship in the deterministic
 default order **provider (id namespace) -> category -> lowest tag -> id**;
-the header's second line carries the **provider tabs** (`All` + one tab per
-namespace, CLIENT pref `menu.lastProvider`); the category cycle is
-hierarchical over the open **`type:` subcategory convention** (any ->
-category -> its `type:` tags, pref `menu.lastSubCategory`) - a provider
-adopts `type:`-prefixed tags to subdivide its categories (Tensura's eight
-skill/magic types are the first consumers). A pool without `type:` tags
-behaves exactly as before.
+the category cycle is hierarchical over the open **`type:` subcategory
+convention** (any -> category -> its `type:` tags, pref `menu.lastSubCategory`)
+- a provider adopts `type:`-prefixed tags to subdivide its categories
+(Tensura's eight skill/magic types are the first consumers). A pool without
+`type:` tags behaves exactly as before.
+
+**Menu tabs** (issue #154): tabs are **registered, not derived** -
+`MenuTabs.register(id, displayNameKey, [icon | ItemStack], membership)` at
+setup (loud ownership, one icon kind per tab, strip order = registration
+order), rendered as the owner's **Icon/Item Stack + Text** identifier; the
+selected tab's membership narrows the query alongside every other filter
+(pref `menu.lastTab`, unknown ids fall back to All). Providers that keep
+their abilities exclusive to their own hotbars (ability-iss,
+pseudocore-curios) simply register nothing: no strip, pool unfiltered.
+ability-tensura registers Skills/Magic/Battlewills (companion issue).
 
 **Unlock gating and reconciliation** (issues #135/#147): the menu shows
 **only unlocked abilities** - proven-unlearned ids filter out and unknown
