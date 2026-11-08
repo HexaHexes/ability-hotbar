@@ -619,11 +619,48 @@ public final class AbilityMenuScreen extends Screen {
                 gui.blit(icon, x + 2, cellY + 2, 0, 0, 24, 24, 24, 24);
             }
             int nameX = iconDrawn ? x + 28 : x + 3;
-            String name = this.font.plainSubstrByWidth(slotName(target, i),
-                    Math.max(4, cellWidth - (iconDrawn ? 31 : 6)));
-            gui.drawString(this.font, name, nameX, cellY + 11,
+            int nameWidth = Math.max(4, cellWidth - (iconDrawn ? 31 : 6));
+            String modeLabel = slotModeLabel(target, i);
+            String name = this.font.plainSubstrByWidth(slotName(target, i), nameWidth);
+            gui.drawString(this.font, name, nameX,
+                    modeLabel == null ? cellY + 11 : cellY + 6,
                     selected ? style.text() : style.muted());
+            if (modeLabel != null) {
+                // The slotted ability's mode under the name (owner's
+                // brief) - the cell shows exactly what an activation
+                // would send (stored id, else the declared default).
+                gui.drawString(this.font,
+                        this.font.plainSubstrByWidth(modeLabel, nameWidth),
+                        nameX, cellY + 18, style.action());
+            }
         }
+    }
+
+    /**
+     * The slotted mode's player-facing name, or null: no stored mode
+     * context (native default applies - nothing to show) or no declared
+     * modes. Resolution mirrors ActivationResolver's wire rule - the
+     * stored id when still declared, the first declared (default) when
+     * stale - so the cell shows exactly what an activation would send.
+     * Raw ids never render (#139).
+     */
+    @Nullable
+    private String slotModeLabel(Bar target, int slot) {
+        var assignment = target.assignment(slot);
+        if (assignment == null || !assignment.isAssigned()
+                || assignment.mode() == null) {
+            return null;
+        }
+        Optional<List<AbilityModes.Mode>> declared =
+                AbilityModes.get(assignment.abilityId());
+        if (declared.isEmpty() || declared.get().isEmpty()) {
+            return null;
+        }
+        AbilityModes.Mode mode = declared.get().stream()
+                .filter(candidate -> candidate.id().equals(assignment.mode()))
+                .findFirst()
+                .orElse(declared.get().get(0));
+        return MenuLabels.named(mode.nameKey()).getString();
     }
 
     /** The filled cell's display name (the raw inert id when its provider is gone). */
