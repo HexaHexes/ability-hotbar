@@ -20,6 +20,7 @@ import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
+import org.bitwisemadness.abilitycore.api.AbilityModes;
 import org.bitwisemadness.abilitycore.api.AbilityPresentation;
 import org.bitwisemadness.abilitycore.api.AbilityUnlocks;
 import org.bitwisemadness.abilitycore.api.ActivationRequest;
@@ -768,9 +769,15 @@ public final class AbilityMenuScreen extends Screen {
             if (hovered) {
                 hoveredIndex = i;
             }
-            // The clicked row keeps the hover treatment after the pointer
-            // leaves (owner's brief: visual assignment feedback).
-            if (hovered || row.id().equals(selectedRowId)) {
+            if (row.id().equals(selectedRowId)) {
+                // Selected rows read exactly like the clicked slot cell
+                // (owner's brief): the dark chamfer shade, not the hover
+                // lift - hover never overrides the selection.
+                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
+                        MenuStyle.alpha(style.background(), 88));
+                // the active row's left-bar marker (their list selection)
+                gui.fill(LIST_LEFT, y, LIST_LEFT + 2, y + ROW_HEIGHT - 2, style.accent());
+            } else if (hovered) {
                 gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
                         MenuStyle.alpha(style.raised(), 55));
                 // the active row's left-bar marker (their list selection)
@@ -926,7 +933,26 @@ public final class AbilityMenuScreen extends Screen {
                 lineY += 12;
             }
         }
-        // (the toggle line + button moved into the list row - owner's brief)
+        // Available modes each get a line in the pane, with the provider's
+        // mode description when it ships one under the mode key (owner's
+        // brief: multi-mode arts; the button moved to the list row).
+        Optional<List<AbilityModes.Mode>> modes = AbilityModes.get(id);
+        if (modes.isPresent()) {
+            for (AbilityModes.Mode mode : modes.get()) {
+                String modeName = MenuLabels.named(mode.nameKey()).getString();
+                gui.drawString(this.font,
+                        this.font.plainSubstrByWidth(modeName, wrapW),
+                        textX, lineY, style.action());
+                lineY += 12;
+                if (I18n.exists(mode.nameKey() + ".description")) {
+                    gui.drawString(this.font, this.font.plainSubstrByWidth(
+                            Component.translatable(mode.nameKey() + ".description")
+                                    .getString(), wrapW),
+                            textX, lineY, style.muted());
+                    lineY += 12;
+                }
+            }
+        }
         // the FULL description (brief): wrapped, clipped to the pane and
         // wheel-scrolled when it overflows; the fixed sections never move
         String description = definition.description().orElse(null);
@@ -948,8 +974,12 @@ public final class AbilityMenuScreen extends Screen {
                 break;
             }
             if (y >= descTop) {
+                // scissored to the pane: an unbreakable token can never
+                // draw past the description area (owner's brief)
+                gui.enableScissor(textX, y, textX + wrapW, y + 9);
                 gui.drawString(this.font, lines.get(i), textX, y,
                         MenuStyle.alpha(style.muted(), 70));
+                gui.disableScissor();
             }
         }
     }
