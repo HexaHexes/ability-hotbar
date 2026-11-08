@@ -49,22 +49,27 @@ import org.jetbrains.annotations.Nullable;
  * of each <b>assignable</b> hotbar.
  *
  * <p>Layout follows the owner's TRS skill-menu design (design comment on
- * hotbar#27): a header band with the title top-left and the target-bar
- * selector (chip + slot meter) top-right, one collapsed filter strip (search
- * pill + category/tag chips), the full-width ability list with inline
- * hover metadata, and a bottom stack of chamfered slot cells over the hint
- * bar. A filtered row click assigns to the selected slot; the slot cells
- * select the target slot, the clear pill empties it - all the same
+ * hotbar#27, reworked by the owner's nine-point brief): a header band with
+ * the title top-left and the slot meter top-right, one collapsed filter
+ * strip (search pill + subcategory tabs), the ability list narrowed to the
+ * left two thirds with the <b>rightmost third reserved as the detail pane</b>
+ * (name, activation, tags/cost, stats, toggle and the full description -
+ * drawn last, so list chrome can never paint over it), and a bottom stack of
+ * chamfered slot cells - numbers only on empty cells, the selected cell
+ * reading darker than the hover lift - beside the bar chip with the
+ * prev/next buttons under it, over the hint bar. A filtered row click
+ * assigns to the selected slot; the clear pill empties it - all the same
  * server-validated {@link AssignAbilityPayload} naming the target bar
  * (ADR-012 id targeting), so the screen is never authoritative: the
  * snapshot echo repaints it with server truth.</p>
  *
- * <p>Search, category and tag filters come from {@link MenuQuery}; the
- * chosen filters persist as CLIENT config ({@code menu.lastCategory}/{@code
- * menu.lastTag}) while bar contents stay server data. Registered
- * non-assignable bars are never listed and the skip-empty cycling option
- * does not apply here (ADR-012). Opens from the menu-key seam, closes with
- * the same key (when the search box is not focused) or Esc.</p>
+ * <p>Search, the selected subcategory tab and the selected tab come from
+ * {@link MenuQuery}; the chosen filters persist as CLIENT config ({@code
+ * menu.lastSubCategory}/{@code menu.lastTab}) while bar contents stay server
+ * data. Registered non-assignable bars are never listed and the skip-empty
+ * cycling option does not apply here (ADR-012). Opens from the menu-key
+ * seam, closes with the same key (when the search box is not focused) or
+ * Esc.</p>
  *
  * <p>Every fill and text color resolves through the active
  * {@link MenuStyle} (issue #129) via the {@link MenuChrome} primitives: the
@@ -89,8 +94,7 @@ public final class AbilityMenuScreen extends Screen {
     private static final int SEARCH_X = 8;
     private static final int SEARCH_Y = 44;
     private static final int SEARCH_WIDTH = 140;
-    /** The header's target-bar chip (cycles the bar on click). */
-    private static final int BAR_CHIP_Y = 4;
+    /** The bottom bar chip beside the slot strip (cycles the bar on click). */
     private static final int BAR_CHIP_HEIGHT = 14;
     private static final int METER_WIDTH = 44;
     /** The bar texture-style cycler pill (issue #127), header line 2 right. */
@@ -111,13 +115,13 @@ public final class AbilityMenuScreen extends Screen {
     private ResourceLocation selectedTab;
     private int scrollOffset;
     private EditBox searchBox;
-    // The hovered row's meta panel, stashed by the list pass and drawn
-    // LAST in render() so list chrome can never paint over it (brief).
+    // The detail pane's sticky subject: the last hovered ability (null
+    // until the first hover - the pane then shows the selected slot's
+    // ability), set by the list pass and drawn LAST in render().
     @Nullable
-    private MenuQuery.Entry metaRow;
-    private int metaRowY;
-    private int metaListWidth;
-    private int metaListBottom;
+    private ResourceLocation detailId;
+    private int detailScroll;
+    private int detailScrollMax;
 
     public AbilityMenuScreen() {
         super(Component.translatable("ability_hotbar.menu.title"));
@@ -195,7 +199,7 @@ public final class AbilityMenuScreen extends Screen {
         }
 
         Bar target = targetBar(state);
-        drawHeader(gui, mouseX, mouseY, target);
+        drawHeader(gui, target);
         drawProviderTabs(gui, mouseX, mouseY);
         if (styleCyclerVisible()) {
             drawStylePill(gui, mouseX, mouseY);
@@ -203,50 +207,28 @@ public final class AbilityMenuScreen extends Screen {
         drawSubcategoryTabs(gui, mouseX, mouseY);
         drawAbilityList(gui, mouseX, mouseY, state);
         drawSlotCells(gui, mouseX, mouseY, target);
-        drawSlotDetail(gui, mouseX, mouseY, target);
+        drawClearButton(gui, mouseX, mouseY, target);
         drawHintBar(gui);
-        drawBarNav(gui, mouseX, mouseY);
-        if (metaRow != null) {
-            // The meta panel draws last: list chrome (and everything else)
-            // can never paint over the tooltip (the owner's layering brief).
-            gui.flush();
-            drawRowMeta(gui, metaRow, metaRowY, metaListWidth, metaListBottom);
-        }
+        drawBarNav(gui, mouseX, mouseY, target);
+        // The detail pane draws last (flush first): the rightmost third is
+        // its own region, and nothing can ever paint over it (brief).
+        gui.flush();
+        drawDetailPane(gui, target);
     }
 
-    /** The header's right cluster: target-bar chip, used/total, slot meter. */
-    private void drawHeader(GuiGraphics gui, int mouseX, int mouseY, @Nullable Bar target) {
-        List<ResourceLocation> bars = manageableBars();
-        if (bars.isEmpty()) {
-            return;
-        }
-        MenuStyle style = style();
-        int[] chip = barChipRect(target);
-        boolean hovered = inside(mouseX, mouseY, chip[0], BAR_CHIP_Y, chip[1], BAR_CHIP_HEIGHT);
-        MenuChrome.glass(gui, chip[0], BAR_CHIP_Y, chip[1], BAR_CHIP_HEIGHT, style, hovered);
-        gui.drawString(this.font, barChipLabel(), chip[0] + 6, BAR_CHIP_Y + 3,
-                hovered ? style.text() : style.muted());
+    /**
+     * The header's right cluster: the slot meter alone - the used/total
+     * count is gone and the bar chip moved beside the slot strip (owner's
+     * nine-point brief).
+     */
+    private void drawHeader(GuiGraphics gui, @Nullable Bar target) {
         if (target == null) {
             return;
         }
-        String count = countText(target);
-        gui.drawString(this.font, count,
-                this.width - 8 - METER_WIDTH - 4 - this.font.width(count), 6,
-                style.muted());
+        MenuStyle style = style();
         float fraction = usedSlots(target) / (float) Math.max(1, target.slotCount());
         MenuChrome.meter(gui, this.width - 8 - METER_WIDTH, 8, METER_WIDTH, 7,
                 fraction, style);
-    }
-
-    /** The bar chip's rect for the current header (shared with hit-testing). */
-    private int[] barChipRect(@Nullable Bar target) {
-        if (manageableBars().isEmpty()) {
-            return new int[] {LIST_LEFT, 0};
-        }
-        int chipWidth = this.font.width(barChipLabel()) + 12;
-        int reserved = target == null ? 0
-                : METER_WIDTH + 4 + this.font.width(countText(target)) + 4;
-        return new int[] {this.width - 8 - reserved - chipWidth, chipWidth};
     }
 
     private Component barChipLabel() {
@@ -255,11 +237,6 @@ public final class AbilityMenuScreen extends Screen {
             return Component.empty();
         }
         return BarName.of(selectedBar == null ? bars.get(0) : selectedBar);
-    }
-
-    /** The header's "used/total" readout (empty while the bar is unknown). */
-    private static String countText(@Nullable Bar target) {
-        return target == null ? "" : usedSlots(target) + "/" + target.slotCount();
     }
 
     private static int usedSlots(Bar bar) {
@@ -305,7 +282,8 @@ public final class AbilityMenuScreen extends Screen {
     /** One subcategory tab's rect (draw and hit share it): sized to fit the row. */
     private int[] subTypeRect(int index, int count) {
         int x = SEARCH_X + SEARCH_WIDTH + 6;
-        int available = this.width - 8 - x;
+        // confined to the left two thirds: the rightmost third is the pane
+        int available = detailX() - 6 - x;
         int width = Math.max(16, Math.min(64, available / count));
         return new int[] {x + index * width, width - 2};
     }
@@ -584,8 +562,14 @@ public final class AbilityMenuScreen extends Screen {
             int x = LIST_LEFT + i * cellWidth;
             boolean selected = i == selectedSlot;
             boolean hovered = inside(mouseX, mouseY, x, y, cellWidth - 1, SLOT_HEIGHT);
-            MenuChrome.glass(gui, x, y, cellWidth - 1, SLOT_HEIGHT, style, selected);
-            if (!selected && hovered) {
+            MenuChrome.glass(gui, x, y, cellWidth - 1, SLOT_HEIGHT, style, false);
+            if (selected) {
+                // Owner's brief: selected reads DARKER than the hover lift,
+                // not brighter - a dark chamfer over the base glass.
+                MenuChrome.chamferFill(gui, x + 1, y + 1, cellWidth - 3, SLOT_HEIGHT - 2,
+                        Math.max(0, MenuChrome.CHAMFER - 1),
+                        MenuStyle.alpha(style.background(), 88));
+            } else if (hovered) {
                 MenuChrome.chamferFill(gui, x + 1, y + 1, cellWidth - 3, SLOT_HEIGHT - 2,
                         Math.max(0, MenuChrome.CHAMFER - 1),
                         MenuStyle.alpha(style.raised(), 55));
@@ -601,10 +585,16 @@ public final class AbilityMenuScreen extends Screen {
                 // doubled box (the rows' technique, 24 of 28+ cells).
                 gui.blit(icon, x + 2, y + 2, 0, 0, 24, 24, 24, 24);
             }
-            int labelX = slotLabelX(cellWidth, iconDrawn);
-            if (labelX >= 0) {
-                gui.drawString(this.font, slotLabel(i + 1), x + labelX, y + 11,
-                        selected ? style.text() : style.muted());
+            // Owner's brief: numbers on EMPTY slots only - a filled slot
+            // reads as its ability, not as its index.
+            var assignment = target.assignment(i);
+            boolean filled = assignment != null && assignment.isAssigned();
+            if (!filled) {
+                int labelX = slotLabelX(cellWidth, iconDrawn);
+                if (labelX >= 0) {
+                    gui.drawString(this.font, slotLabel(i + 1), x + labelX, y + 11,
+                            selected ? style.text() : style.muted());
+                }
             }
         }
     }
@@ -681,41 +671,23 @@ public final class AbilityMenuScreen extends Screen {
         return relative < (listBottom - listTop) / rowHeight ? relative : -1;
     }
 
-    /** What the selected slot currently holds: name, empty, or the raw inert id. */
-    private void drawSlotDetail(GuiGraphics gui, int mouseX, int mouseY,
+    /**
+     * The clear pill, right end of the slot line - the "Slot NN: name"
+     * readout is gone (owner's brief: no selected-skill indicator); the
+     * detail pane carries what the slot holds.
+     */
+    private void drawClearButton(GuiGraphics gui, int mouseX, int mouseY,
             @Nullable Bar target) {
         if (target == null) {
             return;
         }
         MenuStyle style = style();
-        StringBuilder label = new StringBuilder();
-        label.append("Slot ").append(slotLabel(selectedSlot + 1)).append(": ");
-        var assignment = target.assignment(selectedSlot);
-        ResourceLocation abilityId = assignment == null || !assignment.isAssigned()
-                ? null : assignment.abilityId();
-        Component name;
-        boolean inert = false;
-        if (abilityId == null) {
-            name = Component.translatable("ability_hotbar.menu.empty_slot");
-        } else {
-            var definition = AbilityDiscovery.get(abilityId);
-            inert = definition.isEmpty();
-            name = definition
-                    .<Component>map(d -> Component.translatable(d.displayNameKey()))
-                    .orElseGet(() -> Component.literal(abilityId.toString()));
-        }
-        int y = this.height - 47;
-        gui.drawString(this.font, label.toString(), LIST_LEFT, y, style.muted());
-        int nameX = LIST_LEFT + this.font.width(label.toString());
-        gui.drawString(this.font, name.getString(), nameX, y,
-                inert ? INERT_COLOR : style.text());
-        // the clear pill, right end of the slot-detail line
         int[] clear = clearRect();
         boolean hovered = inside(mouseX, mouseY, clear[0], clear[1], clear[2], clear[3]);
         MenuChrome.glass(gui, clear[0], clear[1], clear[2], clear[3], style, hovered);
         Component clearLabel = Component.translatable("ability_hotbar.menu.clear");
         int textX = clear[0] + (clear[2] - this.font.width(clearLabel)) / 2;
-        gui.drawString(this.font, clearLabel, textX, y,
+        gui.drawString(this.font, clearLabel, textX, this.height - 47,
                 hovered ? style.text() : style.action());
     }
 
@@ -726,9 +698,10 @@ public final class AbilityMenuScreen extends Screen {
 
     private void drawAbilityList(GuiGraphics gui, int mouseX, int mouseY, BarState state) {
         List<MenuQuery.Entry> rows = visibleRows();
-        metaRow = null; // reset per frame; drawn last from render()
         MenuStyle style = style();
-        int listWidth = this.width - 16;
+        // the list lives in the left two thirds; the rightmost third is
+        // reserved for the detail pane (owner's nine-point brief)
+        int listWidth = detailX() - LIST_LEFT - 6;
         int listBottom = this.height - LIST_BOTTOM_PAD;
         int visible = Math.max(0, (listBottom - LIST_TOP) / ROW_HEIGHT);
         scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, rows.size() - visible)));
@@ -739,7 +712,6 @@ public final class AbilityMenuScreen extends Screen {
         }
         int y = LIST_TOP;
         int hoveredIndex = -1;
-        int hoveredY = -1;
         for (int i = scrollOffset;
                 i < rows.size() && y + ROW_HEIGHT <= listBottom;
                 i++, y += ROW_HEIGHT) {
@@ -747,7 +719,6 @@ public final class AbilityMenuScreen extends Screen {
             boolean hovered = inside(mouseX, mouseY, LIST_LEFT, y, listWidth, ROW_HEIGHT - 2);
             if (hovered) {
                 hoveredIndex = i;
-                hoveredY = y;
                 gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
                         MenuStyle.alpha(style.raised(), 55));
                 // the active row's left-bar marker (their list selection)
@@ -782,81 +753,188 @@ public final class AbilityMenuScreen extends Screen {
                     MenuStyle.alpha(style.accent(), 45));
         }
         if (hoveredIndex >= 0) {
-            // Stash the hovered row's meta; render() draws the panel LAST
-            // so the list chrome can never paint over the tooltip (brief).
-            metaRow = rows.get(hoveredIndex);
-            metaRowY = hoveredY;
-            metaListWidth = listWidth;
-            metaListBottom = listBottom;
+            // The detail pane's sticky subject: it follows the hover and
+            // keeps the last ability when the pointer leaves the list.
+            ResourceLocation hoveredId = rows.get(hoveredIndex).id();
+            if (!hoveredId.equals(detailId)) {
+                detailId = hoveredId;
+                detailScroll = 0;
+            }
         }
     }
 
+    /** The rightmost third's left edge (owner's nine-point brief). */
+    static int detailX(int screenWidth) {
+        return screenWidth - screenWidth / 3;
+    }
+
+    private int detailX() {
+        return detailX(this.width);
+    }
+
     /**
-     * The hovered row's metadata, inline directly under (or above) the row -
-     * no detail pane, no sidebar (the owner's exclusion on #27). Lines run
-     * meta -> stats -> live presentation fields -> toggle -> description
-     * (issues #119/#148), 12px apart; the height and toggle-line helpers
-     * are shared with the button's hit test, so draw and click can never
-     * disagree. A description alone renders byte-identically to the
-     * pre-#119 panel.
+     * The pane's toggle-row y: name block (16) -> activation -> tags/cost
+     * -> stats -> fields (the #119/#148 line order, re-based for the pane).
+     * Package-private: the draw pass and the button hit share it.
      */
-    private void drawRowMeta(GuiGraphics gui, MenuQuery.Entry entry, int rowY,
-            int listWidth, int listBottom) {
+    static int detailToggleLine(int top, boolean hasStats, int fieldLines) {
+        int y = top + 16;
+        y += 12; // activation requirement line
+        y += 12; // tags + cost line
+        if (hasStats) {
+            y += 12;
+        }
+        return y + fieldLines * 12;
+    }
+
+    /** The pane's Enable/Disable button rect (draw and hit share it). */
+    static int[] detailToggleButton(int top, int textX, int wrapW, boolean hasStats,
+            int fieldLines) {
+        return new int[] {textX + wrapW - 60,
+                detailToggleLine(top, hasStats, fieldLines), 56, 12};
+    }
+
+    /**
+     * The rightmost third (owner's brief, superseding #27's no-sidebar
+     * exclusion): the ability's name, activation requirement, tags + cost
+     * (categories are gone from tooltips), declared stats, live
+     * presentation fields, toggle and the FULL description - wrapped and
+     * wheel-scrolled inside the pane. Sticky: the last hovered ability
+     * stays when the pointer leaves the list; before any hover the
+     * selected slot's ability shows. Drawn last in render(), so nothing
+     * can paint over it (owner's layering brief).
+     */
+    private void drawDetailPane(GuiGraphics gui, @Nullable Bar target) {
         MenuStyle style = style();
-        AbilityDefinition definition = entry.definition();
-        String description = definition.description().orElse(null);
+        int x0 = detailX();
+        int top = FILTER_Y;
+        int bottom = this.height - LIST_BOTTOM_PAD;
+        int paneW = this.width - 8 - x0;
+        if (paneW < 70 || bottom - top < 40) {
+            return;
+        }
+        MenuChrome.tooltip(gui, x0, top, paneW, bottom - top, style);
+        int textX = x0 + 5;
+        int wrapW = paneW - 10;
+        ResourceLocation id = paneAbilityId(target);
+        if (id == null) {
+            gui.drawString(this.font,
+                    Component.translatable("ability_hotbar.menu.detail_hint"),
+                    textX, top + 4, style.muted());
+            return;
+        }
+        var found = AbilityDiscovery.get(id);
+        if (found.isEmpty()) {
+            // inert id: the raw vocabulary shows, flagged red as always
+            gui.drawString(this.font, this.font.plainSubstrByWidth(id.toString(), wrapW),
+                    textX, top + 4, INERT_COLOR);
+            return;
+        }
+        AbilityDefinition definition = found.get();
+        String name = this.font.plainSubstrByWidth(
+                Component.translatable(definition.displayNameKey()).getString(), wrapW - 20);
+        gui.drawString(this.font, name, textX, top + 4, style.text());
+        gui.fill(textX, top + 14, textX + this.font.width(name), top + 15, style.accent());
+        int lineY = top + 16;
+        // activation requirement (brief #9): the declared type, prettified
+        gui.drawString(this.font, Component.translatable("ability_hotbar.menu.activation_fmt",
+                Component.literal(MenuLabels.prettify(definition.activationType().name()))),
+                textX, lineY, style.action());
+        lineY += 12;
+        gui.drawString(this.font, this.font.plainSubstrByWidth(metaText(definition), wrapW),
+                textX, lineY, style.muted());
+        lineY += 12;
         boolean hasStats = !definition.stats().isEmpty();
-        boolean hasDescription = description != null;
-        Optional<AbilityPresentation> presentation = presentationOf(entry.id());
-        int fieldLines = presentation.map(present -> present.fields().size()).orElse(0);
-        Toggle toggle = presentation.map(AbilityPresentation::toggle).orElse(null);
-        int panelH = panelHeight(hasStats, fieldLines, toggle != null, hasDescription);
-        int panelY = panelYFor(rowY, panelH, listBottom);
-        // hotbar#155: the opaque panel fill keeps covered rows from
-        // bleeding through and interleaving with the panel's own lines
-        MenuChrome.tooltip(gui, LIST_LEFT, panelY, listWidth, panelH, style);
-        gui.drawString(this.font, metaText(definition), LIST_LEFT + 5, panelY + 3,
-                style.muted());
-        int lineY = panelY + 13;
         if (hasStats) {
             // issue #119: declared stats in declaration order, in the
-            // value-bearing action colour (the cost badge's language);
-            // labels are provider keys resolved through MenuLabels
+            // value-bearing action colour; labels resolve through MenuLabels
             String stats = definition.stats().stream()
                     .map(stat -> MenuLabels.stat(stat.labelKey()).getString() + ": " + stat.value())
                     .collect(Collectors.joining("   "));
-            gui.drawString(this.font, this.font.plainSubstrByWidth(stats, listWidth - 10),
-                    LIST_LEFT + 5, lineY, style.action());
+            gui.drawString(this.font, this.font.plainSubstrByWidth(stats, wrapW),
+                    textX, lineY, style.action());
             lineY += 12;
         }
+        Optional<AbilityPresentation> presentation = presentationOf(id);
+        int fieldLines = presentation.map(present -> present.fields().size()).orElse(0);
+        Toggle toggle = presentation.map(AbilityPresentation::toggle).orElse(null);
         if (presentation.isPresent()) {
             for (PresentationField field : presentation.get().fields()) {
-                drawField(gui, field, lineY, listWidth, style);
+                drawField(gui, field, lineY, textX, wrapW, style);
                 lineY += 12;
             }
         }
         if (toggle != null) {
-            drawToggleRow(gui, toggle, panelY, listWidth, hasStats, fieldLines, style);
+            drawToggleRow(gui, toggle, lineY, textX,
+                    detailToggleButton(top, textX, wrapW, hasStats, fieldLines), style);
             lineY += 12;
         }
-        if (hasDescription) {
-            var parts = this.font.split(Component.literal(description), listWidth - 10);
-            if (!parts.isEmpty()) {
-                gui.drawString(this.font, parts.get(0), LIST_LEFT + 5, lineY,
+        // the FULL description (brief): wrapped, clipped to the pane and
+        // wheel-scrolled when it overflows; the fixed sections never move
+        String description = definition.description().orElse(null);
+        if (description == null) {
+            detailScrollMax = 0;
+            detailScroll = 0;
+            return;
+        }
+        var lines = this.font.split(Component.literal(description), wrapW);
+        int descTop = lineY + 2;
+        int visibleH = Math.max(9, bottom - 6 - descTop);
+        detailScrollMax = Math.max(0, lines.size() * 9 - visibleH);
+        detailScroll = Math.max(0, Math.min(detailScroll, detailScrollMax));
+        int y = descTop - detailScroll;
+        for (int i = 0; i < lines.size(); i++, y += 9) {
+            if (y >= bottom - 8) {
+                break;
+            }
+            if (y >= descTop) {
+                gui.drawString(this.font, lines.get(i), textX, y,
                         MenuStyle.alpha(style.muted(), 70));
             }
         }
     }
 
-    /** One live presentation field in the tooltip panel (issue #148). */
-    private void drawField(GuiGraphics gui, PresentationField field, int y, int listWidth,
-            MenuStyle style) {
+    /**
+     * The pane's subject: the sticky last-hovered ability, falling back to
+     * the selected slot's ability before the first hover. Shared by the
+     * draw pass and the toggle button's hit test.
+     */
+    @Nullable
+    private ResourceLocation paneAbilityId(@Nullable Bar target) {
+        if (detailId != null) {
+            return detailId;
+        }
+        if (target == null) {
+            return null;
+        }
+        var assignment = target.assignment(selectedSlot);
+        return assignment != null && assignment.isAssigned() ? assignment.abilityId() : null;
+    }
+
+    /** The pane's Enable/Disable button rect for its subject, or null (no toggle). */
+    @Nullable
+    private int[] paneToggleRect(ResourceLocation id) {
+        var found = AbilityDiscovery.get(id);
+        if (found.isEmpty()) {
+            return null;
+        }
+        Optional<AbilityPresentation> presentation = presentationOf(id);
+        if (presentation.isEmpty() || presentation.get().toggle() == null) {
+            return null;
+        }
+        int x0 = detailX();
+        return detailToggleButton(FILTER_Y, x0 + 5, (this.width - 8 - x0) - 10,
+                !found.get().stats().isEmpty(), presentation.get().fields().size());
+    }
+
+    /** One live presentation field in the detail pane (issue #148). */
+    private void drawField(GuiGraphics gui, PresentationField field, int y, int textX,
+            int wrapW, MenuStyle style) {
         String label = MenuLabels.stat(field.labelKey()).getString() + ": ";
-        int x = LIST_LEFT + 5;
-        int labelWidth = Math.min(this.font.width(label), listWidth / 2);
-        gui.drawString(this.font, this.font.plainSubstrByWidth(label, labelWidth), x, y,
+        int labelWidth = Math.min(this.font.width(label), wrapW / 2);
+        gui.drawString(this.font, this.font.plainSubstrByWidth(label, labelWidth), textX, y,
                 style.muted());
-        int valueX = x + labelWidth + 2;
+        int valueX = textX + labelWidth + 2;
         if (field.kind() == PresentationField.Kind.PROGRESS) {
             MenuChrome.meter(gui, valueX, y + 1, 40, 6, field.progress(), style);
             valueX += 44;
@@ -864,20 +942,22 @@ public final class AbilityMenuScreen extends Screen {
         if (!field.value().isEmpty()) {
             gui.drawString(this.font,
                     this.font.plainSubstrByWidth(field.value(),
-                            LIST_LEFT + listWidth - valueX - 4),
+                            textX + wrapW - valueX - 2),
                     valueX, y, style.text());
         }
     }
 
-    /** The toggle state line + Enable/Disable button inside the panel (issue #148). */
-    private void drawToggleRow(GuiGraphics gui, Toggle toggle,
-            int panelY, int listWidth, boolean stats, int fieldLines, MenuStyle style) {
-        int y = panelY + toggleLineOffset(stats, fieldLines);
+    /**
+     * The toggle state line + Enable/Disable button in the pane (#148);
+     * the button rect arrives from {@link #detailToggleButton} so draw and
+     * hit cannot drift.
+     */
+    private void drawToggleRow(GuiGraphics gui, Toggle toggle, int lineY, int textX,
+            int[] button, MenuStyle style) {
         gui.drawString(this.font,
                 Component.translatable(toggle.enabled()
                         ? "ability_hotbar.menu.toggle_on" : "ability_hotbar.menu.toggle_off"),
-                LIST_LEFT + 5, y, toggle.enabled() ? style.text() : style.muted());
-        int[] button = toggleButtonRect(panelY, listWidth, stats, fieldLines);
+                textX, lineY, toggle.enabled() ? style.text() : style.muted());
         MenuChrome.glass(gui, button[0], button[1], button[2], button[3], style, true);
         Component label = Component.translatable(toggle.enabled()
                 ? "ability_hotbar.menu.toggle_disable" : "ability_hotbar.menu.toggle_enable");
@@ -886,40 +966,32 @@ public final class AbilityMenuScreen extends Screen {
                 style.action());
     }
 
-    /** The tooltip panel's height: 14px base + 12 per extra line (issues #119/#148). */
-    static int panelHeight(boolean stats, int fieldLines, boolean toggle, boolean description) {
-        return 14 + (stats ? 12 : 0) + fieldLines * 12 + (toggle ? 12 : 0)
-                + (description ? 12 : 0);
-    }
-
-    /** The toggle line's offset from the panel top (draw and hit share it). */
-    static int toggleLineOffset(boolean stats, int fieldLines) {
-        return 13 + (stats ? 12 : 0) + fieldLines * 12;
-    }
-
-    /** The panel's top for a hovered row: under it, flipped above for the last (#27). */
-    private static int panelYFor(int rowY, int panelH, int listBottom) {
-        int panelY = rowY + ROW_HEIGHT;
-        return panelY + panelH > listBottom ? rowY - panelH : panelY;
-    }
-
     /** The live presentation for one ability (core's contract, issue #148). */
     private Optional<AbilityPresentation> presentationOf(ResourceLocation id) {
         return PresentationProviders.present(this.minecraft.player, id);
     }
 
-    /** The category/tags/cost line shared by the inline meta panel. */
+    /**
+     * The tags/cost line for the detail pane: categories never render in
+     * tooltips (owner's brief #7), and subcategory tags route through
+     * {@link MenuLabels#subcategory} so {@code type:unique} reaches the
+     * player as "Unique" - properly capitalised (brief #8).
+     */
     private static String metaText(AbilityDefinition definition) {
         StringBuilder meta = new StringBuilder();
-        meta.append(MenuLabels.category(definition.category()).getString());
         if (!definition.tags().isEmpty()) {
-            meta.append("  ").append(definition.tags().stream()
-                    .map(tag -> MenuLabels.tag(tag).getString())
+            meta.append(definition.tags().stream()
+                    .map(tag -> tag.startsWith(MenuQuery.SUBCATEGORY_PREFIX)
+                            ? MenuLabels.subcategory(tag).getString()
+                            : MenuLabels.tag(tag).getString())
                     .collect(Collectors.joining(", ")));
         }
         String cost = costText(definition);
         if (!cost.isEmpty()) {
-            meta.append("  ").append(cost);
+            if (meta.length() > 0) {
+                meta.append("  ");
+            }
+            meta.append(cost);
         }
         return meta.toString();
     }
@@ -931,20 +1003,26 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The hint-bar line's prev/next bar buttons (issue #157): style-coloured
-     * triangle glyphs (the vanilla font ships no arrow characters - verified
-     * against font/default.json), glass chrome left of the menu-style pill.
-     * A single-bar list draws them dimmed and inert; no bar at all draws
-     * nothing (the header chip's own rule).
+     * The bottom bar selector (owner's brief): the target-bar chip beside
+     * the slot strip with the prev/next buttons below it, aligned to the
+     * strip. Style-coloured triangle glyphs (the vanilla font ships no
+     * arrow characters - verified against font/default.json). A single-bar
+     * list draws the buttons dimmed and inert; no bar at all draws
+     * nothing.
      */
-    private void drawBarNav(GuiGraphics gui, int mouseX, int mouseY) {
+    private void drawBarNav(GuiGraphics gui, int mouseX, int mouseY, @Nullable Bar target) {
         List<ResourceLocation> bars = manageableBars();
         if (bars.isEmpty()) {
             return;
         }
-        boolean enabled = bars.size() >= 2;
         MenuStyle style = style();
-        int[][] navs = barNavRects(this.width, this.height, menuStylePillVisible());
+        int[] chip = barChipRect(target == null ? 0 : target.slotCount());
+        boolean chipHover = inside(mouseX, mouseY, chip[0], chip[1], chip[2], chip[3]);
+        MenuChrome.glass(gui, chip[0], chip[1], chip[2], chip[3], style, chipHover);
+        gui.drawString(this.font, barChipLabel(), chip[0] + 6, chip[1] + 3,
+                chipHover ? style.text() : style.muted());
+        boolean enabled = bars.size() >= 2;
+        int[][] navs = barNavRects(chip);
         for (int i = 0; i < navs.length; i++) {
             int[] rect = navs[i];
             boolean hovered = enabled
@@ -959,6 +1037,36 @@ public final class AbilityMenuScreen extends Screen {
                     : MenuStyle.alpha(style.muted(), 255);
             drawBarNavGlyph(gui, rect[0], rect[1], i == 0, glyph);
         }
+    }
+
+    /**
+     * The bar chip beside the slot strip (draw and hit share it): right of
+     * the strip's end, clamped inside the frame - a nearly full-width bar
+     * (12+ slots) necessarily tucks the chip over the tail cells, which the
+     * frame clamp keeps visible.
+     */
+    private int[] barChipRect(int slotCount) {
+        int chipWidth = Math.max(24, this.font.width(barChipLabel()) + 12);
+        int stripEnd = LIST_LEFT + slotCount * slotWidth(slotCount, this.width);
+        // keep the clear pill's corner free when there is room to spare;
+        // a nearly full-width bar still tucks the chip over the strip
+        // (the frame clamp keeps it visible)
+        int maxX = this.width - 68 - chipWidth;
+        int x = Math.max(LIST_LEFT, Math.min(stripEnd + 8, maxX));
+        return new int[] {x, slotY() + 2, chipWidth, BAR_CHIP_HEIGHT};
+    }
+
+    /**
+     * The prev/next buttons under the chip (owner's brief: below it,
+     * aligned to the hotbar slots). Draw and hit share it. Package-private
+     * for the geometry fixture.
+     */
+    static int[][] barNavRects(int[] chipRect) {
+        int y = chipRect[1] + chipRect[3] + 2;
+        return new int[][] {
+                {chipRect[0], y, BAR_NAV_SIZE, BAR_NAV_SIZE},
+                {chipRect[0] + BAR_NAV_SIZE + BAR_NAV_GAP, y,
+                        BAR_NAV_SIZE, BAR_NAV_SIZE}};
     }
 
     /** Nine style-coloured rows: flat edge outward, apex inward (◀ / ▶). */
@@ -993,14 +1101,6 @@ public final class AbilityMenuScreen extends Screen {
         }
         BarState state = ClientBarState.get();
         Bar target = targetBar(state);
-        // bar chip (header): cycles the target bar
-        if (!manageableBars().isEmpty()) {
-            int[] chip = barChipRect(target);
-            if (inside(mouseX, mouseY, chip[0], BAR_CHIP_Y, chip[1], BAR_CHIP_HEIGHT)) {
-                cycleBar();
-                return true;
-            }
-        }
         // registered tabs (header line 2, hotbar#154): All + one per registration
         List<MenuTabs.MenuTab> tabs = MenuTabs.all();
         if (!tabs.isEmpty()) {
@@ -1055,11 +1155,16 @@ public final class AbilityMenuScreen extends Screen {
                 return true;
             }
         }
-        // prev/next bar buttons (issue #157): the hint-bar line, same list
-        // as the header chip; a single-bar pair stays inert but owns its rects
+        // bottom bar selector: the chip beside the strip cycles the bar,
+        // the prev/next buttons below it step (owner's nine-point brief)
         List<ResourceLocation> navBars = manageableBars();
         if (!navBars.isEmpty()) {
-            int[][] navs = barNavRects(this.width, this.height, menuStylePillVisible());
+            int[] chip = barChipRect(target == null ? 0 : target.slotCount());
+            if (inside(mouseX, mouseY, chip[0], chip[1], chip[2], chip[3])) {
+                cycleBar();
+                return true;
+            }
+            int[][] navs = barNavRects(chip);
             for (int i = 0; i < navs.length; i++) {
                 int[] rect = navs[i];
                 if (inside(mouseX, mouseY, rect[0], rect[1], rect[2], rect[3])) {
@@ -1074,53 +1179,33 @@ public final class AbilityMenuScreen extends Screen {
                 }
             }
         }
-        // ability rows
+        // the detail pane's Enable/Disable button owns its rect before rows
+        // (issue #148): pressing it must never also assign a row
+        ResourceLocation paneId = paneAbilityId(target);
+        if (paneId != null) {
+            int[] paneToggle = paneToggleRect(paneId);
+            if (paneToggle != null && inside(mouseX, mouseY, paneToggle[0], paneToggle[1],
+                    paneToggle[2], paneToggle[3])) {
+                sendToggle(paneId);
+                return true;
+            }
+        }
+        // ability rows (left two thirds only: a click inside the detail
+        // pane must never assign)
         List<MenuQuery.Entry> rows = visibleRows();
         int listBottom = this.height - LIST_BOTTOM_PAD;
-        int relative = rowIndexAt((int) mouseY, LIST_TOP, listBottom, ROW_HEIGHT);
+        int relative = mouseX < detailX() - 6
+                ? rowIndexAt((int) mouseY, LIST_TOP, listBottom, ROW_HEIGHT)
+                : -1;
         if (relative >= 0) {
             int offset = relative + scrollOffset;
             if (offset < rows.size()) {
                 MenuQuery.Entry row = rows.get(offset);
-                // the tooltip's Enable/Disable button owns its rect first
-                // (issue #148): pressing it must never also assign the row
-                int rowY = LIST_TOP + relative * ROW_HEIGHT;
-                int[] toggleButton = toggleButtonHit(row, rowY, listBottom);
-                if (toggleButton != null && inside(mouseX, mouseY, toggleButton[0],
-                        toggleButton[1], toggleButton[2], toggleButton[3])) {
-                    sendToggle(row.id());
-                    return true;
-                }
                 sendAssignment(row.id().toString());
                 return true;
             }
         }
         return false;
-    }
-
-    /**
-     * The Enable/Disable button's screen rect for a hovered row, or null
-     * when the row presents no toggle - the shared geometry (panel height,
-     * flip and toggle line) guarantees the hit matches what was drawn.
-     */
-    @Nullable
-    private int[] toggleButtonHit(MenuQuery.Entry row, int rowY, int listBottom) {
-        Optional<AbilityPresentation> presentation = presentationOf(row.id());
-        if (presentation.isEmpty() || presentation.get().toggle() == null) {
-            return null;
-        }
-        boolean stats = !row.definition().stats().isEmpty();
-        int fieldLines = presentation.get().fields().size();
-        boolean description = row.definition().description().isPresent();
-        int panelY = panelYFor(rowY,
-                panelHeight(stats, fieldLines, true, description), listBottom);
-        return toggleButtonRect(panelY, this.width - 16, stats, fieldLines);
-    }
-
-    /** The Enable/Disable button's rect inside the panel (draw and hit share it). */
-    private int[] toggleButtonRect(int panelY, int listWidth, boolean stats, int fieldLines) {
-        return new int[] {LIST_LEFT + listWidth - 60,
-                panelY + toggleLineOffset(stats, fieldLines), 56, 12};
     }
 
     /** The panel's Enable/Disable button: a MENU-source activation, no slot (#148). */
@@ -1134,6 +1219,16 @@ public final class AbilityMenuScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) {
+            return true;
+        }
+        // the detail pane owns the wheel while the pointer sits in it (its
+        // description scrolls only while it actually overflows - max is
+        // computed by the draw pass)
+        int x0 = detailX();
+        if (detailScrollMax > 0 && inside(mouseX, mouseY, x0, FILTER_Y,
+                this.width - 8 - x0, (this.height - LIST_BOTTOM_PAD) - FILTER_Y)) {
+            detailScroll = Math.max(0, Math.min(detailScrollMax,
+                    detailScroll + (scrollY > 0 ? -1 : 1)));
             return true;
         }
         if (scrollY > 0) {
@@ -1270,23 +1365,6 @@ public final class AbilityMenuScreen extends Screen {
     /** The bottom stack's slot-cell row top (shared with hit-testing). */
     private int slotY() {
         return this.height - 48;
-    }
-
-    /**
-     * The hint-bar line's prev/next bar-button rects (issue #157): right
-     * side, immediately left of the menu-style pill when it shows. Draw and
-     * hit-test share it so they cannot drift. Package-private for the
-     * geometry fixture.
-     */
-    static int[][] barNavRects(int screenWidth, int screenHeight, boolean stylePillVisible) {
-        int rightEdge = stylePillVisible
-                ? screenWidth - 8 - MENU_STYLE_PILL_WIDTH - 4
-                : screenWidth - 8;
-        int prevX = rightEdge - (BAR_NAV_SIZE * 2 + BAR_NAV_GAP);
-        int y = screenHeight - 15;
-        return new int[][] {
-                {prevX, y, BAR_NAV_SIZE, BAR_NAV_SIZE},
-                {prevX + BAR_NAV_SIZE + BAR_NAV_GAP, y, BAR_NAV_SIZE, BAR_NAV_SIZE}};
     }
 
     private static boolean inside(double mouseX, double mouseY, int x, int y, int w, int h) {
