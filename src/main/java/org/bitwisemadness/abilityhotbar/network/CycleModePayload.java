@@ -64,7 +64,8 @@ public record CycleModePayload(ResourceLocation barId, int slot)
                     return;
                 }
                 var result = ModeChangeHandlers.run(
-                        new ModeChangeRequest(assignment.abilityId(), payload.slot()), player);
+                        new ModeChangeRequest(assignment.abilityId(),
+                                payload.slot(), payload.barId()), player);
                 if (result.outcome() != ActivationOutcome.ACTED) {
                     BarStateSync.sendSnapshot(player);
                     return;
