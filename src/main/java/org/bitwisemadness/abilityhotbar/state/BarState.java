@@ -297,6 +297,20 @@ public record BarState(Bar[] bars, ResourceLocation activeBarId, int schemaVersi
     }
 
     /**
+     * Sets one slot's mode on a <b>named stored bar</b> (the menu's row
+     * pill cycles the bar its tab shows, which may not be the active one -
+     * play-test round): the pairing keeps its ability; an unstored bar or
+     * an out-of-range/unassigned slot is a no-op.
+     */
+    public BarState withSlotMode(ResourceLocation barId, int slot, String mode) {
+        int index = indexOf(barId);
+        if (index < 0) {
+            return this;
+        }
+        return withBar(index, bars[index].withMode(slot, mode));
+    }
+
+    /**
      * Reconciles this state with the live hotbar registry (ADR-012): appends a
      * fresh empty bar for every <b>assignable</b> registration not yet stored
      * (sized like this state's own first bar - the serializer reads no config),

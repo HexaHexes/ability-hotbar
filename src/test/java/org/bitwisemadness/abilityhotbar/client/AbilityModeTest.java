@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The ability-mode keybind's halves (REQ-HOT-16, tensura-iss-integration#51):
- * the client sends one slot-only request when - and only when - the
+ * the client sends one bar-scoped request when - and only when - the
  * selected slot holds an ability with a registered mode-change adapter;
  * the server-side echo's state transition keeps every other slot, the
  * selection and the pairings untouched (one press, one step, one slot).
@@ -38,11 +38,13 @@ class AbilityModeTest {
     }
 
     @Test
-    void requestForCarriesOnlyTheSelectedSlot() {
+    void requestForCarriesTheActiveBarAndSelectedSlot() {
         ModeChangeHandlers.register(CYCLEABLE, (request, player) -> ActivationResult.ACTED);
 
         var first = AbilityMode.requestFor(twoAssignedSlots());
         assertTrue(first.isPresent(), "an assigned slot with an adapter cycles");
+        assertEquals(twoAssignedSlots().activeBarId(), first.get().barId(),
+                "the keybind names the active bar (the menu pill names its tab's)");
         assertEquals(0, first.get().slot(), "the request carries the selected slot");
 
         var second = AbilityMode.requestFor(twoAssignedSlots().withSelectedSlot(1));

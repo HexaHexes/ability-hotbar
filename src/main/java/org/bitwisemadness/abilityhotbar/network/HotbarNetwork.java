@@ -22,11 +22,11 @@ public final class HotbarNetwork {
 
     @SubscribeEvent
     public static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        // v2 (hotbar#27) assign bar id; v3 (hotbar#29) modes+presets+
-        // preset payloads; v4 (REQ-HOT-16) cycle_mode - every set or
-        // codec change ships to both sides together.
+        // v2 assign bar id; v3 modes+presets; v4 cycle_mode; v5 (play-
+        // test round) cycle_mode carries the bar id - every set or codec
+        // change ships to both sides together.
         PayloadRegistrar registrar = event.registrar(AbilityHotbar.MOD_ID)
-                .versioned("4")
+                .versioned("5")
                 .optional();
 
         registrar.playToClient(
