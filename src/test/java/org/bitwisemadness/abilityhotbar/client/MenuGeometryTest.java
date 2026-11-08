@@ -71,10 +71,11 @@ class MenuGeometryTest {
 
     @Test
     void rowToggleButtonsSitAtTheRowsRightEnd() {
-        // owner's brief: #148's button moved from the pane into the row
+        // owner's brief: #148's button moved from the pane into the row,
+        // onto the bottom line beside the state text (with the mode pill)
         int[] button = AbilityMenuScreen.rowToggleButtonRect(58, 300);
         assertEquals(8 + 300 - 58, button[0], "hugs the row's right end");
-        assertEquals(58 + 12, button[1], "centred in the 36px row");
+        assertEquals(58 + 36 - 18, button[1], "bottom line of the 36px row");
         assertEquals(56, button[2], "button width");
         assertEquals(12, button[3], "button height");
     }
