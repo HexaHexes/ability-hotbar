@@ -922,6 +922,10 @@ public final class AbilityMenuScreen extends Screen {
             return;
         }
         MenuChrome.tooltip(gui, x0, top, paneW, bottom - top, style);
+        // The whole pane clips to its own box (owner's brief: description
+        // text can never run off screen), whatever any future line draws.
+        gui.enableScissor(x0 + 1, top, x0 + paneW - 1, bottom);
+        try {
         int textX = x0 + 5;
         int wrapW = paneW - 10;
         ResourceLocation id = paneAbilityId(target);
@@ -1011,13 +1015,12 @@ public final class AbilityMenuScreen extends Screen {
                 break;
             }
             if (y >= descTop) {
-                // scissored to the pane: an unbreakable token can never
-                // draw past the description area (owner's brief)
-                gui.enableScissor(textX, y, textX + wrapW, y + 9);
                 gui.drawString(this.font, lines.get(i), textX, y,
                         MenuStyle.alpha(style.muted(), 70));
-                gui.disableScissor();
             }
+        }
+        } finally {
+            gui.disableScissor();
         }
     }
 
