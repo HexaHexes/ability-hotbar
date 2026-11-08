@@ -72,17 +72,21 @@ class MenuGeometryTest {
     }
 
     @Test
-    void barNavRectsSitBelowTheChipAlignedToTheStrip() {
-        // owner's brief: the prev/next pair sits under the bar chip, left
-        // edges aligned, 14px cells with the 2px gap (#157's glyphs)
+    void barNavRectsSitVerticalBesideTheChipColumn() {
+        // owner's brief: prev over next, right of the chip/clear column
         int[][] navs = AbilityMenuScreen.barNavRects(new int[] {736, 494, 70, 14});
         assertEquals(14, navs[0][2], "prev cell width");
         assertEquals(14, navs[0][3], "prev cell height");
-        assertEquals(736, navs[0][0], "aligned to the chip's left edge");
-        assertEquals(navs[0][0] + 16, navs[1][0], "2px gap between the pair");
-        assertEquals(494 + 14 + 2, navs[0][1], "directly below the chip");
-        assertTrue(navs[0][1] + navs[0][3] <= 494 + 32,
-                "the pair stays inside the slot strip's band");
+        assertEquals(736 + 70 + 4, navs[0][0], "right of the chip column");
+        assertEquals(navs[0][0], navs[1][0], "rotated: the pair shares an x");
+        assertEquals(494, navs[0][1], "prev top-aligns with the chip");
+        assertEquals(494 + 16, navs[1][0 + 1], "next stacks below with the 2px gap");
+        assertTrue(navs[1][1] + navs[1][3] <= 494 + 32,
+                "the vertical pair stays inside the slot strip's band");
+
+        // a narrow chip still leaves room for the clear pill column
+        int[][] narrow = AbilityMenuScreen.barNavRects(new int[] {400, 494, 30, 14});
+        assertEquals(400 + 56 + 4, narrow[0][0], "the clear pill's width floors the column");
     }
 
     @Test

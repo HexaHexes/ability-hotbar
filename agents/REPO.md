@@ -120,12 +120,19 @@ declared stats, live presentation fields, toggle + Enable/Disable, and the
 full wheel-scrollable description - drawn last so nothing can paint over
 it; and a bottom stack of chamfered slot cells (numbers on **empty** cells
 only, the selected cell **darker** than the hover lift) beside the bar
-chip with the prev/next buttons under it, over the hint bar. `MenuChrome`
+chip column - the clear pill below the chip, the prev/next pair rotated
+**vertical** beside them - over the hint bar; a clicked row keeps the
+hover treatment as its assignment feedback, and the pane's description
+resolves translation keys through `I18n` (an untranslated key draws no
+line, never raw key text). `MenuChrome`
 (client) owns the drawing primitives - backdrop, chamfered glass
 capsules/cells, meters, the opaque pane surface - all fed by the active
 `MenuStyle`; the row hit-test, slot width, the pane's third (`detailX`)
 and the toggle-line math are pure and fixture-pinned
-(`MenuGeometryTest`). Each slot cell with an assigned ability draws that
+(`MenuGeometryTest`). The subcategory strip honours a per-tab declared
+order (`MenuTabs.subCategoryOrder` + the ordered `MenuQuery.subTypeTags`
+variant: declared tags first, the rest alphabetical, absent declared tags
+skipped - fixture-pinned). Each slot cell with an assigned ability draws that
 ability's `iconId` (issue #156: the rows' resolution, the item cells' 2px
 padding); empty, unresolvable or icon-less cells - and
 `display.showIcons = false` - keep the number-only cell (the icon needs

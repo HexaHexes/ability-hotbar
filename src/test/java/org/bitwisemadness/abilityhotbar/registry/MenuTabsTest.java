@@ -97,6 +97,24 @@ class MenuTabsTest {
     }
 
     @Test
+    void subCategoryOrderIsDeclaredPerTabAndDiesWithIt() {
+        MenuTabs.register(TAB, "tensura.tab.skills", ALL);
+        MenuTabs.subCategoryOrder(TAB, List.of("type:resistance", "type:ultimate"));
+        assertEquals(List.of("type:resistance", "type:ultimate"),
+                MenuTabs.subCategoryOrder(TAB), "declared order wins");
+        assertEquals(List.of(), MenuTabs.subCategoryOrder(OTHER_TAB),
+                "an undeclared tab keeps no order (alphabetical)");
+        assertEquals(List.of(), MenuTabs.subCategoryOrder(null), "null tab asks for nothing");
+        assertThrows(IllegalArgumentException.class,
+                () -> MenuTabs.subCategoryOrder(null, List.of("type:x")), "null id is loud");
+        assertThrows(IllegalArgumentException.class,
+                () -> MenuTabs.subCategoryOrder(TAB, null), "null list is loud");
+        assertTrue(MenuTabs.remove(TAB), "tab removal succeeds");
+        assertEquals(List.of(), MenuTabs.subCategoryOrder(TAB),
+                "the declaration dies with its tab");
+    }
+
+    @Test
     void identifiersRoundTripAndStacksAreCopies() {
         ResourceLocation sprite = ResourceLocation.fromNamespaceAndPath("tensura", "gui/tab");
         MenuTabs.register(TAB, "tensura.tab.skills", sprite, ALL);
