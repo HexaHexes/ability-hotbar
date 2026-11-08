@@ -78,10 +78,6 @@
 
   "ability_hotbar.configuration.menu": "Ability menu",
   "ability_hotbar.configuration.menu.tooltip": "Remembered filters for the ability management menu.",
-  "ability_hotbar.configuration.lastCategory": "Last category filter",
-  "ability_hotbar.configuration.lastCategory.tooltip": "The category filter the ability menu had selected when it was last closed (empty = no filter).",
-  "ability_hotbar.configuration.lastTag": "Last tag filter",
-  "ability_hotbar.configuration.lastTag.tooltip": "The tag filter the ability menu had selected when it was last closed (empty = no filter).",
   "ability_hotbar.configuration.lastTab": "Last menu tab",
   "ability_hotbar.configuration.lastTab.tooltip": "The menu tab the ability menu had selected when it was last closed (empty = the All tab).",
   "ability_hotbar.configuration.lastSubCategory": "Last subcategory filter",
