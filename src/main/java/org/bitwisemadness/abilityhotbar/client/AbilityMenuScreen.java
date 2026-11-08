@@ -10,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -96,6 +97,8 @@ public final class AbilityMenuScreen extends Screen {
     private static final int SEARCH_WIDTH = 140;
     /** The bottom bar chip beside the slot strip (cycles the bar on click). */
     private static final int BAR_CHIP_HEIGHT = 14;
+    /** The clear pill's width in the chip column below the indicator. */
+    private static final int CLEAR_WIDTH = 56;
     private static final int METER_WIDTH = 44;
     /** The bar texture-style cycler pill (issue #127), header line 2 right. */
     private static final int STYLE_PILL_WIDTH = 110;
@@ -122,6 +125,10 @@ public final class AbilityMenuScreen extends Screen {
     private ResourceLocation detailId;
     private int detailScroll;
     private int detailScrollMax;
+    // The last clicked ability: its row keeps the hover treatment after
+    // the pointer leaves (owner's brief - visual assignment feedback).
+    @Nullable
+    private ResourceLocation selectedRowId;
 
     public AbilityMenuScreen() {
         super(Component.translatable("ability_hotbar.menu.title"));
@@ -309,9 +316,15 @@ public final class AbilityMenuScreen extends Screen {
         return out;
     }
 
-    /** The subcategory tags with entries under the current tab (the strip's tabs). */
+    /**
+     * The subcategory tags with entries under the current tab (the strip's
+     * tabs), in the tab's declared order when it declared one - listed
+     * tags first, the rest alphabetical (the owner's reorder brief).
+     */
     private List<String> subTypeTags() {
-        return MenuQuery.subTypeTags(tabPool());
+        List<String> order = selectedTab == null ? List.of()
+                : MenuTabs.subCategoryOrder(selectedTab);
+        return MenuQuery.subTypeTags(tabPool(), order);
     }
 
     /**
@@ -682,18 +695,23 @@ public final class AbilityMenuScreen extends Screen {
             return;
         }
         MenuStyle style = style();
-        int[] clear = clearRect();
+        int[] clear = clearRect(target.slotCount());
         boolean hovered = inside(mouseX, mouseY, clear[0], clear[1], clear[2], clear[3]);
         MenuChrome.glass(gui, clear[0], clear[1], clear[2], clear[3], style, hovered);
         Component clearLabel = Component.translatable("ability_hotbar.menu.clear");
         int textX = clear[0] + (clear[2] - this.font.width(clearLabel)) / 2;
-        gui.drawString(this.font, clearLabel, textX, this.height - 47,
+        gui.drawString(this.font, clearLabel, textX, clear[1] + 3,
                 hovered ? style.text() : style.action());
     }
 
-    /** The clear button's rect (shared with hit-testing). */
-    private int[] clearRect() {
-        return new int[] {this.width - 64, this.height - 49, 56, 14};
+    /**
+     * The clear pill below the bar chip (owner's brief): the same column
+     * under the indicator, sharing the strip's band. Derived from the chip
+     * rect so draw and hit cannot drift.
+     */
+    private int[] clearRect(int slotCount) {
+        int[] chip = barChipRect(slotCount);
+        return new int[] {chip[0], chip[1] + BAR_CHIP_HEIGHT + 2, CLEAR_WIDTH, 14};
     }
 
     private void drawAbilityList(GuiGraphics gui, int mouseX, int mouseY, BarState state) {
@@ -719,6 +737,10 @@ public final class AbilityMenuScreen extends Screen {
             boolean hovered = inside(mouseX, mouseY, LIST_LEFT, y, listWidth, ROW_HEIGHT - 2);
             if (hovered) {
                 hoveredIndex = i;
+            }
+            // The clicked row keeps the hover treatment after the pointer
+            // leaves (owner's brief: visual assignment feedback).
+            if (hovered || row.id().equals(selectedRowId)) {
                 gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
                         MenuStyle.alpha(style.raised(), 55));
                 // the active row's left-bar marker (their list selection)
@@ -872,12 +894,14 @@ public final class AbilityMenuScreen extends Screen {
         // the FULL description (brief): wrapped, clipped to the pane and
         // wheel-scrolled when it overflows; the fixed sections never move
         String description = definition.description().orElse(null);
-        if (description == null) {
+        Component descriptionComponent = description == null ? null
+                : descriptionComponent(description);
+        if (descriptionComponent == null) {
             detailScrollMax = 0;
             detailScroll = 0;
             return;
         }
-        var lines = this.font.split(Component.literal(description), wrapW);
+        var lines = this.font.split(descriptionComponent, wrapW);
         int descTop = lineY + 2;
         int visibleH = Math.max(9, bottom - 6 - descTop);
         detailScrollMax = Math.max(0, lines.size() * 9 - visibleH);
@@ -996,6 +1020,20 @@ public final class AbilityMenuScreen extends Screen {
         return meta.toString();
     }
 
+    /**
+     * The pane's description text: a translated key when one exists
+     * (ARR-style providers ship {@code <displayNameKey>.description}
+     * keys), plain prose as-is, and nothing for an untranslated key - a
+     * raw key never reaches the player.
+     */
+    @Nullable
+    private static Component descriptionComponent(String description) {
+        if (description.indexOf(' ') < 0) { // key-like: no spaces
+            return I18n.exists(description) ? Component.translatable(description) : null;
+        }
+        return Component.literal(description);
+    }
+
     /** The hint line, bottom-left (their hint-line pattern). */
     private void drawHintBar(GuiGraphics gui) {
         gui.drawString(this.font, Component.translatable("ability_hotbar.menu.hint"),
@@ -1048,24 +1086,25 @@ public final class AbilityMenuScreen extends Screen {
     private int[] barChipRect(int slotCount) {
         int chipWidth = Math.max(24, this.font.width(barChipLabel()) + 12);
         int stripEnd = LIST_LEFT + slotCount * slotWidth(slotCount, this.width);
-        // keep the clear pill's corner free when there is room to spare;
-        // a nearly full-width bar still tucks the chip over the strip
-        // (the frame clamp keeps it visible)
-        int maxX = this.width - 68 - chipWidth;
+        // reserve the strip band's right side for the whole cluster (chip +
+        // clear column, vertical nav pair); a nearly full-width bar tucks
+        // it over the tail cells - the frame clamp keeps it visible
+        int cluster = Math.max(chipWidth, CLEAR_WIDTH) + 4 + BAR_NAV_SIZE;
+        int maxX = this.width - 8 - cluster;
         int x = Math.max(LIST_LEFT, Math.min(stripEnd + 8, maxX));
         return new int[] {x, slotY() + 2, chipWidth, BAR_CHIP_HEIGHT};
     }
 
     /**
-     * The prev/next buttons under the chip (owner's brief: below it,
-     * aligned to the hotbar slots). Draw and hit share it. Package-private
-     * for the geometry fixture.
+     * The prev/next buttons beside the chip column, rotated <b>vertical</b>
+     * (owner's brief): prev over next, right of the chip/clear stack.
+     * Draw and hit share it. Package-private for the geometry fixture.
      */
     static int[][] barNavRects(int[] chipRect) {
-        int y = chipRect[1] + chipRect[3] + 2;
+        int x = chipRect[0] + Math.max(chipRect[2], CLEAR_WIDTH) + 4;
         return new int[][] {
-                {chipRect[0], y, BAR_NAV_SIZE, BAR_NAV_SIZE},
-                {chipRect[0] + BAR_NAV_SIZE + BAR_NAV_GAP, y,
+                {x, chipRect[1], BAR_NAV_SIZE, BAR_NAV_SIZE},
+                {x, chipRect[1] + BAR_NAV_SIZE + BAR_NAV_GAP,
                         BAR_NAV_SIZE, BAR_NAV_SIZE}};
     }
 
@@ -1147,9 +1186,9 @@ public final class AbilityMenuScreen extends Screen {
                 return true;
             }
         }
-        // clear button (slot-detail line, right end)
+        // clear button (below the bar chip, owner's brief)
         if (target != null) {
-            int[] clear = clearRect();
+            int[] clear = clearRect(target.slotCount());
             if (inside(mouseX, mouseY, clear[0], clear[1], clear[2], clear[3])) {
                 sendAssignment("");
                 return true;
@@ -1201,6 +1240,7 @@ public final class AbilityMenuScreen extends Screen {
             int offset = relative + scrollOffset;
             if (offset < rows.size()) {
                 MenuQuery.Entry row = rows.get(offset);
+                selectedRowId = row.id(); // the row keeps the lit treatment
                 sendAssignment(row.id().toString());
                 return true;
             }

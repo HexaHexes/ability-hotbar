@@ -96,6 +96,34 @@ class MenuQueryTest {
     }
 
     @Test
+    void subTypeTagsHonoursDeclaredOrderThenAlphabetical() {
+        Map<ResourceLocation, AbilityDefinition> entries = new LinkedHashMap<>();
+        entries.put(FIREBALL, def("tensura.skill.fireball", SKILL,
+                Set.of("type:common", "type:unique", "type:resistance")));
+        entries.put(HEAL, def("tensura.skill.heal", SKILL,
+                Set.of("type:intrinsic", "type:extra")));
+
+        // the owner's reorder brief: declared tags first, in order; a
+        // reserved slot the pool never has ('type:ultimate') simply skips
+        assertEquals(java.util.List.of("type:resistance", "type:intrinsic",
+                        "type:common", "type:extra", "type:unique"),
+                MenuQuery.subTypeTags(entries, java.util.List.of("type:resistance",
+                        "type:intrinsic", "type:common", "type:extra",
+                        "type:unique", "type:ultimate")),
+                "declared order, absent slot skipped");
+
+        assertEquals(java.util.List.of("type:common", "type:extra", "type:intrinsic",
+                        "type:resistance", "type:unique"),
+                MenuQuery.subTypeTags(entries, java.util.List.of()),
+                "no declaration keeps plain alphabetical");
+
+        assertEquals(java.util.List.of("type:unique", "type:common", "type:extra",
+                        "type:intrinsic", "type:resistance"),
+                MenuQuery.subTypeTags(entries, java.util.List.of("type:unique")),
+                "declared tag first, the rest alphabetical behind it");
+    }
+
+    @Test
     void manageableBarsListsTheWindowThenAssignableRegistrations() {
         HotbarRegistry.register(EXTRA, "otherpack.bar.extra", true);
         HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);

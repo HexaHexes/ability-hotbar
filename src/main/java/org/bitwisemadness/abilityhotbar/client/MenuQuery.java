@@ -100,6 +100,36 @@ public final class MenuQuery {
     }
 
     /**
+     * The strip-order variant (the owner's reorder brief): declared tags
+     * first in their declared order, then the present-but-unlisted tags
+     * alphabetically. A declared tag the pool never has is skipped - order
+     * slots may be reserved for categories a provider expects later.
+     *
+     * @param entries        the already tab-filtered pool
+     * @param declaredOrder  the raw tags in declared display order, or null/empty
+     * @return the subcategory tags for the strip, in draw order
+     */
+    public static List<String> subTypeTags(Map<ResourceLocation, AbilityDefinition> entries,
+            List<String> declaredOrder) {
+        List<String> all = subTypeTags(entries);
+        if (declaredOrder == null || declaredOrder.isEmpty()) {
+            return all;
+        }
+        List<String> ordered = new ArrayList<>(all.size());
+        for (String tag : declaredOrder) {
+            if (all.contains(tag) && !ordered.contains(tag)) {
+                ordered.add(tag);
+            }
+        }
+        for (String tag : all) {
+            if (!ordered.contains(tag)) {
+                ordered.add(tag);
+            }
+        }
+        return ordered;
+    }
+
+    /**
      * One step of the hierarchical category cycle (hotbar#142): {@code null}
      * (no filter), then each category, then each of its {@code type:}
      * subcategories before the next category begins - so the cycle reads

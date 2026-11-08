@@ -1,7 +1,9 @@
 package org.bitwisemadness.abilityhotbar.registry;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiPredicate;
 import net.minecraft.resources.ResourceLocation;
@@ -67,6 +69,8 @@ public final class MenuTabs {
     }
 
     private static final List<MenuTab> TABS = new CopyOnWriteArrayList<>();
+    private static final Map<ResourceLocation, List<String>> SUBCATEGORY_ORDERS =
+            new ConcurrentHashMap<>();
 
     private MenuTabs() {
     }
@@ -117,8 +121,43 @@ public final class MenuTabs {
         return TABS.stream().filter(tab -> tab.id().equals(id)).findFirst();
     }
 
-    /** Test isolation / future reload paths. */
+    /**
+     * Declares the display order of a tab's {@code type:} subcategory
+     * strip (the owner's reorder brief): listed tags first, in order;
+     * then any present-but-unlisted tags alphabetically. A listed tag the
+     * pool never has simply never draws, so a provider may reserve order
+     * slots for categories it expects later. Loud on nulls; one order per
+     * tab - the last declaration wins.
+     *
+     * @param tabId        the registered tab the order belongs to
+     * @param orderedTags  the raw {@code type:} tags, in display order
+     */
+    public static void subCategoryOrder(ResourceLocation tabId, List<String> orderedTags) {
+        if (tabId == null) {
+            throw new IllegalArgumentException("subcategory order tab id must not be null");
+        }
+        if (orderedTags == null) {
+            throw new IllegalArgumentException(
+                    "subcategory order must not be null for " + tabId);
+        }
+        SUBCATEGORY_ORDERS.put(tabId, List.copyOf(orderedTags));
+    }
+
+    /**
+     * @param tabId the registered tab
+     * @return the declared strip order for the tab, empty when it declared
+     *         none (the caller then keeps plain alphabetical order)
+     */
+    public static List<String> subCategoryOrder(ResourceLocation tabId) {
+        if (tabId == null) {
+            return List.of();
+        }
+        return SUBCATEGORY_ORDERS.getOrDefault(tabId, List.of());
+    }
+
+    /** Test isolation / future reload paths: the tab's order dies with it. */
     public static boolean remove(ResourceLocation id) {
+        SUBCATEGORY_ORDERS.remove(id);
         return TABS.removeIf(tab -> tab.id().equals(id));
     }
 
