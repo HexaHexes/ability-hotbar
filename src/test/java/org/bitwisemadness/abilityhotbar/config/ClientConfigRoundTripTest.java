@@ -56,8 +56,6 @@ class ClientConfigRoundTripTest {
             opacity = 1.0
             #Show cooldown progress on slots
             showCooldowns = true
-            #Show resource cost indicators on slots
-            showCosts = true
             #Horizontal offset (pixels) from the bar's anchor
             # Default: 0
             # Range: -500 ~ 500

@@ -32,6 +32,12 @@ class MenuLabelsTest {
         assertEquals("ability_hotbar.tag.battlewill_style", MenuLabels.tagKey("battlewill_style"),
                 "underscores are legal in translation ids and stay");
         assertEquals("ability_hotbar.provider.tensura", MenuLabels.providerKey("tensura"));
+        assertEquals("ability_hotbar.resource.tensura.magicule",
+                MenuLabels.resourceKey("tensura:magicule"),
+                "cost localisation: the resource's convention key");
+        assertEquals("ability_hotbar.resource.irons_spellbooks.mana",
+                MenuLabels.resourceKey("irons_spellbooks:mana"),
+                "namespaced resources stay legal translation ids");
     }
 
     @Test

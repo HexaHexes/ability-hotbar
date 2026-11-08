@@ -102,8 +102,6 @@
   "ability_hotbar.configuration.opacity.tooltip": "Transparency of the whole bar: 0.0 is invisible, 1.0 is fully opaque. Default: 1.0.",
   "ability_hotbar.configuration.showCooldowns": "Show cooldowns",
   "ability_hotbar.configuration.showCooldowns.tooltip": "Draw the cooldown progress overlay on slots. Default: true.",
-  "ability_hotbar.configuration.showCosts": "Show resource costs",
-  "ability_hotbar.configuration.showCosts.tooltip": "Draw the resource-cost indicator on slots. Default: true.",
   "ability_hotbar.configuration.offsetX": "Horizontal offset",
   "ability_hotbar.configuration.offsetX.tooltip": "Horizontal pixel offset from the bar's anchor. Default: 0.",
   "ability_hotbar.configuration.offsetY": "Vertical offset",
