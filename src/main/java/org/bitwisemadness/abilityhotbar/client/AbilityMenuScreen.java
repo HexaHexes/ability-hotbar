@@ -34,6 +34,7 @@ import org.bitwisemadness.abilityhotbar.compat.CoreActivationCompat;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
 import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
+import org.bitwisemadness.abilityhotbar.network.CycleModePayload;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyle;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
@@ -135,6 +136,10 @@ public final class AbilityMenuScreen extends Screen {
     private ResourceLocation detailId;
     private int detailScroll;
     private int detailScrollMax;
+    // Press-drag scrolling inside the pane (owner's brief): a press over
+    // the pane starts a drag; dragY accumulates into whole 9px lines.
+    private boolean detailDragging;
+    private double detailDragRemainder;
     // The last clicked ability: its row keeps the hover treatment after
     // the pointer leaves (owner's brief - visual assignment feedback).
     @Nullable
@@ -637,30 +642,110 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The slotted mode's player-facing name, or null: no stored mode
-     * context (native default applies - nothing to show) or no declared
-     * modes. Resolution mirrors ActivationResolver's wire rule - the
-     * stored id when still declared, the first declared (default) when
-     * stale - so the cell shows exactly what an activation would send.
-     * Raw ids never render (#139).
+     * The declared mode's player-facing name for a stored mode id: the
+     * stored mode when still declared, the first declared (default) when
+     * stale - the wire's own rule - and null for no context or no
+     * declarations. Raw ids never render (#139).
      */
     @Nullable
-    private String slotModeLabel(Bar target, int slot) {
-        var assignment = target.assignment(slot);
-        if (assignment == null || !assignment.isAssigned()
-                || assignment.mode() == null) {
+    static String modeLabelFor(ResourceLocation abilityId, @Nullable String storedMode) {
+        if (storedMode == null) {
             return null;
         }
-        Optional<List<AbilityModes.Mode>> declared =
-                AbilityModes.get(assignment.abilityId());
+        Optional<List<AbilityModes.Mode>> declared = AbilityModes.get(abilityId);
         if (declared.isEmpty() || declared.get().isEmpty()) {
             return null;
         }
         AbilityModes.Mode mode = declared.get().stream()
-                .filter(candidate -> candidate.id().equals(assignment.mode()))
+                .filter(candidate -> candidate.id().equals(storedMode))
                 .findFirst()
                 .orElse(declared.get().get(0));
         return MenuLabels.named(mode.nameKey()).getString();
+    }
+
+    /**
+     * The slotted mode's player-facing name, or null: no stored mode
+     * context (native default applies - nothing to show) or no declared
+     * modes. Resolution mirrors ActivationResolver's wire rule so the
+     * cell shows exactly what an activation would send.
+     */
+    @Nullable
+    private String slotModeLabel(Bar target, int slot) {
+        var assignment = target.assignment(slot);
+        if (assignment == null || !assignment.isAssigned()) {
+            return null;
+        }
+        return modeLabelFor(assignment.abilityId(), assignment.mode());
+    }
+
+    /**
+     * The slot of this ability on the target bar for mode cycling (the
+     * selected slot wins when it holds it - the keybind's own slot), or
+     * -1: no such slot, or the ability declares at most one mode (not
+     * cycleable). Owner's brief: the row button cycles slotted abilities.
+     */
+    private static int modeSlotFor(@Nullable Bar target, ResourceLocation id) {
+        if (target == null || !AbilityModes.get(id)
+                .map(modes -> modes.size() > 1).orElse(false)) {
+            return -1;
+        }
+        int first = -1;
+        for (int i = 0; i < target.slotCount(); i++) {
+            var assignment = target.assignment(i);
+            if (assignment != null && assignment.isAssigned()
+                    && id.equals(assignment.abilityId())) {
+                if (i == target.selectedSlot()) {
+                    return i;
+                }
+                if (first < 0) {
+                    first = i;
+                }
+            }
+        }
+        return first;
+    }
+
+    /**
+     * The mode pill's label: the stored mode's name, falling back to the
+     * first declared (the default) for a not-yet-cycled slot so the pill
+     * can start cycling from the get-go (owner's brief). Null only when
+     * the ability declares no modes at all.
+     */
+    @Nullable
+    private static String modePillLabel(ResourceLocation abilityId,
+            @Nullable String storedMode) {
+        String resolved = modeLabelFor(abilityId, storedMode);
+        if (resolved != null) {
+            return resolved;
+        }
+        return AbilityModes.get(abilityId)
+                .flatMap(modes -> modes.isEmpty()
+                        ? Optional.empty() : Optional.of(modes.get(0)))
+                .map(mode -> MenuLabels.named(mode.nameKey()).getString())
+                .orElse(null);
+    }
+
+    /**
+     * The stored mode of a slotted assignment, or null (null-safe: the
+     * slot's assignment can vanish between resolve and read; a null mode
+     * makes the pill fall back to the default label anyway).
+     */
+    @Nullable
+    private static String storedModeAt(@Nullable Bar bar, int slot) {
+        var assignment = bar == null ? null : bar.assignment(slot);
+        return assignment == null ? null : assignment.mode();
+    }
+
+    /**
+     * The mode pill's rect for a row (draw and the click share it): left
+     * of the Enable/Disable pill when present, else the row's right end,
+     * on the bottom line beside the state text.
+     */
+    private int[] modePillRect(int rowY, int listWidth, String modeLabel,
+            @Nullable int[] toggleRect) {
+        int modeWidth = Math.max(28, this.font.width(modeLabel) + 10);
+        int rightEdge = toggleRect == null ? LIST_LEFT + listWidth - 4 : toggleRect[0] - 4;
+        return new int[] {rightEdge - modeWidth, rowY + ROW_HEIGHT - 18, modeWidth, 12};
     }
 
     /** The filled cell's display name (the raw inert id when its provider is gone). */
@@ -830,11 +915,20 @@ public final class AbilityMenuScreen extends Screen {
             String name = displayName.getString();
             Toggle toggle = presentationOf(row.id())
                     .map(AbilityPresentation::toggle).orElse(null);
-            // Toggleable rows carry their state under the name (owner's
-            // brief) and their button at the row's right end.
-            int textY = toggle == null ? y + (ROW_HEIGHT - 9) / 2 : y + 6;
-            gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
+            // The row's mode pill: slotted multi-mode abilities cycle
+            // from here (owner's brief) - the label is the current (or
+            // default) mode, the click sends the slot's cycle request.
+            int modeSlot = modeSlotFor(stripBar, row.id());
+            String modeLabel = modeSlot < 0 ? null
+                    : modePillLabel(row.id(), storedModeAt(stripBar, modeSlot));
             int[] rowToggle = toggle == null ? null : rowToggleButtonRect(y, listWidth);
+            int[] modeRect = modeLabel == null ? null
+                    : modePillRect(y, listWidth, modeLabel, rowToggle);
+            // Toggleable rows (and rows carrying a mode pill) lift the name
+            // so state + buttons own the bottom line (owner's brief).
+            int textY = toggle == null && modeRect == null
+                    ? y + (ROW_HEIGHT - 9) / 2 : y + 6;
+            gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
             if (toggle != null) {
                 gui.drawString(this.font, Component.translatable(toggle.enabled()
                                 ? "ability_hotbar.menu.toggle_on"
@@ -844,9 +938,20 @@ public final class AbilityMenuScreen extends Screen {
             }
             String cost = costText(row.definition());
             if (!cost.isEmpty()) {
-                int costRight = (rowToggle == null ? LIST_LEFT + listWidth
-                        : rowToggle[0] - 4) - this.font.width(cost);
-                gui.drawString(this.font, cost, costRight, textY, style.action());
+                // pills own the bottom line; the cost keeps the name line
+                gui.drawString(this.font, cost,
+                        LIST_LEFT + listWidth - this.font.width(cost), textY,
+                        style.action());
+            }
+            if (modeRect != null) {
+                boolean modeHover = inside(mouseX, mouseY,
+                        modeRect[0], modeRect[1], modeRect[2], modeRect[3]);
+                MenuChrome.glass(gui, modeRect[0], modeRect[1],
+                        modeRect[2], modeRect[3], style, modeHover);
+                gui.drawString(this.font,
+                        this.font.plainSubstrByWidth(modeLabel, modeRect[2] - 8),
+                        modeRect[0] + 4, modeRect[1] + 2,
+                        modeHover ? style.text() : style.action());
             }
             if (rowToggle != null) {
                 boolean buttonHover = inside(mouseX, mouseY,
@@ -895,10 +1000,11 @@ public final class AbilityMenuScreen extends Screen {
 
     /**
      * The row-end Enable/Disable rect (owner's brief: the button lives in
-     * the list now). Draw and the click's hit test share it.
+     * the list now, on the bottom line beside the state text). Draw and
+     * the click's hit test share it.
      */
     static int[] rowToggleButtonRect(int rowY, int listWidth) {
-        return new int[] {LIST_LEFT + listWidth - 58, rowY + (ROW_HEIGHT - 12) / 2, 56, 12};
+        return new int[] {LIST_LEFT + listWidth - 58, rowY + ROW_HEIGHT - 18, 56, 12};
     }
 
     /**
@@ -1293,6 +1399,17 @@ public final class AbilityMenuScreen extends Screen {
                 }
             }
         }
+        // press-drag inside the pane scrolls it (owner's brief); the rows
+        // are x-bounded below, so the pane region has nothing else to catch
+        BarState paneState = ClientBarState.get();
+        Bar paneBar = paneState == null ? null : targetBar(paneState);
+        int paneBottom = listBottom(paneBar == null ? 0 : paneBar.slotCount());
+        if (inside(mouseX, mouseY, detailX(), FILTER_Y,
+                this.width - 8 - detailX(), paneBottom - FILTER_Y)) {
+            detailDragging = true;
+            detailDragRemainder = 0;
+            return true;
+        }
         // ability rows (left two thirds only: a click inside the detail
         // pane must never assign)
         List<MenuQuery.Entry> rows = visibleRows();
@@ -1314,6 +1431,22 @@ public final class AbilityMenuScreen extends Screen {
                     if (inside(mouseX, mouseY, toggleRect[0], toggleRect[1],
                             toggleRect[2], toggleRect[3])) {
                         sendToggle(row.id());
+                        return true;
+                    }
+                }
+                // the mode pill cycles the slotted ability's mode (owner's
+                // brief) - one server-validated cycle, the keybind's path
+                int modeSlot = modeSlotFor(target, row.id());
+                if (modeSlot >= 0) {
+                    String modeLabel = modePillLabel(row.id(),
+                            storedModeAt(target, modeSlot));
+                    int[] toggleRect = toggle == null ? null
+                            : rowToggleButtonRect(rowY, listWidth());
+                    int[] modeRect = modeLabel == null ? null
+                            : modePillRect(rowY, listWidth(), modeLabel, toggleRect);
+                    if (modeRect != null && inside(mouseX, mouseY, modeRect[0],
+                            modeRect[1], modeRect[2], modeRect[3])) {
+                        PacketDistributor.sendToServer(new CycleModePayload(modeSlot));
                         return true;
                     }
                 }
@@ -1347,8 +1480,10 @@ public final class AbilityMenuScreen extends Screen {
         int scrollBottom = listBottom(scrollBar == null ? 0 : scrollBar.slotCount());
         if (detailScrollMax > 0 && inside(mouseX, mouseY, x0, FILTER_Y,
                 this.width - 8 - x0, scrollBottom - FILTER_Y)) {
+            // owner's brief: faster wheel (3 lines a notch), clamped to the
+            // real overflow the draw pass measured
             detailScroll = Math.max(0, Math.min(detailScrollMax,
-                    detailScroll + (scrollY > 0 ? -1 : 1)));
+                    detailScroll + (scrollY > 0 ? -3 : 3)));
             return true;
         }
         if (scrollY > 0) {
@@ -1357,6 +1492,32 @@ public final class AbilityMenuScreen extends Screen {
             scrollOffset++;
         }
         return true; // the wheel belongs to the list while the menu is open
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button,
+            double dragX, double dragY) {
+        if (super.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+            return true;
+        }
+        if (detailDragging) {
+            // pixels accumulate into whole 9px lines; the draw pass clamps
+            // the result to the real overflow every frame
+            detailDragRemainder += dragY;
+            int lines = (int) detailDragRemainder / 9;
+            if (lines != 0) {
+                detailScroll = Math.max(0, detailScroll - lines);
+                detailDragRemainder -= lines * 9;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        detailDragging = false;
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
