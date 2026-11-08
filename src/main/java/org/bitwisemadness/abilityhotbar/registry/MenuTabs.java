@@ -31,6 +31,26 @@ import org.jetbrains.annotations.Nullable;
 public final class MenuTabs {
 
     /**
+     * A tab's live content (owner's directive): the mod that registered
+     * the tab supplies WHICH abilities it lists, per player - the menu
+     * resolves the ids against core's definitions and still applies
+     * visibility and the tab's own {@code accepts} on top. Null on a tab
+     * means the classic global-pool membership (accepts only).
+     */
+    @FunctionalInterface
+    public interface TabContent {
+
+        /**
+         * @param player the asking player (client menu reads; null = an
+         *               unknown context - return only what is known
+         *               unconditionally, never guess)
+         * @return the ids this tab currently lists (empty = nothing;
+         *         unknown ids are dropped, never invented)
+         */
+        java.util.Collection<ResourceLocation> entries(@Nullable net.minecraft.world.entity.player.Player player);
+    }
+
+    /**
      * One registered tab.
      *
      * @param id             stable namespaced tab id (the registering mod's namespace)
@@ -42,10 +62,15 @@ public final class MenuTabs {
      * @param icon           optional item-stack icon, or null - the draw
      *                       preference when declared
      * @param accepts        membership: may this entry appear under the tab?
+     * @param content        the mod's live content handler, or null for the
+     *                       global pool (owner's handler directive)
+     * @param informational  when true the tab never slots: rows are inert
+     *                       to press, drag and click (info only)
      */
     public record MenuTab(ResourceLocation id, String displayNameKey,
             @Nullable ResourceLocation iconId, @Nullable ItemStack icon,
-            BiPredicate<ResourceLocation, AbilityDefinition> accepts) {
+            BiPredicate<ResourceLocation, AbilityDefinition> accepts,
+            @Nullable TabContent content, boolean informational) {
 
         public MenuTab {
             if (id == null) {
@@ -68,6 +93,39 @@ public final class MenuTabs {
         }
     }
 
+    /**
+     * One declarable provider category tab (owner's generalisation brief:
+     * tensura's and iss' tab shapes abstracted so any mod can register
+     * and expand the family): membership is the definition's
+     * {@code category}, the strip order is optional, and the content
+     * handler (nullable) makes the list dynamic per player.
+     *
+     * @param id                tab id (the provider's namespace)
+     * @param displayNameKey    provider-owned translation key
+     * @param iconId            sprite fallback, or null
+     * @param icon              preferred stack, or null
+     * @param category          the definition category this tab lists
+     * @param subCategoryOrder  the {@code type:} strip order, or null (none)
+     * @param content           live content handler, or null (global pool)
+     */
+    public record CategoryTab(ResourceLocation id, String displayNameKey,
+            @Nullable ResourceLocation iconId, @Nullable ItemStack icon,
+            ResourceLocation category, @Nullable List<String> subCategoryOrder,
+            @Nullable TabContent content) {
+
+        public CategoryTab {
+            if (id == null || displayNameKey == null || displayNameKey.isBlank()) {
+                throw new IllegalArgumentException("category tab needs an id and a name key");
+            }
+            if (category == null) {
+                throw new IllegalArgumentException("category tab needs a category for " + id);
+            }
+            if (icon != null) {
+                icon = icon.copy();
+            }
+        }
+    }
+
     private static final List<MenuTab> TABS = new CopyOnWriteArrayList<>();
     private static final Map<ResourceLocation, List<String>> SUBCATEGORY_ORDERS =
             new ConcurrentHashMap<>();
@@ -78,19 +136,26 @@ public final class MenuTabs {
     /** Declares a plain-text tab (hotbar#154). */
     public static void register(ResourceLocation id, String displayNameKey,
             BiPredicate<ResourceLocation, AbilityDefinition> accepts) {
-        register(id, displayNameKey, null, null, accepts);
+        register(id, displayNameKey, null, null, accepts, null, false);
+    }
+
+    /** Declares a plain tab with the mod's own content handler. */
+    public static void register(ResourceLocation id, String displayNameKey,
+            BiPredicate<ResourceLocation, AbilityDefinition> accepts,
+            TabContent content) {
+        register(id, displayNameKey, null, null, accepts, content, false);
     }
 
     /** Declares a tab identified by a sprite icon plus its text. */
     public static void register(ResourceLocation id, String displayNameKey,
             ResourceLocation iconId, BiPredicate<ResourceLocation, AbilityDefinition> accepts) {
-        register(id, displayNameKey, iconId, null, accepts);
+        register(id, displayNameKey, iconId, null, accepts, null, false);
     }
 
     /** Declares a tab identified by an item stack plus its text. */
     public static void register(ResourceLocation id, String displayNameKey, ItemStack icon,
             BiPredicate<ResourceLocation, AbilityDefinition> accepts) {
-        register(id, displayNameKey, null, icon, accepts);
+        register(id, displayNameKey, null, icon, accepts, null, false);
     }
 
     /**
@@ -102,13 +167,58 @@ public final class MenuTabs {
     public static void register(ResourceLocation id, String displayNameKey,
             @Nullable ResourceLocation iconId, @Nullable ItemStack icon,
             BiPredicate<ResourceLocation, AbilityDefinition> accepts) {
-        MenuTab tab = new MenuTab(id, displayNameKey, iconId, icon, accepts); // validates loudly
+        register(id, displayNameKey, iconId, icon, accepts, null, false);
+    }
+
+    /**
+     * Declares a tab with the mod's own content handler (owner's handler
+     * directive): the handler names the entries, accepts and visibility
+     * still narrow them.
+     */
+    public static void register(ResourceLocation id, String displayNameKey,
+            @Nullable ResourceLocation iconId, @Nullable ItemStack icon,
+            BiPredicate<ResourceLocation, AbilityDefinition> accepts,
+            @Nullable TabContent content) {
+        register(id, displayNameKey, iconId, icon, accepts, content, false);
+    }
+
+    /**
+     * The full declaration: both icon forms, membership, live content and
+     * the informational flag (rows never slot - info only).
+     */
+    public static void register(ResourceLocation id, String displayNameKey,
+            @Nullable ResourceLocation iconId, @Nullable ItemStack icon,
+            BiPredicate<ResourceLocation, AbilityDefinition> accepts,
+            @Nullable TabContent content, boolean informational) {
+        MenuTab tab = new MenuTab(id, displayNameKey, iconId, icon, accepts, // validates loudly
+                content, informational);
         for (MenuTab existing : TABS) {
             if (existing.id().equals(id)) {
                 throw new IllegalStateException("Menu tab already registered: " + id);
             }
         }
         TABS.add(tab);
+    }
+
+    /**
+     * Registers a provider's whole category-tab family from one
+     * declaration (owner's generalisation brief): membership is the
+     * declared {@code category} equality, and a declared strip order is
+     * recorded with the tab - the tensura and iss shapes, reusable.
+     */
+    public static void registerCategoryTabs(List<CategoryTab> tabs) {
+        if (tabs == null) {
+            throw new IllegalArgumentException("category tabs must not be null");
+        }
+        for (CategoryTab spec : tabs) {
+            ResourceLocation category = spec.category();
+            register(spec.id(), spec.displayNameKey(), spec.iconId(), spec.icon(),
+                    (id, definition) -> definition.category().equals(category),
+                    spec.content(), false);
+            if (spec.subCategoryOrder() != null) {
+                subCategoryOrder(spec.id(), spec.subCategoryOrder());
+            }
+        }
     }
 
     /** @return every registered tab, in registration order (the strip's order) */

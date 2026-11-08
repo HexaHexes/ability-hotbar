@@ -19,6 +19,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -1605,6 +1606,11 @@ public final class AbilityMenuScreen extends Screen {
             if (offset < rows.size()) {
                 MenuQuery.Entry row = rows.get(offset);
                 int rowY = LIST_TOP + relative * ROW_HEIGHT;
+                if (informationalTab()) {
+                    // info-only tab (owner's directive): rows never slot,
+                    // cycle or toggle - the pane already follows the hover
+                    return true;
+                }
                 // the row-end Enable/Disable owns its rect before assigning
                 // (owner's brief: #148's button moved into the row)
                 Toggle toggle = presentationOf(row.id())
@@ -1858,10 +1864,26 @@ public final class AbilityMenuScreen extends Screen {
      * Reads Minecraft.getInstance() because the constructor calls this
      * before Screen.minecraft exists (alpha.72's crash: the saved-filter
      * validation ran against a null field the moment the menu opened).
+     * The selected tab's content handler (owner's handler directive)
+     * scopes the source first - its ids resolved against core's
+     * definitions, unknown ids dropped - visibility and accepts still
+     * narrow on top.
      */
     private Map<ResourceLocation, AbilityDefinition> menuPool() {
-        return MenuQuery.visiblePool(AbilityDiscovery.entries(),
-                Minecraft.getInstance().player);
+        MenuTabs.MenuTab tab = selectedTab == null ? null
+                : MenuTabs.get(selectedTab).orElse(null);
+        Player player = Minecraft.getInstance().player;
+        MenuTabs.TabContent content = tab == null ? null : tab.content();
+        if (content == null) {
+            return MenuQuery.visiblePool(AbilityDiscovery.entries(), player);
+        }
+        Map<ResourceLocation, AbilityDefinition> scoped = new HashMap<>();
+        for (ResourceLocation id : content.entries(player)) {
+            if (id != null) {
+                AbilityDiscovery.get(id).ifPresent(definition -> scoped.put(id, definition));
+            }
+        }
+        return MenuQuery.visiblePool(scoped, player);
     }
 
     private List<MenuQuery.Entry> visibleRows() {
@@ -1876,6 +1898,15 @@ public final class AbilityMenuScreen extends Screen {
                 id -> true,
                 tab == null ? null : tab.accepts(),
                 definition -> Component.translatable(definition.displayNameKey()));
+    }
+
+    /**
+     * Whether the selected tab is informational (rows inert to press,
+     * drag, toggle and cycle - owner's directive: info only).
+     */
+    private boolean informationalTab() {
+        return selectedTab != null && MenuTabs.get(selectedTab)
+                .map(MenuTabs.MenuTab::informational).orElse(false);
     }
 
     @Nullable

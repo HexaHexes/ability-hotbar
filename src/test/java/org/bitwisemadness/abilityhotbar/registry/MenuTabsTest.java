@@ -199,4 +199,49 @@ class MenuTabsTest {
         assertFalse(MenuTabs.resolvedIconTexture(null, rl -> true).isPresent(),
                 "a null icon resolves to nothing");
     }
+
+    @Test
+    void contentHandlersRideTheRegistration() {
+        // owner's directive: each mod supplies its tab's content through
+        // its own handler - present on the tab, retrievable, absent by
+        // default (the classic global pool stays the null case)
+        java.util.Set<ResourceLocation> listed = java.util.Set.of(ABILITY);
+        MenuTabs.register(TAB, "tensura.tab.skills", ALL, player -> listed);
+        MenuTabs.MenuTab plain = MenuTabs.get(TAB).orElseThrow();
+        assertTrue(plain.content() != null, "the handler rides the registration");
+        assertEquals(listed, plain.content().entries(null),
+                "the handler names the entries verbatim");
+        assertFalse(plain.informational(), "a plain registration stays slotable");
+
+        MenuTabs.remove(TAB);
+        MenuTabs.register(TAB, "tensura.tab.skills", null, null, ALL,
+                player -> listed, true);
+        MenuTabs.MenuTab info = MenuTabs.get(TAB).orElseThrow();
+        assertTrue(info.informational(), "the full form flags info-only tabs");
+        assertTrue(info.content() != null, "content and informational combine");
+    }
+
+    @Test
+    void categoryTabsRegisterFromOneDeclaration() {
+        // owner's generalisation brief: the tensura/iss family shape -
+        // category equality is membership, the strip order rides along
+        ResourceLocation skill = ResourceLocation.fromNamespaceAndPath("tensura", "skill");
+        MenuTabs.registerCategoryTabs(List.of(
+                new MenuTabs.CategoryTab(TAB, "tensura.tab.skills", null, null, skill,
+                        List.of("type:extra", "type:common"), null)));
+        MenuTabs.MenuTab tab = MenuTabs.get(TAB).orElseThrow();
+        assertTrue(tab.accepts().test(ABILITY, def()), "category equality is membership");
+        AbilityDefinition other = new AbilityDefinition("tensura.skill.y", null,
+                ResourceLocation.fromNamespaceAndPath("tensura", "magic"),
+                ActivationType.INSTANT, java.util.List.of(), ConsumptionStrategies.ALL,
+                AmountResolvers.STATIC, java.util.Set.of(), java.util.Map.of());
+        assertFalse(tab.accepts().test(OTHER_ABILITY, other),
+                "another category never joins");
+        assertEquals(List.of("type:extra", "type:common"), MenuTabs.subCategoryOrder(TAB),
+                "the declared strip order rides the declaration");
+        assertThrows(IllegalArgumentException.class,
+                () -> MenuTabs.registerCategoryTabs(List.of(
+                        new MenuTabs.CategoryTab(TAB, " ", null, null, skill, null, null))),
+                "a malformed category tab is loud");
+    }
 }
