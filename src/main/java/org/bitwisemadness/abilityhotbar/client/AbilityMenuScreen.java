@@ -675,13 +675,11 @@ public final class AbilityMenuScreen extends Screen {
             var assignment = target.assignment(i);
             boolean filled = assignment != null && assignment.isAssigned();
             boolean dropHover = filled && dragAbilityId != null && hovered;
-            if (!filled || dropHover) {
-                // The vanilla selector marks where an icon goes (owner's
-                // brief): every empty cell, and any filled cell under a
-                // dragged ability - the drop target reads as one thing.
-                gui.blitSprite(VANILLA_SELECTION, x + 2, cellY + 2,
-                        cellWidth - 5, SLOT_HEIGHT - 4);
-            }
+            // the vanilla selector marks the slot on EVERY cell (owner:
+            // filled ones too) - where an icon goes, and the drop target
+            // for a dragged ability
+            gui.blitSprite(VANILLA_SELECTION, x + 2, cellY + 2,
+                    cellWidth - 5, SLOT_HEIGHT - 4);
             if (!filled) {
                 // the number sits CENTRED inside the selector, empty only
                 String label = slotLabel(i + 1);
@@ -692,7 +690,7 @@ public final class AbilityMenuScreen extends Screen {
                 continue;
             }
             if (dropHover) {
-                continue; // filled + dragged-over: the selector IS the read
+                continue; // filled + dragged-over: the box alone is the read
             }
             // Filled: the icon plus the ability's name truncated to the cell
             // (owner's brief) - the index a filled cell used to show is gone.
