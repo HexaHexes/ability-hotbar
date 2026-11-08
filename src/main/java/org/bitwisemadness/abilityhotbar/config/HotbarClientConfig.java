@@ -59,10 +59,23 @@ public final class HotbarClientConfig {
             BUILDER.comment("Last menu tab chosen in the ability menu (empty = the All tab)")
                     .define("menu.lastTab", "");
 
-    /** The last subcategory tab; same rules as {@link #MENU_TAB}. */
+    /**
+     * The last subcategory tab; same rules as {@link #MENU_TAB} - saved as
+     * the pair {@code <tab>;<filter>} since the filter became tab-scoped.
+     */
     public static final ModConfigSpec.ConfigValue<String> MENU_SUBCATEGORY =
             BUILDER.comment("Last subcategory filter chosen in the ability menu (empty = no filter)")
                     .define("menu.lastSubCategory", "");
+
+    /** Description pane wheel speed, lines per notch (owner: configurable). */
+    public static final ModConfigSpec.IntValue DESCRIPTION_SCROLL_LINES =
+            BUILDER.comment("Description pane lines scrolled per wheel notch")
+                    .defineInRange("menu.descriptionScrollLines", 16, 1, 64);
+
+    /** Drag-to-assign: a row drag onto a slot cell assigns there. */
+    public static final ModConfigSpec.BooleanValue DRAG_TO_ASSIGN =
+            BUILDER.comment("Allow dragging an ability row onto a slot cell to assign it")
+                    .define("menu.dragToAssign", true);
 
     /**
      * The active menu style (issue #129): a registered style id, empty =

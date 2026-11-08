@@ -84,6 +84,12 @@ class ClientConfigRoundTripTest {
             style = ""
             #Per-bar hotbar styles as barId=styleId pairs separated by ';' (empty = vanilla default)
             barStyles = ""
+            #Description pane lines scrolled per wheel notch
+            # Default: 16
+            # Range: 1 ~ 64
+            descriptionScrollLines = 16
+            #Allow dragging an ability row onto a slot cell to assign it
+            dragToAssign = true
             """;
 
     private static CommentedConfig parse(String toml) {

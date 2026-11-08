@@ -70,6 +70,17 @@ class MenuGeometryTest {
     }
 
     @Test
+    void slotNumbersCentreInsideTheVanillaSelector() {
+        // owner's brief: the number sits centred in the selection texture
+        assertEquals(16, AbilityMenuScreen.slotLabelCenteredX(40, 6),
+                "a six-pixel label centres in a 40px cell");
+        assertEquals(14, AbilityMenuScreen.slotLabelCenteredX(36, 6),
+                "centred again at 36");
+        assertEquals(2, AbilityMenuScreen.slotLabelCenteredX(1, 6),
+                "never outside the cell");
+    }
+
+    @Test
     void rowToggleButtonsSitAtTheRowsRightEnd() {
         // owner's brief: #148's button moved from the pane into the row,
         // onto the bottom line beside the state text (with the mode pill)
@@ -81,21 +92,26 @@ class MenuGeometryTest {
     }
 
     @Test
-    void footerSlotIconsFitThenYieldToTheNumberByWidth() {
-        // hotbar#156 doubled: the 24px icon at 2px pad needs 28px; the
-        // number needs ~8 more beside it (threshold 36). Icon-less cells
-        // always keep the plain number.
+    void footerSlotIconsFitByWidth() {
+        // hotbar#156 doubled: the 24px icon at 2px pad needs 28px
         assertEquals(true, AbilityMenuScreen.slotIconFits(40), "a normal cell");
         assertEquals(true, AbilityMenuScreen.slotIconFits(28), "the icon's own width");
         assertEquals(false, AbilityMenuScreen.slotIconFits(27), "one pixel short");
         assertEquals(false, AbilityMenuScreen.slotIconFits(1), "the 1px floor cell");
+    }
 
-        assertEquals(28, AbilityMenuScreen.slotLabelX(40, true), "icon + number");
-        assertEquals(28, AbilityMenuScreen.slotLabelX(36, true), "both still fit at 36");
-        assertEquals(-1, AbilityMenuScreen.slotLabelX(35, true), "icon-only cell");
-        assertEquals(-1, AbilityMenuScreen.slotLabelX(28, true), "icon-only below the fit");
-        assertEquals(3, AbilityMenuScreen.slotLabelX(40, false), "no icon: today's number");
-        assertEquals(3, AbilityMenuScreen.slotLabelX(1, false), "even the 1px cell");
+    @Test
+    void slotCellAtMirrorsTheStripGeometry() {
+        // owner's drag-to-assign brief: the drop target is the drawn cell -
+        // 9 slots of 31px, strip top at height 400 - 16 - 32 = 352
+        assertEquals(0, AbilityMenuScreen.slotCellAt(12, 355, 9, 400, 100, 400),
+                "the first cell's first pixels");
+        assertEquals(1, AbilityMenuScreen.slotCellAt(40, 355, 9, 400, 100, 400),
+                "the second cell");
+        assertEquals(-1, AbilityMenuScreen.slotCellAt(12, 340, 9, 400, 100, 400),
+                "above the strip is not a cell");
+        assertEquals(-1, AbilityMenuScreen.slotCellAt(12, 355, 0, 400, 100, 400),
+                "no slots, no cells");
     }
 
     @Test
