@@ -716,31 +716,35 @@ public final class AbilityMenuScreen extends Screen {
             if (dropHover) {
                 continue; // filled + dragged-over: the box alone is the read
             }
-            // Filled: the icon RESIZED TO FIT inside the selector (owner),
-            // name + mode beside the box, truncated to what remains
+            // Filled: a SMALLER icon inside the selector (owner: it was
+            // too big) and up to three text lines beside the box - two
+            // wrapped name lines plus the mode as line three
             ResourceLocation icon = slotIcon(target, i);
             boolean iconDrawn = icon != null && HotbarClientConfig.SHOW_ICONS.get()
                     && slotIconFits(cellWidth);
             int nameX = boxX + side + 2;
             int nameWidth = Math.max(4, cellWidth - (side + 5));
             if (iconDrawn) {
-                int iconSize = side - 4;
+                int iconSize = Math.max(4, Math.min(18, side - 6));
                 gui.blit(icon, boxX + (side - iconSize) / 2,
                         boxY + (side - iconSize) / 2,
                         0, 0, iconSize, iconSize, iconSize, iconSize);
             }
             String modeLabel = slotModeLabel(target, i);
-            String name = this.font.plainSubstrByWidth(slotName(target, i), nameWidth);
-            gui.drawString(this.font, name, nameX,
-                    modeLabel == null ? cellY + 11 : cellY + 6,
-                    selected ? style.text() : style.muted());
+            List<FormattedCharSequence> nameLines = this.font.split(
+                    Component.literal(slotName(target, i)), nameWidth);
+            int nameY = cellY + 2;
+            for (int line = 0; line < nameLines.size() && line < 2; line++) {
+                gui.drawString(this.font, nameLines.get(line), nameX, nameY,
+                        selected ? style.text() : style.muted());
+                nameY += 9;
+            }
             if (modeLabel != null) {
-                // The slotted ability's mode under the name (owner's
-                // brief) - the cell shows exactly what an activation
-                // would send (stored id, else the declared default).
+                // line three: exactly what an activation would send
+                // (stored id, else the declared default)
                 gui.drawString(this.font,
                         this.font.plainSubstrByWidth(modeLabel, nameWidth),
-                        nameX, cellY + 18, style.action());
+                        nameX, cellY + 22, style.action());
             }
         }
     }
