@@ -79,23 +79,30 @@ and falls back to the prettified raw value (separators to spaces, first
 letter capitalised: `tensura:magic` reads as "Magic"). A grep fixture keeps
 the raw sites out of the screen.
 
-**Menu filtering and order** (issue #142): rows ship in the deterministic
-default order **provider (id namespace) -> category -> lowest tag -> id**;
-the category cycle is hierarchical over the open **`type:` subcategory
-convention** (any -> category -> its `type:` tags, pref `menu.lastSubCategory`)
-- a provider adopts `type:`-prefixed tags to subdivide its categories
-(Tensura's eight skill/magic types are the first consumers). A pool without
-`type:` tags behaves exactly as before.
+**Menu filtering and order** (issue #142, the subcategory tabs of the
+owner's layout brief): rows ship in the deterministic default order
+**provider (id namespace) -> category -> lowest tag -> id**; the filter
+strip's **subcategory tabs** (beside the search pill: `All` + one tab per
+`type:` subcategory **with entries for the currently selected tab**, built
+from the tab-filtered pool by `MenuQuery.subTypeTags`; pref
+`menu.lastSubCategory`, stale values drop to All) - a provider adopts
+`type:`-prefixed tags to subdivide its categories (Tensura's eight
+skill/magic types are the first consumers). A pool without `type:` tags
+draws no strip and behaves exactly as before.
 
-**Menu tabs** (issue #154): tabs are **registered, not derived** -
-`MenuTabs.register(id, displayNameKey, [icon | ItemStack], membership)` at
-setup (loud ownership, one icon kind per tab, strip order = registration
-order), rendered as the owner's **Icon/Item Stack + Text** identifier; the
-selected tab's membership narrows the query alongside every other filter
-(pref `menu.lastTab`, unknown ids fall back to All). Providers that keep
-their abilities exclusive to their own hotbars (ability-iss,
-pseudocore-curios) simply register nothing: no strip, pool unfiltered.
-ability-tensura registers Skills/Magic/Battlewills (companion issue).
+**Menu tabs** (issue #154, both-forms per hotbar#171): tabs are
+**registered, not derived** -
+`MenuTabs.register(id, displayNameKey, [icon and/or ItemStack], membership)`
+at setup (loud ownership, strip order = registration order) - the stack is
+the draw preference and the sprite the fallback, decided at draw time
+(`stackRendersInGui`: an item whose baked model renders nothing in any GUI,
+like skill books' study book, falls back to the sprite; neither produces
+pixels -> text only). The selected tab's membership narrows the query
+alongside every other filter (pref `menu.lastTab`, unknown ids fall back to
+All). Providers that keep their abilities exclusive to their own hotbars
+(ability-iss, pseudocore-curios) simply register nothing: no strip, pool
+unfiltered. ability-tensura registers Skills/Magic/Battlewills with both
+forms (companion issue).
 
 **Unlock gating and reconciliation** (issues #135/#147): the menu shows
 **only unlocked abilities** - proven-unlearned ids filter out and unknown

@@ -88,7 +88,7 @@ public final class AbilityMenuScreen extends Screen {
     /** Below the list: slot detail, slot cells and the hint bar (#27). */
     private static final int LIST_BOTTOM_PAD = 54;
     private static final int INERT_COLOR = 0xFFFF5555;
-    /** The filter strip row (search pill + category/tag chips). */
+    /** The filter strip row (search pill + subcategory tabs). */
     private static final int FILTER_Y = 40;
     private static final int CHIP_HEIGHT = 18;
     private static final int SEARCH_X = 8;
