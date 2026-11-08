@@ -72,24 +72,17 @@ class MenuGeometryTest {
     }
 
     @Test
-    void barNavRectsSitOnTheHintLineLeftOfTheStylePill() {
-        // hotbar#157: the pair hugs the right edge - 14px cells, 2px gap
-        int[][] navs = AbilityMenuScreen.barNavRects(640, 480, false);
+    void barNavRectsSitBelowTheChipAlignedToTheStrip() {
+        // owner's brief: the prev/next pair sits under the bar chip, left
+        // edges aligned, 14px cells with the 2px gap (#157's glyphs)
+        int[][] navs = AbilityMenuScreen.barNavRects(new int[] {736, 494, 70, 14});
         assertEquals(14, navs[0][2], "prev cell width");
         assertEquals(14, navs[0][3], "prev cell height");
-        assertEquals(640 - 8 - 30, navs[0][0], "prev sits 30px left of the edge");
+        assertEquals(736, navs[0][0], "aligned to the chip's left edge");
         assertEquals(navs[0][0] + 16, navs[1][0], "2px gap between the pair");
-        assertEquals(640 - 8, navs[1][0] + navs[1][2], "next ends at the right edge");
-        assertEquals(480 - 15, navs[0][1], "the hint-bar line (same row as the pill)");
-
-        // with the menu-style pill (120 wide) the pair stops 4px short of it
-        int[][] withPill = AbilityMenuScreen.barNavRects(640, 480, true);
-        int pillX = 640 - 8 - 120;
-        assertEquals(pillX - 4, withPill[1][0] + withPill[1][2], "clear of the pill");
-
-        // never the clear line (h-49..h-35) nor the slot row (h-32..h-16)
-        assertTrue(withPill[0][1] >= 480 - 32 + 16, "below the slot cells");
-        assertTrue(withPill[0][1] + withPill[0][3] <= 480 - 1, "inside the screen");
+        assertEquals(494 + 14 + 2, navs[0][1], "directly below the chip");
+        assertTrue(navs[0][1] + navs[0][3] <= 494 + 32,
+                "the pair stays inside the slot strip's band");
     }
 
     @Test
@@ -117,20 +110,31 @@ class MenuGeometryTest {
     }
 
     @Test
-    void tooltipPanelHeightCountsItsLines() {
-        // issues #119/#148: 14px base + 12 per extra line - draw and the
-        // toggle button's hit test share this exact arithmetic
-        assertEquals(14, AbilityMenuScreen.panelHeight(false, 0, false, false),
-                "meta only keeps the original one-liner");
-        assertEquals(26, AbilityMenuScreen.panelHeight(false, 0, false, true),
-                "description alone matches the pre-#119 panel exactly");
-        assertEquals(26, AbilityMenuScreen.panelHeight(true, 0, false, false),
-                "stats alone takes one extra line");
-        assertEquals(74, AbilityMenuScreen.panelHeight(true, 2, true, true),
-                "stats + two fields + toggle + description");
-        assertEquals(13, AbilityMenuScreen.toggleLineOffset(false, 0),
-                "the toggle line sits under meta");
-        assertEquals(49, AbilityMenuScreen.toggleLineOffset(true, 2),
-                "stats and two fields push it down by their lines");
+    void detailPaneReservesTheRightThird() {
+        // owner's brief #9: the pane owns exactly the rightmost third
+        assertEquals(640, AbilityMenuScreen.detailX(960), "two thirds for the list");
+        assertEquals(641, AbilityMenuScreen.detailX(961), "integer third, no rounding back");
+        assertEquals(642, AbilityMenuScreen.detailX(963), "exact thirds split evenly");
+        assertEquals(214, AbilityMenuScreen.detailX(320), "the minimum width keeps a third");
+        assertTrue(AbilityMenuScreen.detailX(960) + 960 / 3 == 960,
+                "the pane reaches the right edge");
+    }
+
+    @Test
+    void detailToggleLineCountsItsSections() {
+        // name block (16) + activation + tags/cost, then stats and fields
+        // at 12 each - the draw pass and the button's hit test share it
+        assertEquals(40, AbilityMenuScreen.detailToggleLine(0, false, 0),
+                "three fixed lines before fields");
+        assertEquals(52, AbilityMenuScreen.detailToggleLine(0, true, 0),
+                "stats adds one line");
+        assertEquals(116, AbilityMenuScreen.detailToggleLine(40, true, 2),
+                "top offset + stats + two fields");
+
+        int[] button = AbilityMenuScreen.detailToggleButton(0, 100, 200, true, 2);
+        assertEquals(76, button[1], "draw and hit agree on the toggle row");
+        assertEquals(100 + 200 - 60, button[0], "the button hugs the pane's right edge");
+        assertEquals(56, button[2], "button width");
+        assertEquals(12, button[3], "button height");
     }
 }

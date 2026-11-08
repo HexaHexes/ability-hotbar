@@ -106,29 +106,37 @@ still echoing state. Losing a unlock **clears the slot server-side**:
 `BarStateSync` (saved + echoed, no tick loop, one log line per cleared id,
 unknown never touched); no client write exists for any of it.
 
-**Menu layout** (issue #27): the screen follows the Tensura RPG System
-skill-menu geometry (the design comment on that issue): a header band with
-the title top-left and the target-bar selector top-right (chip + used/total
-+ slot meter; the chip cycles bars), one collapsed filter strip (borderless
-search pill + category/tag cycle chips), the full-width ability list with
-**inline** hover metadata directly under the row (no detail pane, no
-sidebar), and a bottom stack of chamfered slot cells over the hint bar.
-`MenuChrome` (client) owns the drawing primitives - backdrop, chamfered
-glass capsules/cells, meters - all fed by the active `MenuStyle`; the row
-hit-test, slot width and meter math are pure and fixture-pinned
+**Menu layout** (issue #27, reworked by the owner's nine-point brief): a
+header band with the title top-left and the slot meter top-right (the
+used/total counter is gone; the bar chip moved to the bottom stack), one
+collapsed filter strip (borderless search pill + subcategory tabs - only
+`type:` subcategories with entries for the selected tab), the ability list
+in the **left two thirds** with the **rightmost third reserved as the
+detail pane**: sticky on the last hovered ability (falling back to the
+selected slot's ability, raw id in red when inert) - name with accent
+underline, activation requirement, tags + cost (categories never render in
+tooltips; subcategory tags capitalised via `MenuLabels.subcategory`),
+declared stats, live presentation fields, toggle + Enable/Disable, and the
+full wheel-scrollable description - drawn last so nothing can paint over
+it; and a bottom stack of chamfered slot cells (numbers on **empty** cells
+only, the selected cell **darker** than the hover lift) beside the bar
+chip with the prev/next buttons under it, over the hint bar. `MenuChrome`
+(client) owns the drawing primitives - backdrop, chamfered glass
+capsules/cells, meters, the opaque pane surface - all fed by the active
+`MenuStyle`; the row hit-test, slot width, the pane's third (`detailX`)
+and the toggle-line math are pure and fixture-pinned
 (`MenuGeometryTest`). Each slot cell with an assigned ability draws that
 ability's `iconId` (issue #156: the rows' resolution, the item cells' 2px
-padding) before its number; empty, unresolvable or icon-less cells - and
-`display.showIcons = false` - keep the number-only cell (icon needs 16px
-of cell width, the number 12 more; also fixture-pinned). The hint-bar
-line carries the ◀/▶ prev/next bar buttons (issue #157): one shared
-`selectBar` step through `MenuQuery.manageableBars` (wrap-around, the
-same slot/scroll reset as the header chip), drawn as style-coloured
-triangle glyphs - the vanilla font covers no arrow characters
-(`font/default.json`, verified) - immediately left of the menu-style
-pill (`barNavRects` shared by draw and hit-test, `cycleIndex` fixture-
-pinned); a single-bar list shows them dimmed and inert.
-
+padding); empty, unresolvable or icon-less cells - and
+`display.showIcons = false` - keep the number-only cell (the icon needs
+28px of cell width with the number beside it; fixture-pinned). The bar
+chip beside the strip cycles bars (issue #157) and the prev/next buttons
+below it share one `selectBar` step through `MenuQuery.manageableBars`
+(wrap-around, the same slot/scroll reset as the chip), drawn as
+style-coloured triangle glyphs - the vanilla font covers no arrow
+characters (`font/default.json`, verified); `barNavRects` is shared by
+draw and hit-test, `cycleIndex` fixture-pinned, and a single-bar list
+shows the buttons dimmed and inert.
 **Wiki:** [HexaHexes/ability-hotbar/wiki](https://github.com/HexaHexes/ability-hotbar/wiki) -
 split audience: player/modpack-maker pages (menu, bar configuration, localising,
 styles) and developer pages (content bars, query layer, integration seams),

@@ -47,6 +47,8 @@
   "ability_hotbar.menu.search": "Search abilities...",
   "ability_hotbar.menu.waiting": "Waiting for bar state...",
   "ability_hotbar.menu.subcategory_any": "All",
+  "ability_hotbar.menu.activation_fmt": "Activation: %s",
+  "ability_hotbar.menu.detail_hint": "Hover an ability to inspect it.",
   "ability_hotbar.menu.tab_all": "All",
   "ability_hotbar.menu.style_default": "Style: Default",
   "ability_hotbar.menu.style_fmt": "Style: %s",
