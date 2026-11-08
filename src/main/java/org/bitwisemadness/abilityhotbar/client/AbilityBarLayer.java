@@ -88,7 +88,6 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     /** Shared with the menu's unlock dim (ability-hotbar#135) - same verdict, same colour. */
     static final int UNAVAILABLE_TINT = 0x66FF0000;
     private static final int COOLDOWN_COLOR = 0xAA000000;
-    private static final int COST_BG = 0xCC000000;
 
     private AbilityBarLayer() {
     }
@@ -507,7 +506,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         drawOverlays(gui, slot, x, y, w, h);
     }
 
-    /** Draws the state overlays: cooldown, unavailable tint, cost badge. */
+    /** Draws the state overlays: cooldown and unavailable tint. */
     private static void drawOverlays(GuiGraphics gui, SlotRender slot, int x, int y, int w, int h) {
         // Cooldown overlay (known progress only; unknown draws nothing).
         if (slot.hasCooldownOverlay() && HotbarClientConfig.SHOW_COOLDOWNS.get()) {
@@ -522,11 +521,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
                 && slot.availability() instanceof org.bitwisemadness.abilitycore.api.AvailabilityState.Unavailable) {
             gui.fill(x, y, x + w, y + h, UNAVAILABLE_TINT);
         }
-
-        // Cost badge (known cost only).
-        if (slot.hasCostBadge() && HotbarClientConfig.SHOW_COSTS.get()) {
-            gui.fill(x, y + h - 4, x + w, y + h, COST_BG);
-        }
+        // The old cost badge (the black strip over icons) is gone (owner:
+        // it read as a rendering bug over spell/skill art) - costs live in
+        // the menu's row and Costs section, localised.
     }
 
     private static void drawIcon(GuiGraphics gui, ResourceLocation icon, int x, int y, int w, int h) {

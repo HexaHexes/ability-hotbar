@@ -113,11 +113,6 @@ public final class HotbarClientConfig {
             BUILDER.comment("Show cooldown progress on slots")
                     .define("display.showCooldowns", true);
 
-    /** Show resource-cost indicators on slots. */
-    public static final ModConfigSpec.BooleanValue SHOW_COSTS =
-            BUILDER.comment("Show resource cost indicators on slots")
-                    .define("display.showCosts", true);
-
     /** Horizontal pixel offset from the anchor point. */
     public static final ModConfigSpec.IntValue OFFSET_X =
             BUILDER.comment("Horizontal offset (pixels) from the bar's anchor")

@@ -244,4 +244,33 @@ class MenuTabsTest {
                         new MenuTabs.CategoryTab(TAB, " ", null, null, skill, null, null))),
                 "a malformed category tab is loud");
     }
+
+    @Test
+    void chipIconsRideBothFormsLikeTheTabs() {
+        // owner: icons for the subcategory tabs, exactly the tab strip's
+        // contract - both forms, last declaration wins, loud on nothing
+        ResourceLocation sprite = ResourceLocation.fromNamespaceAndPath("hotbar", "spark");
+        MenuTabs.subCategoryIcon("type:common", sprite, null);
+        MenuTabs.ChipIcon spriteIcon = MenuTabs.subCategoryIcon("type:common").orElseThrow();
+        assertEquals(sprite, spriteIcon.iconId(), "the sprite form rides");
+        assertNull(spriteIcon.icon());
+
+        MenuTabs.subCategoryIcon("type:common", null, new ItemStack(Items.BOOK));
+        MenuTabs.ChipIcon stackIcon = MenuTabs.subCategoryIcon("type:common").orElseThrow();
+        assertEquals(Items.BOOK, stackIcon.icon().getItem(),
+                "the last declaration wins (like subCategoryOrder)");
+        assertNull(stackIcon.iconId(), "the stack-only form drops the sprite");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> MenuTabs.subCategoryIcon(" ", null, null), "a blank tag is loud");
+        assertThrows(IllegalArgumentException.class,
+                () -> MenuTabs.subCategoryIcon("type:x", null, null),
+                "an icon without any identifier is loud");
+        assertTrue(MenuTabs.subCategoryIcon("type:absent").isEmpty(),
+                "an undeclared chip reads empty (text-only)");
+
+        MenuTabs.removeSubCategoryIcon("type:common");
+        assertTrue(MenuTabs.subCategoryIcon("type:common").isEmpty(),
+                "remove drops the declaration");
+    }
 }

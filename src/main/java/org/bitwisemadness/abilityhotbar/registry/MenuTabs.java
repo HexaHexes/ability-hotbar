@@ -129,6 +129,8 @@ public final class MenuTabs {
     private static final List<MenuTab> TABS = new CopyOnWriteArrayList<>();
     private static final Map<ResourceLocation, List<String>> SUBCATEGORY_ORDERS =
             new ConcurrentHashMap<>();
+    private static final Map<String, ChipIcon> SUBCATEGORY_ICONS =
+            new ConcurrentHashMap<>();
 
     private MenuTabs() {
     }
@@ -263,6 +265,54 @@ public final class MenuTabs {
             return List.of();
         }
         return SUBCATEGORY_ORDERS.getOrDefault(tabId, List.of());
+    }
+
+    /**
+     * One subcategory chip's registered identifier (owner: chip icons,
+     * like the ability tabs already allow) - both forms, sprite the
+     * fallback for stacks that render nothing in a GUI (the tab strip's
+     * resolve-or-hide rule, shared).
+     */
+    public record ChipIcon(@Nullable ResourceLocation iconId, @Nullable ItemStack icon) {
+
+        public ChipIcon {
+            if (iconId == null && icon == null) {
+                throw new IllegalArgumentException("a chip icon needs a sprite or a stack");
+            }
+            if (icon != null) {
+                icon = icon.copy();
+            }
+        }
+    }
+
+    /**
+     * Declares a {@code type:} chip's icon: one per tag, the last
+     * declaration wins (mirroring {@link #subCategoryOrder}). Loud on a
+     * blank tag or an icon with no identifier at all.
+     *
+     * @param typeTag the raw {@code type:} tag the chip draws
+     * @param iconId  sprite form, or null for the stack-only registration
+     * @param icon    stack form, or null for the sprite-only registration
+     */
+    public static void subCategoryIcon(String typeTag,
+            @Nullable ResourceLocation iconId, @Nullable ItemStack icon) {
+        if (typeTag == null || typeTag.isBlank()) {
+            throw new IllegalArgumentException("chip icon tag must not be blank");
+        }
+        SUBCATEGORY_ICONS.put(typeTag, new ChipIcon(iconId, icon)); // validates loudly
+    }
+
+    /**
+     * @param typeTag the raw {@code type:} tag
+     * @return the declared chip icon, empty when the provider declared none
+     */
+    public static Optional<ChipIcon> subCategoryIcon(String typeTag) {
+        return Optional.ofNullable(typeTag == null ? null : SUBCATEGORY_ICONS.get(typeTag));
+    }
+
+    /** Test isolation / future reload paths: drops one chip icon. */
+    public static void removeSubCategoryIcon(String typeTag) {
+        SUBCATEGORY_ICONS.remove(typeTag);
     }
 
     /** Test isolation / future reload paths: the tab's order dies with it. */

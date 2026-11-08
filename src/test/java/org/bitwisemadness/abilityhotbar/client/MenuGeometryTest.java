@@ -71,13 +71,18 @@ class MenuGeometryTest {
 
     @Test
     void slotNumbersCentreInsideTheVanillaSelector() {
-        // owner's brief: the number sits centred in the selection texture
-        assertEquals(16, AbilityMenuScreen.slotLabelCenteredX(40, 6),
-                "a six-pixel label centres in a 40px cell");
-        assertEquals(14, AbilityMenuScreen.slotLabelCenteredX(36, 6),
+        // owner: an icon-sized selector box (like the world hotbar) - the
+        // number centres INSIDE the box, whatever the cell width
+        assertEquals(28, AbilityMenuScreen.selectorSide(40),
+                "a normal cell takes the 28px box");
+        assertEquals(23, AbilityMenuScreen.selectorSide(27),
+                "a narrow cell clamps the box to its width");
+        assertEquals(13, AbilityMenuScreen.slotLabelCenteredX(40, 6),
+                "a six-pixel label centres in the 28px box");
+        assertEquals(13, AbilityMenuScreen.slotLabelCenteredX(36, 6),
                 "centred again at 36");
-        assertEquals(2, AbilityMenuScreen.slotLabelCenteredX(1, 6),
-                "never outside the cell");
+        assertEquals(3, AbilityMenuScreen.slotLabelCenteredX(1, 6),
+                "the floored 8px box still never leaves the cell");
     }
 
     @Test

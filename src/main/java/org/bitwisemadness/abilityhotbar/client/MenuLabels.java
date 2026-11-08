@@ -36,6 +36,27 @@ final class MenuLabels {
                 + separatorsToDots(category.getPath());
     }
 
+    /** The convention translation key for a resource id. */
+    static String resourceKey(String resourceId) {
+        return "ability_hotbar.resource." + separatorsToDots(resourceId);
+    }
+
+    /**
+     * A localised resource name (owner: costs are localised): the
+     * provider's convention key when translated, else the prettified
+     * path - {@code tensura:magicule} reads "Magicule", never the raw id.
+     */
+    static Component resource(String resourceId) {
+        String key = resourceKey(resourceId);
+        if (I18n.exists(key)) {
+            return Component.translatable(key);
+        }
+        int colon = resourceId == null ? -1 : resourceId.indexOf(':');
+        String path = resourceId == null ? ""
+                : colon >= 0 ? resourceId.substring(colon + 1) : resourceId;
+        return Component.literal(prettify(path));
+    }
+
     /** The convention translation key for a tag string. */
     static String tagKey(String tag) {
         return "ability_hotbar.tag." + separatorsToDots(tag);

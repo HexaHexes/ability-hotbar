@@ -363,9 +363,20 @@ public final class AbilityMenuScreen extends Screen {
             Component label = all
                     ? Component.translatable("ability_hotbar.menu.subcategory_any")
                     : MenuLabels.subcategory(typeTag);
+            // Provider chip icons (owner): the tab strip's identifier rule
+            // on the subcategory strip - stack, sprite, else text-only
+            int textX = rect[0] + 4;
+            if (typeTag != null) {
+                MenuTabs.ChipIcon icon = MenuTabs.subCategoryIcon(typeTag).orElse(null);
+                if (icon != null) {
+                    textX = drawIdentifier(gui, icon.iconId(), icon.icon(),
+                            rect[0] + 4, FILTER_Y + (CHIP_HEIGHT - 12) / 2, 12);
+                }
+            }
+            int budget = Math.max(4, rect[0] + rect[1] - 3 - textX);
             gui.drawString(this.font,
-                    this.font.plainSubstrByWidth(label.getString(), Math.max(4, rect[1] - 6)),
-                    rect[0] + 4, FILTER_Y + 4,
+                    this.font.plainSubstrByWidth(label.getString(), budget),
+                    textX, FILTER_Y + (CHIP_HEIGHT - 9) / 2,
                     active ? style.action() : hovered ? style.text() : style.muted());
         }
     }
@@ -467,8 +478,18 @@ public final class AbilityMenuScreen extends Screen {
      * and when neither does, the tab stays text-only, never a broken box.
      */
     private int drawTabIcon(GuiGraphics gui, MenuTabs.MenuTab tab, int x, int y) {
-        ResourceLocation iconId = tab.iconId();
-        ItemStack stack = tab.icon();
+        return drawIdentifier(gui, tab.iconId(), tab.icon(), x, y, TAB_ICON);
+    }
+
+    /**
+     * One registered identifier at one size (owner: chip icons ride the
+     * tab strip's rule): the stack is the draw preference when it renders
+     * in a GUI, the sprite the fallback, and nothing resolves to a
+     * text-only label - never a broken box. Returns the text x after the
+     * icon, or x when no icon draws.
+     */
+    private int drawIdentifier(GuiGraphics gui, @Nullable ResourceLocation iconId,
+            @Nullable ItemStack stack, int x, int y, int size) {
         boolean stackRenders = stack != null && !stack.isEmpty() && stackRendersInGui(stack);
         MenuTabs.IconTexture texture = stackRenders || iconId == null ? null
                 : MenuTabs.resolvedIconTexture(iconId, rl -> Minecraft.getInstance()
@@ -480,7 +501,7 @@ public final class AbilityMenuScreen extends Screen {
         pose.pushPose();
         try {
             pose.translate(x, y, 0.0);
-            float scale = TAB_ICON / 16.0f;
+            float scale = size / 16.0f;
             pose.scale(scale, scale, 1.0f);
             if (stackRenders) {
                 gui.renderItem(stack, 0, 0);
@@ -492,7 +513,7 @@ public final class AbilityMenuScreen extends Screen {
         } finally {
             pose.popPose();
         }
-        return x + TAB_ICON + 3;
+        return x + size + 3;
     }
 
     /**
@@ -676,33 +697,38 @@ public final class AbilityMenuScreen extends Screen {
             var assignment = target.assignment(i);
             boolean filled = assignment != null && assignment.isAssigned();
             boolean dropHover = filled && dragAbilityId != null && hovered;
-            // the vanilla selector marks the slot on EVERY cell (owner:
-            // filled ones too) - where an icon goes, and the drop target
-            // for a dragged ability
-            gui.blitSprite(VANILLA_SELECTION, x + 2, cellY + 2,
-                    cellWidth - 5, SLOT_HEIGHT - 4);
+            // The vanilla selector marks the slot on EVERY cell (owner):
+            // an icon-sized box like the world hotbar - only the icon or
+            // the number lives inside; a drag shows the bare box target
+            int side = selectorSide(cellWidth);
+            int boxX = x + 2;
+            int boxY = cellY + (SLOT_HEIGHT - side) / 2;
+            gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
             if (!filled) {
                 // the number sits CENTRED inside the selector, empty only
                 String label = slotLabel(i + 1);
                 gui.drawString(this.font, label,
-                        x + slotLabelCenteredX(cellWidth, this.font.width(label)),
-                        cellY + 11,
+                        boxX + Math.max(0, (side - this.font.width(label)) / 2),
+                        boxY + Math.max(0, (side - 9) / 2),
                         selected ? style.text() : style.muted());
                 continue;
             }
             if (dropHover) {
                 continue; // filled + dragged-over: the box alone is the read
             }
-            // Filled: the icon plus the ability's name truncated to the cell
-            // (owner's brief) - the index a filled cell used to show is gone.
+            // Filled: the icon RESIZED TO FIT inside the selector (owner),
+            // name + mode beside the box, truncated to what remains
             ResourceLocation icon = slotIcon(target, i);
             boolean iconDrawn = icon != null && HotbarClientConfig.SHOW_ICONS.get()
                     && slotIconFits(cellWidth);
+            int nameX = boxX + side + 2;
+            int nameWidth = Math.max(4, cellWidth - (side + 5));
             if (iconDrawn) {
-                gui.blit(icon, x + 2, cellY + 2, 0, 0, 24, 24, 24, 24);
+                int iconSize = side - 4;
+                gui.blit(icon, boxX + (side - iconSize) / 2,
+                        boxY + (side - iconSize) / 2,
+                        0, 0, iconSize, iconSize, iconSize, iconSize);
             }
-            int nameX = iconDrawn ? x + 28 : x + 3;
-            int nameWidth = Math.max(4, cellWidth - (iconDrawn ? 31 : 6));
             String modeLabel = slotModeLabel(target, i);
             String name = this.font.plainSubstrByWidth(slotName(target, i), nameWidth);
             gui.drawString(this.font, name, nameX,
@@ -872,13 +898,19 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The empty cell's number x offset: centred inside the vanilla
-     * selection box (owner's brief - the number lives in the selector).
-     * The selector spans x=2..cellWidth-3 of the cell. Package-private
-     * for the geometry fixture (draw shares it).
+     * The selector box's side: an icon-sized square inside the cell
+     * (owner: like the world hotbar - only the icon lives in the box).
+     */
+    static int selectorSide(int cellWidth) {
+        return Math.max(8, Math.min(SLOT_HEIGHT - 4, cellWidth - 4));
+    }
+
+    /**
+     * The empty cell's number x offset: centred INSIDE the selector box.
+     * Package-private for the geometry fixture (draw shares it).
      */
     static int slotLabelCenteredX(int cellWidth, int labelWidth) {
-        return 2 + Math.max(0, (cellWidth - 5 - labelWidth) / 2);
+        return 2 + Math.max(0, (selectorSide(cellWidth) - labelWidth) / 2);
     }
 
     /**
@@ -1966,12 +1998,14 @@ public final class AbilityMenuScreen extends Screen {
         return cost == null ? "" : costText(cost);
     }
 
-    /** One declared cost as text: whole amounts drop the decimal point. */
+    /** One declared cost as text: whole amounts drop the decimal point,
+     * and the resource reads localised (the provider's convention key,
+     * else its prettified path - owner: costs are localised). */
     private static String costText(ResourceCost cost) {
         double amount = cost.amount();
         String formatted = amount == Math.floor(amount) ? String.valueOf((long) amount)
                 : String.valueOf(amount);
-        return formatted + " " + cost.resourceId();
+        return formatted + " " + MenuLabels.resource(cost.resourceId()).getString();
     }
 
     @Nullable
