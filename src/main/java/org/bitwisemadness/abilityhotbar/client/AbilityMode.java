@@ -31,15 +31,18 @@ public final class AbilityMode {
     /**
      * The cycle request for the current state - the testable half (the
      * {@code digitSelection} shape): empty when there is no state, no
-     * assignment in the selected slot, or no registered mode-change
-     * adapter for that ability (iss/curios ids are not cycleable - the
-     * client's same-construction knowledge avoids a pointless round trip).
+     * active bar, no assignment in the selected slot, or no registered
+     * mode-change adapter for that ability (iss/curios ids are not
+     * cycleable - the client's same-construction knowledge avoids a
+     * pointless round trip). The keybind acts on the <b>active</b> bar's
+     * cursor, so it names that bar explicitly (the menu's pill sends the
+     * bar its tab shows).
      *
      * @param state the client's synced bar state (nullable)
-     * @return the slot-only request, or empty for a no-op press
+     * @return the bar-scoped request, or empty for a no-op press
      */
     static Optional<CycleModePayload> requestFor(@Nullable BarState state) {
-        if (state == null) {
+        if (state == null || state.activeBarId() == null) {
             return Optional.empty();
         }
         int slot = state.selectedSlot();
@@ -50,7 +53,7 @@ public final class AbilityMode {
         if (!ModeChangeHandlers.has(assignment.abilityId())) {
             return Optional.empty();
         }
-        return Optional.of(new CycleModePayload(slot));
+        return Optional.of(new CycleModePayload(state.activeBarId(), slot));
     }
 
     /** Toggles ability mode: one press, one server-validated cycle (REQ-HOT-16). */

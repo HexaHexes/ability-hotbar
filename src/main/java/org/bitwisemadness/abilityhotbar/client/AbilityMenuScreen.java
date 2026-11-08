@@ -1435,8 +1435,10 @@ public final class AbilityMenuScreen extends Screen {
                     }
                 }
                 // the mode pill cycles the slotted ability's mode (owner's
-                // brief) - one server-validated cycle, the keybind's path
-                int modeSlot = modeSlotFor(target, row.id());
+                // brief) - one server-validated cycle, the keybind's path;
+                // the bar id rides along: the tab shown may not be active
+                int modeSlot = selectedBar == null ? -1
+                        : modeSlotFor(target, row.id());
                 if (modeSlot >= 0) {
                     String modeLabel = modePillLabel(row.id(),
                             storedModeAt(target, modeSlot));
@@ -1446,7 +1448,8 @@ public final class AbilityMenuScreen extends Screen {
                             : modePillRect(rowY, listWidth(), modeLabel, toggleRect);
                     if (modeRect != null && inside(mouseX, mouseY, modeRect[0],
                             modeRect[1], modeRect[2], modeRect[3])) {
-                        PacketDistributor.sendToServer(new CycleModePayload(modeSlot));
+                        PacketDistributor.sendToServer(
+                                new CycleModePayload(selectedBar, modeSlot));
                         return true;
                     }
                 }
@@ -1480,10 +1483,11 @@ public final class AbilityMenuScreen extends Screen {
         int scrollBottom = listBottom(scrollBar == null ? 0 : scrollBar.slotCount());
         if (detailScrollMax > 0 && inside(mouseX, mouseY, x0, FILTER_Y,
                 this.width - 8 - x0, scrollBottom - FILTER_Y)) {
-            // owner's brief: faster wheel (3 lines a notch), clamped to the
-            // real overflow the draw pass measured
+            // owner's brief: fast wheel (six lines a notch - three still
+            // read as too slow), clamped to the real overflow the draw
+            // pass measured
             detailScroll = Math.max(0, Math.min(detailScrollMax,
-                    detailScroll + (scrollY > 0 ? -3 : 3)));
+                    detailScroll + (scrollY > 0 ? -6 : 6)));
             return true;
         }
         if (scrollY > 0) {
@@ -1501,13 +1505,14 @@ public final class AbilityMenuScreen extends Screen {
             return true;
         }
         if (detailDragging) {
-            // pixels accumulate into whole 9px lines; the draw pass clamps
-            // the result to the real overflow every frame
+            // pixels accumulate into whole lines at four pixels a step
+            // (owner: drag was too slow at one-to-one), the draw pass
+            // clamps the result to the real overflow every frame
             detailDragRemainder += dragY;
-            int lines = (int) detailDragRemainder / 9;
+            int lines = (int) detailDragRemainder / 4;
             if (lines != 0) {
                 detailScroll = Math.max(0, detailScroll - lines);
-                detailDragRemainder -= lines * 9;
+                detailDragRemainder -= lines * 4;
             }
             return true;
         }

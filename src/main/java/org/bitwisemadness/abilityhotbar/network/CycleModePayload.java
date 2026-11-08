@@ -18,24 +18,32 @@ import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
 
 /**
  * Client-to-server ability-mode cycle request (REQ-HOT-16, tracked as
- * tensura-iss-integration#51): carries only the <b>slot</b> - the server
- * resolves the ability from its own state (never a client-authoritative id
- * or mode value), routes one cycle through core's mode-change contract, and
- * on ACTED reflects the provider's new live mode into that slot's stored
- * setting before echoing the snapshot (the round-trip the UI reads). No
- * adapter, an empty slot, or any refusal changes nothing and echoes.
- * A mode change never casts, resets selections, or drives anything else -
- * core's mode contract is charge-free by construction.
+ * tensura-iss-integration#51): carries the <b>bar and slot</b> - the menu
+ * edits a bar that may not be the active one (its tab/chip selection is
+ * client-side), so the slot alone could name a different bar's row
+ * (play-test round). The server resolves the ability from its own state
+ * (never a client-authoritative id or mode value), routes one cycle
+ * through core's mode-change contract, and on ACTED reflects the
+ * provider's new live mode into that slot's stored setting before
+ * echoing the snapshot (the round-trip the UI reads). No adapter, an
+ * unstored bar, an empty slot, or any refusal changes nothing and
+ * echoes. A mode change never casts, resets selections, or drives
+ * anything else - core's mode contract is charge-free by construction.
  *
- * @param slot the selected slot on the player's active bar
+ * @param barId the bar whose slot cycles (the keybind sends the active bar)
+ * @param slot  the selected slot on that bar
  */
-public record CycleModePayload(int slot) implements CustomPacketPayload {
+public record CycleModePayload(ResourceLocation barId, int slot)
+        implements CustomPacketPayload {
 
     public static final Type<CycleModePayload> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(AbilityHotbar.MOD_ID, "cycle_mode"));
 
     public static final StreamCodec<ByteBuf, CycleModePayload> STREAM_CODEC =
-            ByteBufCodecs.VAR_INT.map(CycleModePayload::new, CycleModePayload::slot);
+            StreamCodec.composite(
+                    ResourceLocation.STREAM_CODEC, CycleModePayload::barId,
+                    ByteBufCodecs.VAR_INT, CycleModePayload::slot,
+                    CycleModePayload::new);
 
     @Override
     public Type<? extends CycleModePayload> type() {
@@ -47,7 +55,9 @@ public record CycleModePayload(int slot) implements CustomPacketPayload {
         context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer player) {
                 BarState current = player.getData(BarStateAttachments.BAR_STATE);
-                SlotAssignment assignment = current.assignment(payload.slot());
+                SlotAssignment[] row = current.assignmentsOf(payload.barId());
+                SlotAssignment assignment = row == null || payload.slot() < 0
+                        || payload.slot() >= row.length ? null : row[payload.slot()];
                 if (assignment == null || assignment.abilityId() == null
                         || !ModeChangeHandlers.has(assignment.abilityId())) {
                     BarStateSync.sendSnapshot(player);
@@ -60,7 +70,8 @@ public record CycleModePayload(int slot) implements CustomPacketPayload {
                     return;
                 }
                 BarState next = ModeContract.currentMode(player, assignment.abilityId())
-                        .map(mode -> current.withSlotMode(payload.slot(), mode))
+                        .map(mode -> current.withSlotMode(
+                                payload.barId(), payload.slot(), mode))
                         .orElse(current);
                 BarStateSync.acceptAssignment(player, next);
             }
