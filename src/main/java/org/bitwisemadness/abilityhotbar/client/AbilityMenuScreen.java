@@ -1,6 +1,8 @@
 package org.bitwisemadness.abilityhotbar.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -15,6 +17,7 @@ import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -27,6 +30,7 @@ import org.bitwisemadness.abilitycore.api.ActivationRequest;
 import org.bitwisemadness.abilitycore.api.ActivationSource;
 import org.bitwisemadness.abilitycore.api.PresentationField;
 import org.bitwisemadness.abilitycore.api.PresentationProviders;
+import org.bitwisemadness.abilitycore.api.ResourceCost;
 import org.bitwisemadness.abilitycore.api.Toggle;
 import org.bitwisemadness.abilitycore.discovery.AbilityDiscovery;
 import org.bitwisemadness.abilityhotbar.UnlockRule;
@@ -117,6 +121,9 @@ public final class AbilityMenuScreen extends Screen {
     private static final int SLOT_HEIGHT = 32;
     /** The gap between the two slot rows. */
     private static final int SLOT_GAP = 2;
+    /** The vanilla hotbar selection sprite - empty-slot/drop indicator. */
+    private static final ResourceLocation VANILLA_SELECTION =
+            ResourceLocation.fromNamespaceAndPath("minecraft", "hud/hotbar_selection");
     /** The prev/next bar buttons beside the strip (issue #157): 14px cells. */
     private static final int BAR_NAV_SIZE = 14;
     private static final int BAR_NAV_GAP = 2;
@@ -125,6 +132,10 @@ public final class AbilityMenuScreen extends Screen {
     private int selectedSlot;
     @Nullable
     private String subCategoryFilter;
+    // The subcategory filter belongs to the tab it was picked on (owner's
+    // brief): each tab remembers its own choice for this session, and a
+    // tab switch swaps to that tab's filter instead of leaking one.
+    private final Map<ResourceLocation, String> subFilterMemory = new HashMap<>();
     @Nullable
     private ResourceLocation selectedTab;
     private int scrollOffset;
@@ -144,12 +155,22 @@ public final class AbilityMenuScreen extends Screen {
     // the pointer leaves (owner's brief - visual assignment feedback).
     @Nullable
     private ResourceLocation selectedRowId;
+    // Drag-to-assign (owner's brief): a press on a row arms it, movement
+    // past the threshold promotes it to a drag, and the release drops it
+    // on a slot cell - in place it stays the old click-assign.
+    @Nullable
+    private ResourceLocation pressedRowId;
+    @Nullable
+    private ResourceLocation dragAbilityId;
+    private double pressStartX;
+    private double pressStartY;
+    /** Movement (px, manhattan) before a row press becomes a drag. */
+    private static final int DRAG_THRESHOLD = 6;
 
     public AbilityMenuScreen() {
         super(Component.translatable("ability_hotbar.menu.title"));
         // Loaded once per open (a resize re-runs init, not this constructor),
         // so mid-session filters are not clobbered by the last saved pair.
-        subCategoryFilter = emptyToNull(HotbarClientConfig.MENU_SUBCATEGORY.get());
         selectedTab = parseFilter(HotbarClientConfig.MENU_TAB.get());
         BarState state = ClientBarState.get();
         List<ResourceLocation> bars = manageableBars();
@@ -159,11 +180,38 @@ public final class AbilityMenuScreen extends Screen {
         if (selectedTab != null && MenuTabs.get(selectedTab).isEmpty()) {
             selectedTab = null; // a removed or unknown tab id falls back to All
         }
+        // The pair parse runs after the tab fallback so a dead tab id can
+        // never leave its filter behind on All (parseFilter posture).
+        subCategoryFilter = parseSubCategory(
+                HotbarClientConfig.MENU_SUBCATEGORY.get(), selectedTab);
         // A corrupt pref must never blank the menu (the parseFilter posture):
         // a subcategory naming nothing under the selected tab drops to All.
         if (subCategoryFilter != null && !subTypeTags().contains(subCategoryFilter)) {
             subCategoryFilter = null;
         }
+    }
+
+    /**
+     * Parses the saved subcategory pref (owner's brief: the filter belongs
+     * to one tab): the pair {@code <tab>;<filter>} applies only when its
+     * owner is the restored tab - All is the empty owner - and a bare
+     * legacy value keeps its old meaning (validated by the caller).
+     */
+    @Nullable
+    private static String parseSubCategory(String raw, @Nullable ResourceLocation tab) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        int cut = raw.indexOf(';');
+        if (cut < 0) {
+            return emptyToNull(raw);
+        }
+        String owner = raw.substring(0, cut);
+        boolean ownerAll = owner.isEmpty();
+        if (ownerAll != (tab == null) || !ownerAll && !owner.equals(tab.toString())) {
+            return null;
+        }
+        return emptyToNull(raw.substring(cut + 1));
     }
 
     @Override
@@ -236,6 +284,26 @@ public final class AbilityMenuScreen extends Screen {
         // its own region, and nothing can ever paint over it (brief).
         gui.flush();
         drawDetailPane(gui, target);
+        // the dragged ability's icon rides the cursor (owner's drag brief)
+        if (dragAbilityId != null) {
+            drawDragGhost(gui, mouseX, mouseY);
+        }
+    }
+
+    /** The drag affordance: the row's own icon at the cursor, 32px. */
+    private void drawDragGhost(GuiGraphics gui, int mouseX, int mouseY) {
+        if (dragAbilityId == null) {
+            return;
+        }
+        var found = AbilityDiscovery.get(dragAbilityId);
+        if (found.isEmpty()) {
+            return;
+        }
+        ResourceLocation icon = found.get().iconId();
+        if (icon == null) {
+            return;
+        }
+        gui.blit(icon, mouseX - 16, mouseY - 16, 0, 0, 32, 32, 32, 32);
     }
 
     /**
@@ -606,14 +674,23 @@ public final class AbilityMenuScreen extends Screen {
             }
             var assignment = target.assignment(i);
             boolean filled = assignment != null && assignment.isAssigned();
+            boolean dropHover = filled && dragAbilityId != null && hovered;
+            // the vanilla selector marks the slot on EVERY cell (owner:
+            // filled ones too) - where an icon goes, and the drop target
+            // for a dragged ability
+            gui.blitSprite(VANILLA_SELECTION, x + 2, cellY + 2,
+                    cellWidth - 5, SLOT_HEIGHT - 4);
             if (!filled) {
-                // numbers on EMPTY slots only (owner's earlier brief)
-                int labelX = slotLabelX(cellWidth, false);
-                if (labelX >= 0) {
-                    gui.drawString(this.font, slotLabel(i + 1), x + labelX, cellY + 11,
-                            selected ? style.text() : style.muted());
-                }
+                // the number sits CENTRED inside the selector, empty only
+                String label = slotLabel(i + 1);
+                gui.drawString(this.font, label,
+                        x + slotLabelCenteredX(cellWidth, this.font.width(label)),
+                        cellY + 11,
+                        selected ? style.text() : style.muted());
                 continue;
+            }
+            if (dropHover) {
+                continue; // filled + dragged-over: the box alone is the read
             }
             // Filled: the icon plus the ability's name truncated to the cell
             // (owner's brief) - the index a filled cell used to show is gone.
@@ -794,16 +871,37 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The footer cell's slot-number x offset (hotbar#156): 28 when the icon
-     * draws (doubled, at 2..26) and the number still fits beside it, -1 for
-     * an icon-only cell (under 36 wide), 3 for the plain number cell.
-     * Package-private for the geometry fixture (draw shares it).
+     * The empty cell's number x offset: centred inside the vanilla
+     * selection box (owner's brief - the number lives in the selector).
+     * The selector spans x=2..cellWidth-3 of the cell. Package-private
+     * for the geometry fixture (draw shares it).
      */
-    static int slotLabelX(int cellWidth, boolean iconDrawn) {
-        if (iconDrawn) {
-            return cellWidth >= 36 ? 28 : -1;
+    static int slotLabelCenteredX(int cellWidth, int labelWidth) {
+        return 2 + Math.max(0, (cellWidth - 5 - labelWidth) / 2);
+    }
+
+    /**
+     * The slot cell under the point, or -1: the click/drop side of
+     * {@link #drawSlotCells}' geometry (owner's drag-to-assign brief), so a
+     * release can name the target slot without re-deriving the layout.
+     * Package-private for the geometry fixture.
+     */
+    static int slotCellAt(double mouseX, double mouseY, int slotCount,
+            int screenWidth, int reserved, int screenHeight) {
+        if (slotCount <= 0) {
+            return -1;
         }
-        return 3;
+        int cellWidth = slotWidth(slotCount, screenWidth, reserved);
+        int rowSlots = Math.min(slotCount, MAX_ROW_SLOTS);
+        int y = screenHeight - 16 - stripHeight(slotCount);
+        for (int i = 0; i < slotCount; i++) {
+            int x = LIST_LEFT + (i % rowSlots) * cellWidth;
+            int cellY = y + (i / rowSlots) * (SLOT_HEIGHT + SLOT_GAP);
+            if (inside(mouseX, mouseY, x, cellY, cellWidth - 1, SLOT_HEIGHT)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -1054,79 +1152,156 @@ public final class AbilityMenuScreen extends Screen {
         gui.drawString(this.font, name, textX, top + 4, style.text());
         gui.fill(textX, top + 14, textX + this.font.width(name), top + 15, style.accent());
         int lineY = top + 16;
-        // activation requirement (brief #9): the declared type, prettified
-        gui.drawString(this.font, Component.translatable("ability_hotbar.menu.activation_fmt",
-                Component.literal(MenuLabels.prettify(definition.activationType().name()))),
-                textX, lineY, style.action());
-        lineY += 12;
-        gui.drawString(this.font, this.font.plainSubstrByWidth(metaText(definition), wrapW),
-                textX, lineY, style.muted());
-        lineY += 12;
-        boolean hasStats = !definition.stats().isEmpty();
-        if (hasStats) {
-            // issue #119: declared stats in declaration order, in the
-            // value-bearing action colour; labels resolve through MenuLabels
-            String stats = definition.stats().stream()
-                    .map(stat -> MenuLabels.stat(stat.labelKey()).getString() + ": " + stat.value())
+        // The info section splits into labelled subsections (owner's
+        // brief): build the rows once, then measure and scroll them as
+        // ONE unit - a short pane can never strand a header off-screen.
+        List<PaneRow> rows = new ArrayList<>();
+        rows.add(new PaneRow.Header("ability_hotbar.menu.section.activation"));
+        rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
+                Component.translatable("ability_hotbar.menu.activation_fmt",
+                        Component.literal(MenuLabels.prettify(
+                                definition.activationType().name()))).getString(),
+                wrapW), style.action()));
+        String tags = metaText(definition);
+        if (!tags.isEmpty()) {
+            rows.add(new PaneRow.Line(
+                    this.font.plainSubstrByWidth(tags, wrapW), style.muted()));
+        }
+        if (!definition.costs().isEmpty()) {
+            // owner's brief: EVERY declared cost shows, not just the first
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.costs"));
+            String costs = definition.costs().stream()
+                    .map(cost -> costText(cost))
                     .collect(Collectors.joining("   "));
-            gui.drawString(this.font, this.font.plainSubstrByWidth(stats, wrapW),
-                    textX, lineY, style.action());
-            lineY += 12;
+            rows.add(new PaneRow.Line(
+                    this.font.plainSubstrByWidth(costs, wrapW), style.action()));
+        }
+        if (!definition.stats().isEmpty()) {
+            // issue #119: declared stats in declaration order, labels
+            // resolved through MenuLabels
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.stats"));
+            String stats = definition.stats().stream()
+                    .map(stat -> MenuLabels.stat(stat.labelKey()).getString()
+                            + ": " + stat.value())
+                    .collect(Collectors.joining("   "));
+            rows.add(new PaneRow.Line(
+                    this.font.plainSubstrByWidth(stats, wrapW), style.action()));
         }
         Optional<AbilityPresentation> presentation = presentationOf(id);
-        if (presentation.isPresent()) {
+        if (presentation.isPresent() && !presentation.get().fields().isEmpty()) {
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.status"));
             for (PresentationField field : presentation.get().fields()) {
-                drawField(gui, field, lineY, textX, wrapW, style);
-                lineY += 12;
+                rows.add(new PaneRow.FieldRow(field));
             }
         }
-        // Available modes each get a line in the pane, with the provider's
-        // mode description when it ships one under the mode key (owner's
-        // brief: multi-mode arts; the button moved to the list row).
+        // Available modes each get a line, with the provider's mode
+        // description when it ships one under the mode key (owner's brief:
+        // multi-mode arts; the button moved to the list row).
         Optional<List<AbilityModes.Mode>> modes = AbilityModes.get(id);
-        if (modes.isPresent()) {
+        if (modes.isPresent() && !modes.get().isEmpty()) {
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.modes"));
             for (AbilityModes.Mode mode : modes.get()) {
-                String modeName = MenuLabels.named(mode.nameKey()).getString();
-                gui.drawString(this.font,
-                        this.font.plainSubstrByWidth(modeName, wrapW),
-                        textX, lineY, style.action());
-                lineY += 12;
+                rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
+                        MenuLabels.named(mode.nameKey()).getString(), wrapW),
+                        style.action()));
                 if (I18n.exists(mode.nameKey() + ".description")) {
-                    gui.drawString(this.font, this.font.plainSubstrByWidth(
+                    rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
                             Component.translatable(mode.nameKey() + ".description")
-                                    .getString(), wrapW),
-                            textX, lineY, style.muted());
-                    lineY += 12;
+                                    .getString(), wrapW), style.muted()));
                 }
             }
         }
-        // the FULL description (brief): wrapped, clipped to the pane and
-        // wheel-scrolled when it overflows; the fixed sections never move
+        // the FULL description (brief): wrapped and clipped to the pane,
+        // scrollable with everything above it when anything overflows
         String description = definition.description().orElse(null);
         Component descriptionComponent = description == null ? null
                 : descriptionComponent(description);
-        if (descriptionComponent == null) {
-            detailScrollMax = 0;
-            detailScroll = 0;
-            return;
+        if (descriptionComponent != null) {
+            rows.add(new PaneRow.Header(
+                    "ability_hotbar.menu.section.description"));
+            rows.add(new PaneRow.Wrapped(
+                    this.font.split(descriptionComponent, wrapW)));
         }
-        var lines = this.font.split(descriptionComponent, wrapW);
-        int descTop = lineY + 2;
-        int visibleH = Math.max(9, bottom - 6 - descTop);
-        detailScrollMax = Math.max(0, lines.size() * 9 - visibleH);
+
+        int contentTop = lineY + 2;
+        int contentHeight = 0;
+        for (PaneRow row : rows) {
+            contentHeight += row.height();
+        }
+        int visibleH = Math.max(9, bottom - 6 - contentTop);
+        detailScrollMax = Math.max(0, contentHeight - visibleH);
         detailScroll = Math.max(0, Math.min(detailScroll, detailScrollMax));
-        int y = descTop - detailScroll;
-        for (int i = 0; i < lines.size(); i++, y += 9) {
-            if (y >= bottom - 8) {
-                break;
+        int cursor = contentTop - detailScroll;
+        for (PaneRow row : rows) {
+            if (cursor + row.height() > top && cursor < bottom) {
+                drawPaneRow(gui, row, cursor, textX, wrapW, style);
             }
-            if (y >= descTop) {
-                gui.drawString(this.font, lines.get(i), textX, y,
-                        MenuStyle.alpha(style.muted(), 70));
-            }
+            cursor += row.height();
         }
         } finally {
             gui.disableScissor();
+        }
+    }
+
+    /** One pane row drawn at its scrolled y inside the scissor. */
+    private void drawPaneRow(GuiGraphics gui, PaneRow row, int y, int textX,
+            int wrapW, MenuStyle style) {
+        if (row instanceof PaneRow.Header header) {
+            gui.drawString(this.font, Component.translatable(header.key()),
+                    textX, y + 4, style.accent());
+        } else if (row instanceof PaneRow.Line line) {
+            gui.drawString(this.font, line.text(), textX, y, line.color());
+        } else if (row instanceof PaneRow.Wrapped wrapped) {
+            List<FormattedCharSequence> lines = wrapped.lines();
+            for (int i = 0; i < lines.size(); i++) {
+                gui.drawString(this.font, lines.get(i), textX, y + i * 9,
+                        MenuStyle.alpha(style.muted(), 70));
+            }
+        } else if (row instanceof PaneRow.FieldRow field) {
+            drawField(gui, field.field(), y, textX, wrapW, style);
+        }
+    }
+
+    /**
+     * A pane content row for the subsectioned info section (owner's
+     * brief): a header, a single clipped line, a wrapped text block, or a
+     * live presentation field - each carrying its own height so the
+     * measure pass and the draw pass can never disagree.
+     */
+    private sealed interface PaneRow {
+
+        int height();
+
+        /** A section header: 4px lead-in under whatever precedes it. */
+        record Header(String key) implements PaneRow {
+            @Override
+            public int height() {
+                return 16;
+            }
+        }
+
+        /** One clipped line in a fixed colour. */
+        record Line(String text, int color) implements PaneRow {
+            @Override
+            public int height() {
+                return 12;
+            }
+        }
+
+        /** A wrapped block (the description): 9px lines. */
+        record Wrapped(List<FormattedCharSequence> lines) implements PaneRow {
+            @Override
+            public int height() {
+                return lines.size() * 9;
+            }
+        }
+
+        /** A live presentation field (status/mastery meters). */
+        record FieldRow(PresentationField field) implements PaneRow {
+            @Override
+            public int height() {
+                return 12;
+            }
         }
     }
 
@@ -1178,23 +1353,19 @@ public final class AbilityMenuScreen extends Screen {
      * {@link MenuLabels#subcategory} so {@code type:unique} reaches the
      * player as "Unique" - properly capitalised (brief #8).
      */
+    /**
+     * The tags line (the Costs subsection owns costs now - owner's brief:
+     * every declared cost shows, not just the representative one).
+     */
     private static String metaText(AbilityDefinition definition) {
-        StringBuilder meta = new StringBuilder();
-        if (!definition.tags().isEmpty()) {
-            meta.append(definition.tags().stream()
-                    .map(tag -> tag.startsWith(MenuQuery.SUBCATEGORY_PREFIX)
-                            ? MenuLabels.subcategory(tag).getString()
-                            : MenuLabels.tag(tag).getString())
-                    .collect(Collectors.joining(", ")));
+        if (definition.tags().isEmpty()) {
+            return "";
         }
-        String cost = costText(definition);
-        if (!cost.isEmpty()) {
-            if (meta.length() > 0) {
-                meta.append("  ");
-            }
-            meta.append(cost);
-        }
-        return meta.toString();
+        return definition.tags().stream()
+                .map(tag -> tag.startsWith(MenuQuery.SUBCATEGORY_PREFIX)
+                        ? MenuLabels.subcategory(tag).getString()
+                        : MenuLabels.tag(tag).getString())
+                .collect(Collectors.joining(", "));
     }
 
     /**
@@ -1325,7 +1496,19 @@ public final class AbilityMenuScreen extends Screen {
             int tabX = LIST_LEFT;
             for (int i = -1; i < tabs.size(); i++) {
                 if (inside(mouseX, mouseY, tabX, STYLE_PILL_Y, tabWidth - 2, 14)) {
+                    // The subcategory filter belongs to its tab (owner's
+                    // brief): stash this tab's choice, swap to the new
+                    // tab's own - never leak one across the strip.
+                    subFilterMemory.put(selectedTab,
+                            subCategoryFilter == null ? "" : subCategoryFilter);
                     selectedTab = i < 0 ? null : tabs.get(i).id();
+                    String remembered = subFilterMemory.get(selectedTab);
+                    subCategoryFilter = remembered == null || remembered.isEmpty()
+                            ? null : remembered;
+                    if (subCategoryFilter != null
+                            && !subTypeTags().contains(subCategoryFilter)) {
+                        subCategoryFilter = null;
+                    }
                     scrollOffset = 0;
                     return true;
                 }
@@ -1453,8 +1636,17 @@ public final class AbilityMenuScreen extends Screen {
                         return true;
                     }
                 }
-                selectedRowId = row.id(); // the row keeps the lit treatment
-                sendAssignment(row.id().toString());
+                // arm the row: click-assign moves to release, past the
+                // threshold it becomes a slot-cell drag (owner's brief) -
+                // with drag-to-assign off, the press assigns directly
+                if (!HotbarClientConfig.DRAG_TO_ASSIGN.get()) {
+                    selectedRowId = row.id();
+                    sendAssignment(row.id().toString());
+                    return true;
+                }
+                pressedRowId = row.id();
+                pressStartX = mouseX;
+                pressStartY = mouseY;
                 return true;
             }
         }
@@ -1483,11 +1675,11 @@ public final class AbilityMenuScreen extends Screen {
         int scrollBottom = listBottom(scrollBar == null ? 0 : scrollBar.slotCount());
         if (detailScrollMax > 0 && inside(mouseX, mouseY, x0, FILTER_Y,
                 this.width - 8 - x0, scrollBottom - FILTER_Y)) {
-            // owner's brief: fast wheel (six lines a notch - three still
-            // read as too slow), clamped to the real overflow the draw
-            // pass measured
+            // owner's brief: configurable wheel speed (default 16 lines a
+            // notch), clamped to the real overflow the draw pass measured
+            int linesPerNotch = HotbarClientConfig.DESCRIPTION_SCROLL_LINES.get();
             detailScroll = Math.max(0, Math.min(detailScrollMax,
-                    detailScroll + (scrollY > 0 ? -6 : 6)));
+                    detailScroll + (scrollY > 0 ? -linesPerNotch : linesPerNotch)));
             return true;
         }
         if (scrollY > 0) {
@@ -1502,6 +1694,18 @@ public final class AbilityMenuScreen extends Screen {
     public boolean mouseDragged(double mouseX, double mouseY, int button,
             double dragX, double dragY) {
         if (super.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
+            return true;
+        }
+        if (dragAbilityId != null) {
+            return true; // the ghost rides the cursor; cells read the hover
+        }
+        if (pressedRowId != null) {
+            // movement past the threshold promotes the press to a drag
+            if (Math.abs(mouseX - pressStartX) + Math.abs(mouseY - pressStartY)
+                    > DRAG_THRESHOLD) {
+                dragAbilityId = pressedRowId;
+                pressedRowId = null;
+            }
             return true;
         }
         if (detailDragging) {
@@ -1522,7 +1726,42 @@ public final class AbilityMenuScreen extends Screen {
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         detailDragging = false;
+        ResourceLocation drag = dragAbilityId;
+        ResourceLocation pressed = pressedRowId;
+        dragAbilityId = null;
+        pressedRowId = null;
+        if (drag != null) {
+            dropDragged(mouseX, mouseY, drag);
+            return true;
+        }
+        if (pressed != null) {
+            // press + release in place: the old click-assign to the
+            // selected slot (the row keeps the lit treatment)
+            selectedRowId = pressed;
+            sendAssignment(pressed.toString());
+            return true;
+        }
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    /**
+     * The drag's resolution (owner's brief): a slot cell under the point
+     * takes the ability - explicitly, to that slot - and any other release
+     * cancels the drag without assigning (a drag never degrades to a
+     * click-assign).
+     */
+    private void dropDragged(double mouseX, double mouseY, ResourceLocation id) {
+        BarState state = ClientBarState.get();
+        Bar target = state == null ? null : targetBar(state);
+        if (target == null || selectedBar == null) {
+            return;
+        }
+        int slot = slotCellAt(mouseX, mouseY, target.slotCount(),
+                this.width, clusterWidth(), this.height);
+        if (slot >= 0) {
+            PacketDistributor.sendToServer(
+                    new AssignAbilityPayload(slot, id.toString(), selectedBar));
+        }
     }
 
     @Override
@@ -1540,7 +1779,11 @@ public final class AbilityMenuScreen extends Screen {
     @Override
     public void onClose() {
         // The remembered filters are CLIENT config; bar contents never are.
-        HotbarClientConfig.MENU_SUBCATEGORY.set(subCategoryFilter == null ? "" : subCategoryFilter);
+        // The subcategory rides its owning tab (owner's brief): the pair
+        // survives reopen only when the saved tab does.
+        HotbarClientConfig.MENU_SUBCATEGORY.set(subCategoryFilter == null ? ""
+                : (selectedTab == null ? "" : selectedTab.toString())
+                        + ";" + subCategoryFilter);
         HotbarClientConfig.MENU_TAB.set(selectedTab == null ? "" : selectedTab.toString());
         HotbarClientConfig.SPEC.save();
         super.onClose();
@@ -1689,9 +1932,11 @@ public final class AbilityMenuScreen extends Screen {
 
     private static String costText(AbilityDefinition definition) {
         var cost = RepresentativeCost.of(definition);
-        if (cost == null) {
-            return "";
-        }
+        return cost == null ? "" : costText(cost);
+    }
+
+    /** One declared cost as text: whole amounts drop the decimal point. */
+    private static String costText(ResourceCost cost) {
         double amount = cost.amount();
         String formatted = amount == Math.floor(amount) ? String.valueOf((long) amount)
                 : String.valueOf(amount);
