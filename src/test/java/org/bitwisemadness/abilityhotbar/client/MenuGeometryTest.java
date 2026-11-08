@@ -44,13 +44,39 @@ class MenuGeometryTest {
     }
 
     @Test
-    void slotWidthIsCappedFlooredAndNeverZero() {
-        assertEquals(80, AbilityMenuScreen.slotWidth(4, 400), "the 80px cap");
-        assertEquals(42, AbilityMenuScreen.slotWidth(9, 400), "the plain division");
-        assertEquals(15, AbilityMenuScreen.slotWidth(18, 300), "wide slots divide");
-        assertEquals(5, AbilityMenuScreen.slotWidth(9, 64), "narrow windows shrink cells");
-        assertEquals(1, AbilityMenuScreen.slotWidth(60, 64), "the 1px floor");
-        assertEquals(0, AbilityMenuScreen.slotWidth(0, 400), "no slots, no cells");
+    void slotWidthStretchesToFillTheRowMinusTheCluster() {
+        // owner's stretch brief: the row shares everything left of the chip
+        // cluster; the divisor caps at NINE so both 18-slot rows align
+        assertEquals(31, AbilityMenuScreen.slotWidth(9, 400, 100),
+                "(400-16-100)/9 floored");
+        assertEquals(AbilityMenuScreen.slotWidth(9, 400, 100),
+                AbilityMenuScreen.slotWidth(18, 400, 100),
+                "18 slots divide by the same nine: aligned rows");
+        assertEquals(96, AbilityMenuScreen.slotWidth(4, 400, 0),
+                "no cluster: cells stretch past the old 80px cap");
+        assertEquals(5, AbilityMenuScreen.slotWidth(9, 64, 0),
+                "narrow windows shrink cells");
+        assertEquals(1, AbilityMenuScreen.slotWidth(9, 24, 0), "the 1px floor");
+        assertEquals(0, AbilityMenuScreen.slotWidth(0, 400, 0), "no slots, no cells");
+    }
+
+    @Test
+    void stripRowsSplitAtNineAndKeepTheirHeight() {
+        assertEquals(1, AbilityMenuScreen.rowsFor(9), "nine slots stay one row");
+        assertEquals(2, AbilityMenuScreen.rowsFor(10), "ten slots split");
+        assertEquals(2, AbilityMenuScreen.rowsFor(18), "eighteen = two rows of nine");
+        assertEquals(32, AbilityMenuScreen.stripHeight(9), "single row height");
+        assertEquals(66, AbilityMenuScreen.stripHeight(18), "two rows plus their gap");
+    }
+
+    @Test
+    void rowToggleButtonsSitAtTheRowsRightEnd() {
+        // owner's brief: #148's button moved from the pane into the row
+        int[] button = AbilityMenuScreen.rowToggleButtonRect(58, 300);
+        assertEquals(8 + 300 - 58, button[0], "hugs the row's right end");
+        assertEquals(58 + 12, button[1], "centred in the 36px row");
+        assertEquals(56, button[2], "button width");
+        assertEquals(12, button[3], "button height");
     }
 
     @Test
@@ -124,21 +150,4 @@ class MenuGeometryTest {
                 "the pane reaches the right edge");
     }
 
-    @Test
-    void detailToggleLineCountsItsSections() {
-        // name block (16) + activation + tags/cost, then stats and fields
-        // at 12 each - the draw pass and the button's hit test share it
-        assertEquals(40, AbilityMenuScreen.detailToggleLine(0, false, 0),
-                "three fixed lines before fields");
-        assertEquals(52, AbilityMenuScreen.detailToggleLine(0, true, 0),
-                "stats adds one line");
-        assertEquals(116, AbilityMenuScreen.detailToggleLine(40, true, 2),
-                "top offset + stats + two fields");
-
-        int[] button = AbilityMenuScreen.detailToggleButton(0, 100, 200, true, 2);
-        assertEquals(76, button[1], "draw and hit agree on the toggle row");
-        assertEquals(100 + 200 - 60, button[0], "the button hugs the pane's right edge");
-        assertEquals(56, button[2], "button width");
-        assertEquals(12, button[3], "button height");
-    }
 }

@@ -125,13 +125,18 @@ underline, activation requirement, tags + cost (categories never render in
 tooltips; subcategory tags capitalised via `MenuLabels.subcategory`),
 declared stats, live presentation fields, toggle + Enable/Disable, and the
 full wheel-scrollable description - drawn last so nothing can paint over
-it; and a bottom stack of chamfered slot cells (numbers on **empty** cells
-only, the selected cell **darker** than the hover lift) beside the bar
-chip column - the clear pill below the chip, the prev/next pair rotated
-**vertical** beside them - over the hint bar; a clicked row keeps the
-hover treatment as its assignment feedback, and the pane's description
-resolves translation keys through `I18n` (an untranslated key draws no
-line, never raw key text). `MenuChrome`
+it; and a bottom stack of chamfered slot cells that **stretches across the
+width** (cells share everything left of the chip cluster; at most nine per
+row, 18 slots split into two aligned rows), filled cells showing the
+ability's icon plus its **truncated name**, numbers on **empty** cells
+only, the selected cell **darker** than the hover lift - beside the bar
+chip column (the clear pill below the chip, the prev/next pair rotated
+**vertical** beside them) over the hint bar; a clicked row keeps the hover
+treatment as its assignment feedback, toggleable rows carry their
+**Enabled/Disabled state under the name** with an **Enable/Disable button
+at the row's right end** (hover-highlighted, hit before the assign click),
+and the pane's description resolves translation keys through `I18n` (an
+untranslated key draws no line, never raw key text). `MenuChrome`
 (client) owns the drawing primitives - backdrop, chamfered glass
 capsules/cells, meters, the opaque pane surface - all fed by the active
 `MenuStyle`; the row hit-test, slot width, the pane's third (`detailX`)
