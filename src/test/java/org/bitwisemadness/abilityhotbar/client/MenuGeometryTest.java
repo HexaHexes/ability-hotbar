@@ -106,6 +106,30 @@ class MenuGeometryTest {
     }
 
     @Test
+    void footerIconsFillTheSelectorsWindow() {
+        // owner: the icon fills the selection sprite's 16x16 window at
+        // (4,4) of 24x23 - centring a smaller icon in the whole box left
+        // it 1px too high with a gap beneath (tensura's icons)
+        int[] normal = AbilityMenuScreen.slotIconRect(28);
+        assertEquals(5, normal[0], "the window's x offset inside the 28px box");
+        assertEquals(5, normal[1], "the window's y offset - no longer riding high");
+        assertEquals(19, normal[2],
+                "the window rounds to 19: one pixel bigger than the old 18");
+
+        int[] narrow = AbilityMenuScreen.slotIconRect(24);
+        assertEquals(16, narrow[2], "a narrow cell's window is 16px wide");
+
+        for (int side : new int[] {8, 16, 24, 25, 26, 27, 28}) {
+            int[] rect = AbilityMenuScreen.slotIconRect(side);
+            assertTrue(rect[0] >= 0 && rect[1] >= 0,
+                    "offsets never leave the box at side " + side);
+            assertTrue(rect[0] + rect[2] <= side && rect[1] + rect[2] <= side,
+                    "the icon stays inside the box at side " + side);
+            assertTrue(rect[2] >= 4, "the floor size at side " + side);
+        }
+    }
+
+    @Test
     void slotCellAtMirrorsTheStripGeometry() {
         // owner's drag-to-assign brief: the drop target is the drawn cell -
         // 9 slots of 31px, strip top at height 400 - 16 - 32 = 352

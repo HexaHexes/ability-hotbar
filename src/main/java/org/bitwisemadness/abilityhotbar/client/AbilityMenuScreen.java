@@ -703,8 +703,8 @@ public final class AbilityMenuScreen extends Screen {
             int side = selectorSide(cellWidth);
             int boxX = x + 2;
             int boxY = cellY + (SLOT_HEIGHT - side) / 2;
-            gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
             if (!filled) {
+                gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
                 // the number sits CENTRED inside the selector, empty only
                 String label = slotLabel(i + 1);
                 gui.drawString(this.font, label,
@@ -714,22 +714,24 @@ public final class AbilityMenuScreen extends Screen {
                 continue;
             }
             if (dropHover) {
-                continue; // filled + dragged-over: the box alone is the read
+                // filled + dragged-over: the box alone is the read
+                gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
+                continue;
             }
-            // Filled: a SMALLER icon inside the selector (owner: it was
-            // too big) and up to three text lines beside the box - two
-            // wrapped name lines plus the mode as line three
+            // Filled: the icon fills the selector's WINDOW (see
+            // slotIconRect), the box then draws OVER it (owner: as the
+            // ISS hotbar does); name lines follow, the mode line last
             ResourceLocation icon = slotIcon(target, i);
             boolean iconDrawn = icon != null && HotbarClientConfig.SHOW_ICONS.get()
                     && slotIconFits(cellWidth);
             int nameX = boxX + side + 2;
             int nameWidth = Math.max(4, cellWidth - (side + 5));
             if (iconDrawn) {
-                int iconSize = Math.max(4, Math.min(18, side - 6));
-                gui.blit(icon, boxX + (side - iconSize) / 2,
-                        boxY + (side - iconSize) / 2,
-                        0, 0, iconSize, iconSize, iconSize, iconSize);
+                int[] iconRect = slotIconRect(side);
+                gui.blit(icon, boxX + iconRect[0], boxY + iconRect[1],
+                        0, 0, iconRect[2], iconRect[2], iconRect[2], iconRect[2]);
             }
+            gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
             String modeLabel = slotModeLabel(target, i);
             List<FormattedCharSequence> nameLines = this.font.split(
                     Component.literal(slotName(target, i)), nameWidth);
@@ -752,8 +754,11 @@ public final class AbilityMenuScreen extends Screen {
     /**
      * The declared mode's player-facing name for a stored mode id: the
      * stored mode when still declared, the first declared (default) when
-     * stale - the wire's own rule - and null for no context or no
-     * declarations. Raw ids never render (#139).
+     * stale - the wire's own rule - and null for no context, no
+     * declarations, or an ability with <b>one</b> mode (owner: the slot
+     * pill takes a third line only when there is a mode to choose
+     * between; a lone mode is the ability's only shape, not a setting,
+     * so those cells stay two lines). Raw ids never render (#139).
      */
     @Nullable
     static String modeLabelFor(ResourceLocation abilityId, @Nullable String storedMode) {
@@ -761,7 +766,7 @@ public final class AbilityMenuScreen extends Screen {
             return null;
         }
         Optional<List<AbilityModes.Mode>> declared = AbilityModes.get(abilityId);
-        if (declared.isEmpty() || declared.get().isEmpty()) {
+        if (declared.isEmpty() || declared.get().size() < 2) {
             return null;
         }
         AbilityModes.Mode mode = declared.get().stream()
@@ -907,6 +912,33 @@ public final class AbilityMenuScreen extends Screen {
      */
     static int selectorSide(int cellWidth) {
         return Math.max(8, Math.min(SLOT_HEIGHT - 4, cellWidth - 4));
+    }
+
+    /**
+     * The filled cell's icon rect <b>inside the selector's window</b>,
+     * as {@code {offsetX, offsetY, size}} (owner: tensura's icons
+     * rendered 1px too high and 1px too small). The vanilla selection
+     * sprite is 24x23 with a <b>16x16 window at (4,4)</b>; stretched to
+     * {@code side} its window sits at {@code (4/24, 4/23)*side} and
+     * measures {@code (16/24, 16/23)*side} - so the icon fills that
+     * window (square, the smaller dimension) centred in it, instead of
+     * being centred in the whole box where the deeper bottom ring left
+     * it riding high with a gap beneath. Package-private for the
+     * geometry fixture; the draw shares it.
+     *
+     * @param side the selector box's side ({@link #selectorSide(int)})
+     * @return the icon's x/y offset inside the box and its size
+     */
+    static int[] slotIconRect(int side) {
+        int windowX = Math.round(side * 4f / 24f);
+        int windowY = Math.round(side * 4f / 23f);
+        int windowW = Math.round(side * 16f / 24f);
+        int windowH = Math.round(side * 16f / 23f);
+        int size = Math.max(4, Math.min(windowW, windowH));
+        return new int[] {
+                windowX + (windowW - size) / 2,
+                windowY + (windowH - size) / 2,
+                size};
     }
 
     /**
