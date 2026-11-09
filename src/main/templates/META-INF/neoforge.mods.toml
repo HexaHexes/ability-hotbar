@@ -68,7 +68,11 @@ side = "BOTH"
 modId = "ability_tensura"
 type = "optional"
 versionRange = "[0.0,)"
-ordering = "AFTER"
+# Owner ruling: this mod always loads BEFORE ability_tensura (ability-core ->
+# this bar -> ability-tensura/ability-iss), so no ordering edge here - the
+# direction is enforced by ability_tensura's own AFTER row. A second AFTER
+# edge from this side would be a mutual pair, i.e. a load-order cycle.
+ordering = "NONE"
 side = "BOTH"
 
 # Add your mod's dependencies below. Use type = "optional" for anything the mod
