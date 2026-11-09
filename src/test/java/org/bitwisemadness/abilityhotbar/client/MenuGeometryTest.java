@@ -187,14 +187,14 @@ class MenuGeometryTest {
 
     @Test
     void selectorWindowMatchesTheRasterizedSpriteWindow() {
-        // the sprite is 24x23 with a 16x16 window at (4,4); nearest-
-        // sampled at side 28 it lands on pixels 5..22 by 5..23 - miss it
-        // and a white sliver or a clipped ring shows (owner's subtraction)
+        // the sprite is 24x23 with a 16x16 window at (4,4); the owner saw
+        // white survive one pixel beyond the centre solve on left/right/
+        // bottom (top exact) - so the cut reaches {4,5,20,20} at side 28
         int[] window = AbilityMenuScreen.selectorWindow(28);
-        assertEquals(5, window[0], "window x");
-        assertEquals(5, window[1], "window y");
-        assertEquals(18, window[2], "window width");
-        assertEquals(19, window[3], "window height");
+        assertEquals(4, window[0], "window x (one pixel wider left)");
+        assertEquals(5, window[1], "window y (the top edge is exact)");
+        assertEquals(20, window[2], "window width");
+        assertEquals(20, window[3], "window height (one pixel taller)");
         for (int side : new int[] {8, 16, 24, 26, 27, 28}) {
             int[] rect = AbilityMenuScreen.selectorWindow(side);
             assertTrue(rect[0] >= 0 && rect[1] >= 0

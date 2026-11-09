@@ -1033,16 +1033,24 @@ public final class AbilityMenuScreen extends Screen {
 
     /**
      * The stretched selection sprite's <b>window</b> in box coordinates
-     * ({@code {x, y, w, h}}) - the rasterized form of the sprite's own
-     * 16x16 window at (4,4) of 24x23, solved for nearest sampling so the
-     * subtraction lands on real pixels, not an approximation.
+     * ({@code {x, y, w, h}}) - the sprite's own 16x16 window at (4,4) of
+     * 24x23, solved for nearest sampling, <b>grown one pixel on the left,
+     * right and bottom</b>: the owner observed a one-pixel white remnant
+     * of the window surviving on exactly those sides (the top edge is
+     * exact), so the subtraction must reach the window as the GPU
+     * actually rasterizes it - anything narrower leaves the white line,
+     * anything wider would eat the frame.
      */
     static int[] selectorWindow(int side) {
-        int x0 = (int) Math.ceil(4 * side / 24.0 - 0.5);
-        int x1 = (int) Math.ceil(20 * side / 24.0 - 0.5);
+        int x0 = (int) Math.ceil(4 * side / 24.0 - 0.5) - 1;
+        int x1 = (int) Math.ceil(20 * side / 24.0 - 0.5) + 1;
         int y0 = (int) Math.ceil(4 * side / 23.0 - 0.5);
-        int y1 = (int) Math.ceil(20 * side / 23.0 - 0.5);
-        return new int[] {x0, y0, Math.max(0, x1 - x0), Math.max(0, y1 - y0)};
+        int y1 = (int) Math.ceil(20 * side / 23.0 - 0.5) + 1;
+        return new int[] {
+                Math.max(0, x0),
+                Math.max(0, y0),
+                Math.max(0, Math.min(side, x1) - Math.max(0, x0)),
+                Math.max(0, Math.min(side, y1) - Math.max(0, y0))};
     }
 
     /**
