@@ -70,7 +70,11 @@ public record CycleModePayload(ResourceLocation barId, int slot)
                     BarStateSync.sendSnapshot(player);
                     return;
                 }
-                BarState next = ModeContract.currentMode(player, assignment.abilityId())
+                // the SLOT-scoped read (core#133): the cycle stepped this
+                // slot's own preset position, so store that slot's mode -
+                // never another slot's (owner: each slot sets its mode)
+                BarState next = ModeContract
+                        .currentMode(player, assignment.abilityId(), payload.slot())
                         .map(mode -> current.withSlotMode(
                                 payload.barId(), payload.slot(), mode))
                         .orElse(current);

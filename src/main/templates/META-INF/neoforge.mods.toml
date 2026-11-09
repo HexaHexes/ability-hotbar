@@ -39,7 +39,9 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "ability_core"
 type = "optional"
-versionRange = "[1.0.0-alpha.34,)"
+# alpha.02: ModeContract's slot-scoped read (core#133) - this mod calls it
+# on every mode cycle; an older core has no such method.
+versionRange = "[1.0.1-alpha.02,)"
 ordering = "AFTER"
 side = "BOTH"
 
