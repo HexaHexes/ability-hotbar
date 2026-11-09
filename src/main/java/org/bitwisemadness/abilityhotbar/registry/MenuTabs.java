@@ -131,8 +131,31 @@ public final class MenuTabs {
             new ConcurrentHashMap<>();
     private static final Map<String, ChipIcon> SUBCATEGORY_ICONS =
             new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, ResourceLocation> TAB_BARS =
+            new ConcurrentHashMap<>();
 
     private MenuTabs() {
+    }
+
+    /**
+     * Declares which provider bar a tab's slot strip shows (the owner's
+     * ISS directive: the Spells tab shows the spellbook's cells, not the
+     * assignable bar's). Registered at setup beside the tab itself; a tab
+     * with no declaration keeps the assignable bar (the shipped rule).
+     */
+    public static void registerBarForTab(ResourceLocation tabId, ResourceLocation barId) {
+        if (tabId == null || barId == null) {
+            throw new IllegalArgumentException("tab id and bar id must not be null");
+        }
+        TAB_BARS.put(tabId, barId);
+    }
+
+    /**
+     * The provider bar a tab's strip shows, or empty when the tab keeps
+     * the assignable bar (the shipped behaviour).
+     */
+    public static Optional<ResourceLocation> barForTab(@Nullable ResourceLocation tabId) {
+        return tabId == null ? Optional.empty() : Optional.ofNullable(TAB_BARS.get(tabId));
     }
 
     /** Declares a plain-text tab (hotbar#154). */
