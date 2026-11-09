@@ -17,12 +17,15 @@ import org.junit.jupiter.api.Test;
  * The snapshot's hydration half (play-test round): a cycleable slot's
  * mode is filled from the provider's live projection so the menu's slot
  * cells and row pill show the ability's current mode from the get-go.
- * The projection wins over a stale stored value (it is what an
- * activation would use), an absent projection keeps the stored one, an
- * undeclared id never reaches the wire, modeless abilities and
- * unassigned slots are never touched, and every stored bar hydrates -
- * the menu edits a bar that may not be the active one. Hydration is
- * display-only: the input state is never mutated.
+ * A slot whose stored setting is still declared keeps <b>its own</b>
+ * value - the projection is the ability's one live answer and never
+ * overwrites what the player set on a slot (per-slot modes), while a
+ * stale setting the ability no longer declares is re-projected, an
+ * absent projection keeps the stored one, an undeclared id never reaches
+ * the wire, modeless abilities and unassigned slots are never touched,
+ * and every stored bar hydrates - the menu edits a bar that may not be
+ * the active one. Hydration is display-only: the input state is never
+ * mutated.
  */
 class BarStateHydrationTest {
 
@@ -55,13 +58,45 @@ class BarStateHydrationTest {
     }
 
     @Test
-    void hydrationPrefersTheProjectionOverAStaleStoredValue() {
+    void hydrationKeepsAStoredModeTheAbilityStillDeclares() {
+        // owner: each slot sets its own mode - the projection is the
+        // ability's ONE live value, so writing it over a declared setting
+        // would collapse every slot holding that ability onto one mode
         BarState state = withCycleable(0).withSlotMode(0, "m1");
 
         BarState hydrated = BarStateSync.hydrated(state, id -> Optional.of("m2"));
 
+        assertEquals("m1", hydrated.assignment(0).mode(),
+                "the slot's own setting wins over the live projection");
+    }
+
+    @Test
+    void hydrationReprojectsAStaleStoredMode() {
+        // a setting the ability no longer declares is not a setting any
+        // more: the projection may fill it (or leave it, if undeclared)
+        BarState state = withCycleable(0).withSlotMode(0, "m0");
+
+        BarState hydrated = BarStateSync.hydrated(state, id -> Optional.of("m2"));
+
         assertEquals("m2", hydrated.assignment(0).mode(),
-                "the projection is what an activation would use");
+                "a stale mode is replaced by the declared projection");
+    }
+
+    @Test
+    void hydrationKeepsEachSlotsOwnModeAcrossSlots() {
+        // two slots of the SAME ability, two settings: neither may drift
+        // onto the other's value (the play-test regression this rule
+        // exists for)
+        BarState state = BarState.empty(3, 1)
+                .withAssignment(0, CYCLEABLE).withSlotMode(0, "m1")
+                .withAssignment(1, CYCLEABLE).withSlotMode(1, "m2");
+
+        BarState hydrated = BarStateSync.hydrated(state, id -> Optional.of("m2"));
+
+        assertEquals("m1", hydrated.assignment(0).mode(),
+                "slot 0 keeps its own mode");
+        assertEquals("m2", hydrated.assignment(1).mode(),
+                "slot 1 keeps its own mode");
     }
 
     @Test

@@ -478,7 +478,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         }
     }
 
-    /** Draws one slot: icon/placeholder, overlays, and the selection frame. */
+    /** Draws one slot: icon/placeholder, then the selection frame over it, then overlays. */
     private static void drawSlot(GuiGraphics gui, SlotRender slot, int[] rect, BarLayout layout,
             ResourceLocation selection) {
         int x = rect[0];
@@ -491,16 +491,14 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             gui.fill(x, y, x + w, y + h, INERT_COLOR);
         }
 
-        // Vanilla draws the selection frame BEFORE the item (Gui.renderItemHotbar
-        // blits HOTBAR_SELECTION, then the item loop), so a pack-replaced frame
-        // cannot cover the slot content. Match that order here.
-        if (slot.selected()) {
-            drawSelectionFrame(gui, layout, rect, selection);
-        }
-
-        // Icon on top of the selection frame (as vanilla layers items over it).
+        // The selector renders OVER the icon (owner: as the ISS hotbar
+        // already does) - vanilla blits its frame before the item, but
+        // the owner's directive is the parity target here.
         if (slot.assigned() && !slot.inert() && HotbarClientConfig.SHOW_ICONS.get()) {
             drawIcon(gui, slot.iconId(), x, y, w, h);
+        }
+        if (slot.selected()) {
+            drawSelectionFrame(gui, layout, rect, selection);
         }
 
         drawOverlays(gui, slot, x, y, w, h);

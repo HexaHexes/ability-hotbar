@@ -26,8 +26,10 @@ import org.jetbrains.annotations.Nullable;
  * the <b>hydrated</b> display copy (play-test round): a cycleable slot's
  * mode is filled from the provider's live projection so the menu's slots
  * and row pill show the ability's current mode even before anything cycles
- * it - hydration never persists, the stored state stays exactly what was
- * accepted.</p>
+ * it - a slot that already carries a declared setting keeps that setting
+ * (per-slot modes: the projection is the ability's one live value and
+ * never overwrites what the player set on a slot) - hydration never
+ * persists, the stored state stays exactly what was accepted.</p>
  */
 public final class BarStateSync {
 
@@ -76,9 +78,11 @@ public final class BarStateSync {
      * slots show the ability's mode from the get-go). Pure - the caller
      * supplies the projection read. Only a projected mode the ability
      * <b>actually declares</b> is written (an undeclared id never reaches
-     * the wire), the projection wins over a stale stored value (it is what
-     * an activation would use), and an absent projection keeps the stored
-     * value or nothing - unknown fills nothing, never a guess.
+     * the wire), a slot whose stored setting is still declared keeps
+     * <b>its own</b> value (per-slot modes - the projection is the
+     * ability's one live answer and never overwrites a setting), an
+     * absent projection keeps the stored value or nothing - unknown fills
+     * nothing, never a guess.
      */
     static BarState hydrated(BarState state,
             Function<ResourceLocation, Optional<String>> projected) {
@@ -108,6 +112,15 @@ public final class BarStateSync {
      * undeclared id never reaches the wire), a modeless ability and an
      * empty slot never gain a mode, and an absent projection fills
      * nothing - unknown stays unknown, never a guess.
+     *
+     * <p><b>The slot's own setting wins when it is still declared</b>
+     * (owner: each slot sets its mode). The projection is the ability's
+     * ONE live value; writing it over a stored mode collapses every slot
+     * holding that ability - on any bar - onto one mode, which is
+     * precisely the per-slot setting hotbar#29 exists to keep. The
+     * projection therefore fills only what the slot does not already
+     * say: a never-set slot (the play-test "from the get-go" fill) and a
+     * stale one the ability no longer declares.</p>
      */
     @Nullable
     private static String fillableMode(SlotAssignment assignment,
@@ -121,8 +134,14 @@ public final class BarStateSync {
         if (declared.isEmpty() || declared.get().isEmpty()) {
             return null;
         }
+        List<AbilityModes.Mode> modes = declared.get();
+        String stored = assignment.mode();
+        if (stored != null && modes.stream()
+                .anyMatch(candidate -> candidate.id().equals(stored))) {
+            return null; // the setting is live: keep it, never re-project
+        }
         String mode = projected.apply(assignment.abilityId()).orElse(null);
-        if (mode == null || declared.get().stream()
+        if (mode == null || modes.stream()
                 .noneMatch(candidate -> candidate.id().equals(mode))) {
             return null;
         }
