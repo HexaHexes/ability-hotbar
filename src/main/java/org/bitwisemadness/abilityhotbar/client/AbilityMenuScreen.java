@@ -1415,10 +1415,13 @@ public final class AbilityMenuScreen extends Screen {
             rows.add(new PaneRow.Line(
                     this.font.plainSubstrByWidth(tags, wrapW), style.muted()));
         }
-        if (!definition.costs().isEmpty()) {
-            // owner's brief: EVERY declared cost shows, not just the first
+        // every declared cost shows, not just the first - and the LIVE
+        // answer when the provider reprices after registration (the
+        // tensura_iron_spells mixin), else the baked list
+        List<ResourceCost> shownCosts = LiveCosts.forDisplay(id, definition);
+        if (!shownCosts.isEmpty()) {
             rows.add(new PaneRow.Header("ability_hotbar.menu.section.costs"));
-            String costs = definition.costs().stream()
+            String costs = shownCosts.stream()
                     .map(cost -> costText(cost))
                     .collect(Collectors.joining("   "));
             rows.add(new PaneRow.Line(
