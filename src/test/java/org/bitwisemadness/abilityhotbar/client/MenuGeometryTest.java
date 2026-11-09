@@ -186,6 +186,26 @@ class MenuGeometryTest {
     }
 
     @Test
+    void selectorWindowMatchesTheRasterizedSpriteWindow() {
+        // the sprite is 24x23 with a 16x16 window at (4,4); nearest-
+        // sampled at side 28 it lands on pixels 5..22 by 5..23 - miss it
+        // and a white sliver or a clipped ring shows (owner's subtraction)
+        int[] window = AbilityMenuScreen.selectorWindow(28);
+        assertEquals(5, window[0], "window x");
+        assertEquals(5, window[1], "window y");
+        assertEquals(18, window[2], "window width");
+        assertEquals(19, window[3], "window height");
+        for (int side : new int[] {8, 16, 24, 26, 27, 28}) {
+            int[] rect = AbilityMenuScreen.selectorWindow(side);
+            assertTrue(rect[0] >= 0 && rect[1] >= 0
+                            && rect[0] + rect[2] <= side && rect[1] + rect[3] <= side,
+                    "the window stays inside the box at side " + side);
+            assertTrue(rect[2] > 0 && rect[3] > 0,
+                    "the window is never empty at side " + side);
+        }
+    }
+
+    @Test
     void detailPaneReservesItsConfiguredShare() {
         // owner's brief #9 (the rightmost third), later configurable as
         // menu.detailPaneWidthPercent: 33% of the width, integer math

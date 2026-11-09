@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -530,12 +531,58 @@ public final class AbilityMenuScreen extends Screen {
             } else if (texture.sprite()) {
                 gui.blitSprite(texture.drawWith(), 0, 0, 16, 16);
             } else {
-                gui.blit(texture.drawWith(), 0, 0, 0, 0, 16, 16, 16, 16);
+                blitIconTexture(gui, texture.drawWith());
             }
         } finally {
             pose.popPose();
         }
         return x + size + 3;
+    }
+
+    /** Texture pixel sizes per id: the PNG header, read once and cached. */
+    private static final Map<ResourceLocation, int[]> TEXTURE_SIZES = new ConcurrentHashMap<>();
+
+    /**
+     * One plain texture into the 16-unit icon box (the pose scales it to
+     * the requested size). A texture <b>taller than wide</b> stacks its
+     * frames - ARR's GUI sprites are 32x64 - so only the top square is
+     * the icon: squeezing the whole file drew both frames, which read as
+     * a broken chip (owner's report). Sizes come from the PNG header
+     * (AbstractTexture exposes none), read once per id.
+     */
+    private static void blitIconTexture(GuiGraphics gui, ResourceLocation id) {
+        int[] size = TEXTURE_SIZES.computeIfAbsent(id, AbilityMenuScreen::readPngSize);
+        if (size[1] > size[0]) {
+            int width = size[0];
+            gui.blit(id, 0, 0, 16, 16, 0f, 0f, width, width, width, size[1]);
+        } else {
+            gui.blit(id, 0, 0, 0, 0, 16, 16, 16, 16);
+        }
+    }
+
+    /** {@code {width, height}} from a PNG's IHDR, or the 16x16 fallback. */
+    private static int[] readPngSize(ResourceLocation id) {
+        int[] fallback = {16, 16};
+        try {
+            var resource = Minecraft.getInstance().getResourceManager()
+                    .getResource(id).orElse(null);
+            if (resource == null) {
+                return fallback;
+            }
+            try (java.io.InputStream in = resource.open()) {
+                byte[] header = in.readNBytes(24);
+                if (header.length < 24 || (header[0] & 0xFF) != 0x89) {
+                    return fallback; // not a PNG: the old whole-file squeeze
+                }
+                int width = ((header[16] & 0xFF) << 24) | ((header[17] & 0xFF) << 16)
+                        | ((header[18] & 0xFF) << 8) | (header[19] & 0xFF);
+                int height = ((header[20] & 0xFF) << 24) | ((header[21] & 0xFF) << 16)
+                        | ((header[22] & 0xFF) << 8) | (header[23] & 0xFF);
+                return width > 0 && height > 0 ? new int[] {width, height} : fallback;
+            }
+        } catch (java.io.IOException | RuntimeException unreadable) {
+            return fallback;
+        }
     }
 
     /**
@@ -727,7 +774,7 @@ public final class AbilityMenuScreen extends Screen {
             int boxX = x + 2;
             int boxY = cellY + (menuCellHeight() - side) / 2;
             if (!filled) {
-                gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
+                drawSelectionRing(gui, boxX, boxY, side);
                 // the number sits CENTRED inside the selector, empty only
                 String label = slotLabel(i + 1);
                 gui.drawString(this.font, label,
@@ -738,7 +785,7 @@ public final class AbilityMenuScreen extends Screen {
             }
             if (dropHover) {
                 // filled + dragged-over: the box alone is the read
-                gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
+                drawSelectionRing(gui, boxX, boxY, side);
                 continue;
             }
             // Filled: the icon fills the selector's WINDOW (see
@@ -754,22 +801,27 @@ public final class AbilityMenuScreen extends Screen {
                 gui.blit(icon, boxX + iconRect[0], boxY + iconRect[1],
                         0, 0, iconRect[2], iconRect[2], iconRect[2], iconRect[2]);
             }
-            gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
+            drawSelectionRing(gui, boxX, boxY, side);
             String modeLabel = slotModeLabel(target, i);
             List<FormattedCharSequence> nameLines = this.font.split(
                     Component.literal(slotName(target, i)), nameWidth);
-            int nameY = cellY + 2;
+            // the block sits centred: its position follows how many
+            // non-empty lines there actually are (owner) - never a fixed
+            // offset, so one line reads centred and three fill the cell
+            int lineCount = Math.min(nameLines.size(), 2)
+                    + (modeLabel == null ? 0 : 1);
+            int nameY = cellY + Math.max(2, (menuCellHeight() - lineCount * 9) / 2);
             for (int line = 0; line < nameLines.size() && line < 2; line++) {
                 gui.drawString(this.font, nameLines.get(line), nameX, nameY,
                         selected ? style.text() : style.muted());
                 nameY += 9;
             }
             if (modeLabel != null) {
-                // line three: exactly what an activation would send
-                // (stored id, else the declared default)
+                // exactly what an activation would send (stored id, else
+                // the declared default) - the line after the name lines
                 gui.drawString(this.font,
                         this.font.plainSubstrByWidth(modeLabel, nameWidth),
-                        nameX, cellY + 22, style.action());
+                        nameX, nameY, style.action());
             }
         }
     }
@@ -927,6 +979,53 @@ public final class AbilityMenuScreen extends Screen {
      */
     static boolean slotIconFits(int cellWidth) {
         return cellWidth >= 28;
+    }
+
+    /**
+     * The stretched selection sprite's <b>window</b> in box coordinates
+     * ({@code {x, y, w, h}}) - the rasterized form of the sprite's own
+     * 16x16 window at (4,4) of 24x23, solved for nearest sampling so the
+     * subtraction lands on real pixels, not an approximation.
+     */
+    static int[] selectorWindow(int side) {
+        int x0 = (int) Math.ceil(4 * side / 24.0 - 0.5);
+        int x1 = (int) Math.ceil(20 * side / 24.0 - 0.5);
+        int y0 = (int) Math.ceil(4 * side / 23.0 - 0.5);
+        int y1 = (int) Math.ceil(20 * side / 23.0 - 0.5);
+        return new int[] {x0, y0, Math.max(0, x1 - x0), Math.max(0, y1 - y0)};
+    }
+
+    /**
+     * The selection sprite with its window <b>subtracted</b> (owner:
+     * dynamically remove the white square): the sprite blits four times,
+     * each scissored to one band around the window, so only the frame
+     * draws. Whatever pack overrides {@code hud/hotbar_selection} -
+     * Excalibur's window is a white wash, vanilla's is transparent - the
+     * pill's background shows through the middle and the icon stays crisp.
+     */
+    private static void drawSelectionRing(GuiGraphics gui, int x, int y, int side) {
+        int[] window = selectorWindow(side);
+        int top = window[1];
+        int left = window[0];
+        int right = left + window[2];
+        int bottom = top + window[3];
+        int[][] bands = {
+                {x, y, side, top},
+                {x, y + bottom, side, side - bottom},
+                {x, y + top, left, window[3]},
+                {x + right, y + top, side - right, window[3]}
+        };
+        for (int[] band : bands) {
+            if (band[2] <= 0 || band[3] <= 0) {
+                continue;
+            }
+            gui.enableScissor(band[0], band[1], band[0] + band[2], band[1] + band[3]);
+            try {
+                gui.blitSprite(VANILLA_SELECTION, x, y, side, side);
+            } finally {
+                gui.disableScissor();
+            }
+        }
     }
 
     /**
