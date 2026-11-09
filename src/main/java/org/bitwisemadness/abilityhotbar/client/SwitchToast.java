@@ -2,6 +2,8 @@ package org.bitwisemadness.abilityhotbar.client;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilitycore.config.ConfigDiagnostics;
+import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -21,7 +23,10 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class SwitchToast {
 
-    /** How long the name stays on screen - "brief" per the requirement. */
+    /**
+     * How long the name stays on screen by default - "brief" per the
+     * requirement; the live value is {@code display.switchToastDurationMs}.
+     */
     public static final long DURATION_MS = 2500L;
 
     @Nullable
@@ -49,7 +54,14 @@ public final class SwitchToast {
      */
     public static boolean isVisible(long now) {
         ResourceLocation id = barId;
-        return id != null && now >= shownAt && now - shownAt < DURATION_MS;
+        if (id == null || now < shownAt) {
+            return false;
+        }
+        // live display.switchToastDurationMs; the shipped default when the
+        // spec is not loaded (headless fixtures), 0 = never shows
+        long duration = ConfigDiagnostics.readOrDefault("display.switchToastDurationMs",
+                () -> HotbarClientConfig.SWITCH_TOAST_DURATION_MS.get(), (int) DURATION_MS);
+        return now - shownAt < duration;
     }
 
     /**

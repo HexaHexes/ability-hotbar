@@ -7,6 +7,8 @@ import java.util.Arrays;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilitycore.config.ConfigDiagnostics;
+import org.bitwisemadness.abilityhotbar.config.HotbarServerConfig;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -28,16 +30,28 @@ import org.jetbrains.annotations.Nullable;
 public record LoadoutPreset(String name, ResourceLocation barId,
         SlotAssignment[] assignments) {
 
-    /** Server-side name ceiling (validated at the payload boundary first). */
+    /** Server-side name ceiling as shipped (hotbar.maxPresetNameLength's default). */
     public static final int MAX_NAME_LENGTH = 32;
+
+    /**
+     * The live ceiling ({@code hotbar.maxPresetNameLength}), read through
+     * core's diagnostics helper so a headless fixture (spec unloaded)
+     * runs on the shipped default instead of throwing. SERVER-owned and
+     * synced: clients read the same value the server enforces.
+     */
+    public static int maxNameLength() {
+        return ConfigDiagnostics.readOrDefault("hotbar.maxPresetNameLength",
+                () -> HotbarServerConfig.MAX_PRESET_NAME_LENGTH.get(), MAX_NAME_LENGTH);
+    }
 
     public LoadoutPreset {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("preset name must not be blank");
         }
-        if (name.length() > MAX_NAME_LENGTH) {
+        int maxLength = maxNameLength();
+        if (name.length() > maxLength) {
             throw new IllegalArgumentException(
-                    "preset name must be <= " + MAX_NAME_LENGTH + " chars, got " + name.length());
+                    "preset name must be <= " + maxLength + " chars, got " + name.length());
         }
         if (barId == null) {
             throw new IllegalArgumentException("barId must not be null");
@@ -80,7 +94,8 @@ public record LoadoutPreset(String name, ResourceLocation barId,
 
     /**
      * Server-side name validation (the payload boundary): trimmed length
-     * within {@value #MAX_NAME_LENGTH} and non-blank after trimming.
+     * within the live {@code hotbar.maxPresetNameLength} and non-blank
+     * after trimming.
      *
      * @param raw the candidate name (nullable)
      * @return the trimmed name, or null when the candidate is not acceptable
@@ -91,7 +106,7 @@ public record LoadoutPreset(String name, ResourceLocation barId,
             return null;
         }
         String trimmed = raw.trim();
-        if (trimmed.isEmpty() || trimmed.length() > MAX_NAME_LENGTH) {
+        if (trimmed.isEmpty() || trimmed.length() > maxNameLength()) {
             return null;
         }
         return trimmed;

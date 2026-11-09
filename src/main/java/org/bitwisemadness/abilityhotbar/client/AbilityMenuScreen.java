@@ -33,6 +33,7 @@ import org.bitwisemadness.abilitycore.api.PresentationField;
 import org.bitwisemadness.abilitycore.api.PresentationProviders;
 import org.bitwisemadness.abilitycore.api.ResourceCost;
 import org.bitwisemadness.abilitycore.api.Toggle;
+import org.bitwisemadness.abilitycore.config.ConfigDiagnostics;
 import org.bitwisemadness.abilitycore.discovery.AbilityDiscovery;
 import org.bitwisemadness.abilityhotbar.UnlockRule;
 import org.bitwisemadness.abilityhotbar.compat.CoreActivationCompat;
@@ -93,7 +94,18 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class AbilityMenuScreen extends Screen {
 
-    private static final int ROW_HEIGHT = 36;
+    /** The shipped list-row height - the live value is menu.rowHeight. */
+    private static final int DEFAULT_ROW_HEIGHT = 36;
+
+    /**
+     * The live list-row height ({@code menu.rowHeight}), read through
+     * core's diagnostics helper so a headless fixture (spec unloaded)
+     * runs on the shipped default instead of throwing.
+     */
+    private static int menuRowHeight() {
+        return ConfigDiagnostics.readOrDefault("menu.rowHeight",
+                () -> HotbarClientConfig.ROW_HEIGHT.get(), DEFAULT_ROW_HEIGHT);
+    }
     private static final int LIST_LEFT = 8;
     /** The list starts 6px under the collapsed filter strip (#141). */
     private static final int LIST_TOP = 64;
@@ -119,7 +131,19 @@ public final class AbilityMenuScreen extends Screen {
      * per row (owner's brief: 18 slots split into two rows of nine).
      */
     private static final int MAX_ROW_SLOTS = 9;
-    private static final int SLOT_HEIGHT = 32;
+    /** The shipped slot-cell height - the live value is menu.slotCellHeight. */
+    private static final int DEFAULT_CELL_HEIGHT = 32;
+
+    /**
+     * The live slot-cell height ({@code menu.slotCellHeight}, spec floor
+     * 30 - the three-line cell needs it), read through core's
+     * diagnostics helper so a headless fixture (spec unloaded) runs on
+     * the shipped default instead of throwing.
+     */
+    private static int menuCellHeight() {
+        return ConfigDiagnostics.readOrDefault("menu.slotCellHeight",
+                () -> HotbarClientConfig.SLOT_CELL_HEIGHT.get(), DEFAULT_CELL_HEIGHT);
+    }
     /** The gap between the two slot rows. */
     private static final int SLOT_GAP = 2;
     /** The vanilla hotbar selection sprite - empty-slot/drop indicator. */
@@ -165,8 +189,6 @@ public final class AbilityMenuScreen extends Screen {
     private ResourceLocation dragAbilityId;
     private double pressStartX;
     private double pressStartY;
-    /** Movement (px, manhattan) before a row press becomes a drag. */
-    private static final int DRAG_THRESHOLD = 6;
 
     public AbilityMenuScreen() {
         super(Component.translatable("ability_hotbar.menu.title"));
@@ -679,20 +701,21 @@ public final class AbilityMenuScreen extends Screen {
         int y = slotY(slotCount);
         for (int i = 0; i < slotCount; i++) {
             int x = LIST_LEFT + (i % rowSlots) * cellWidth;
-            int cellY = y + (i / rowSlots) * (SLOT_HEIGHT + SLOT_GAP);
+            int cellY = y + (i / rowSlots) * (menuCellHeight() + SLOT_GAP);
             boolean selected = i == selectedSlot;
-            boolean hovered = inside(mouseX, mouseY, x, cellY, cellWidth - 1, SLOT_HEIGHT);
-            MenuChrome.glass(gui, x, cellY, cellWidth - 1, SLOT_HEIGHT, style, false);
+            boolean hovered = inside(mouseX, mouseY, x, cellY, cellWidth - 1, menuCellHeight());
+            MenuChrome.glass(gui, x, cellY, cellWidth - 1, menuCellHeight(), style, false);
             if (selected) {
                 // Owner's brief: selected reads DARKER than the hover lift,
                 // not brighter - a dark chamfer over the base glass.
-                MenuChrome.chamferFill(gui, x + 1, cellY + 1, cellWidth - 3, SLOT_HEIGHT - 2,
+                MenuChrome.chamferFill(gui, x + 1, cellY + 1, cellWidth - 3, menuCellHeight() - 2,
                         Math.max(0, MenuChrome.CHAMFER - 1),
-                        MenuStyle.alpha(style.background(), 88));
+                        MenuStyle.alpha(style.background(),
+                                HotbarClientConfig.SELECTION_ALPHA.get()));
             } else if (hovered) {
-                MenuChrome.chamferFill(gui, x + 1, cellY + 1, cellWidth - 3, SLOT_HEIGHT - 2,
+                MenuChrome.chamferFill(gui, x + 1, cellY + 1, cellWidth - 3, menuCellHeight() - 2,
                         Math.max(0, MenuChrome.CHAMFER - 1),
-                        MenuStyle.alpha(style.raised(), 55));
+                        MenuStyle.alpha(style.raised(), HotbarClientConfig.HOVER_ALPHA.get()));
             }
             var assignment = target.assignment(i);
             boolean filled = assignment != null && assignment.isAssigned();
@@ -702,7 +725,7 @@ public final class AbilityMenuScreen extends Screen {
             // the number lives inside; a drag shows the bare box target
             int side = selectorSide(cellWidth);
             int boxX = x + 2;
-            int boxY = cellY + (SLOT_HEIGHT - side) / 2;
+            int boxY = cellY + (menuCellHeight() - side) / 2;
             if (!filled) {
                 gui.blitSprite(VANILLA_SELECTION, boxX, boxY, side, side);
                 // the number sits CENTRED inside the selector, empty only
@@ -858,7 +881,7 @@ public final class AbilityMenuScreen extends Screen {
             @Nullable int[] toggleRect) {
         int modeWidth = Math.max(28, this.font.width(modeLabel) + 10);
         int rightEdge = toggleRect == null ? LIST_LEFT + listWidth - 4 : toggleRect[0] - 4;
-        return new int[] {rightEdge - modeWidth, rowY + ROW_HEIGHT - 18, modeWidth, 12};
+        return new int[] {rightEdge - modeWidth, rowY + menuRowHeight() - 18, modeWidth, 12};
     }
 
     /** The filled cell's display name (the raw inert id when its provider is gone). */
@@ -911,7 +934,7 @@ public final class AbilityMenuScreen extends Screen {
      * (owner: like the world hotbar - only the icon lives in the box).
      */
     static int selectorSide(int cellWidth) {
-        return Math.max(8, Math.min(SLOT_HEIGHT - 4, cellWidth - 4));
+        return Math.max(8, Math.min(menuCellHeight() - 4, cellWidth - 4));
     }
 
     /**
@@ -965,8 +988,8 @@ public final class AbilityMenuScreen extends Screen {
         int y = screenHeight - 16 - stripHeight(slotCount);
         for (int i = 0; i < slotCount; i++) {
             int x = LIST_LEFT + (i % rowSlots) * cellWidth;
-            int cellY = y + (i / rowSlots) * (SLOT_HEIGHT + SLOT_GAP);
-            if (inside(mouseX, mouseY, x, cellY, cellWidth - 1, SLOT_HEIGHT)) {
+            int cellY = y + (i / rowSlots) * (menuCellHeight() + SLOT_GAP);
+            if (inside(mouseX, mouseY, x, cellY, cellWidth - 1, menuCellHeight())) {
                 return i;
             }
         }
@@ -1041,7 +1064,7 @@ public final class AbilityMenuScreen extends Screen {
         int listWidth = listWidth();
         Bar stripBar = targetBar(state);
         int listBottom = listBottom(stripBar == null ? 0 : stripBar.slotCount());
-        int visible = Math.max(0, (listBottom - LIST_TOP) / ROW_HEIGHT);
+        int visible = Math.max(0, (listBottom - LIST_TOP) / menuRowHeight());
         scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, rows.size() - visible)));
         if (rows.isEmpty()) {
             gui.drawString(this.font, Component.translatable("ability_hotbar.menu.no_results"),
@@ -1051,10 +1074,10 @@ public final class AbilityMenuScreen extends Screen {
         int y = LIST_TOP;
         int hoveredIndex = -1;
         for (int i = scrollOffset;
-                i < rows.size() && y + ROW_HEIGHT <= listBottom;
-                i++, y += ROW_HEIGHT) {
+                i < rows.size() && y + menuRowHeight() <= listBottom;
+                i++, y += menuRowHeight()) {
             MenuQuery.Entry row = rows.get(i);
-            boolean hovered = inside(mouseX, mouseY, LIST_LEFT, y, listWidth, ROW_HEIGHT - 2);
+            boolean hovered = inside(mouseX, mouseY, LIST_LEFT, y, listWidth, menuRowHeight() - 2);
             if (hovered) {
                 hoveredIndex = i;
             }
@@ -1062,15 +1085,16 @@ public final class AbilityMenuScreen extends Screen {
                 // Selected rows read exactly like the clicked slot cell
                 // (owner's brief): the dark chamfer shade, not the hover
                 // lift - hover never overrides the selection.
-                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
-                        MenuStyle.alpha(style.background(), 88));
+                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + menuRowHeight() - 2,
+                        MenuStyle.alpha(style.background(),
+                                HotbarClientConfig.SELECTION_ALPHA.get()));
                 // the active row's left-bar marker (their list selection)
-                gui.fill(LIST_LEFT, y, LIST_LEFT + 2, y + ROW_HEIGHT - 2, style.accent());
+                gui.fill(LIST_LEFT, y, LIST_LEFT + 2, y + menuRowHeight() - 2, style.accent());
             } else if (hovered) {
-                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
-                        MenuStyle.alpha(style.raised(), 55));
+                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + menuRowHeight() - 2,
+                        MenuStyle.alpha(style.raised(), HotbarClientConfig.HOVER_ALPHA.get()));
                 // the active row's left-bar marker (their list selection)
-                gui.fill(LIST_LEFT, y, LIST_LEFT + 2, y + ROW_HEIGHT - 2, style.accent());
+                gui.fill(LIST_LEFT, y, LIST_LEFT + 2, y + menuRowHeight() - 2, style.accent());
             }
             ResourceLocation icon = row.definition().iconId();
             if (icon != null && HotbarClientConfig.SHOW_ICONS.get()) {
@@ -1094,7 +1118,7 @@ public final class AbilityMenuScreen extends Screen {
             // Toggleable rows (and rows carrying a mode pill) lift the name
             // so state + buttons own the bottom line (owner's brief).
             int textY = toggle == null && modeRect == null
-                    ? y + (ROW_HEIGHT - 9) / 2 : y + 6;
+                    ? y + (menuRowHeight() - 9) / 2 : y + 6;
             gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
             if (toggle != null) {
                 gui.drawString(this.font, Component.translatable(toggle.enabled()
@@ -1138,11 +1162,11 @@ public final class AbilityMenuScreen extends Screen {
             // unavailable tint; unknown stays undimmed (never-guess).
             if (UnlockRule.provenUnlearned(
                     AbilityUnlocks.isLearned(this.minecraft.player, row.id()))) {
-                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + ROW_HEIGHT - 2,
+                gui.fill(LIST_LEFT, y, LIST_LEFT + listWidth, y + menuRowHeight() - 2,
                         AbilityBarLayer.UNAVAILABLE_TINT);
             }
             // the cyan row underline (their list chrome)
-            gui.fill(LIST_LEFT, y + ROW_HEIGHT - 2, LIST_LEFT + listWidth, y + ROW_HEIGHT - 1,
+            gui.fill(LIST_LEFT, y + menuRowHeight() - 2, LIST_LEFT + listWidth, y + menuRowHeight() - 1,
                     MenuStyle.alpha(style.accent(), 45));
         }
         if (hoveredIndex >= 0) {
@@ -1156,9 +1180,16 @@ public final class AbilityMenuScreen extends Screen {
         }
     }
 
-    /** The rightmost third's left edge (owner's nine-point brief). */
+    /**
+     * The detail pane's left edge: the rightmost
+     * {@code menu.detailPaneWidthPercent} of the screen. Read through
+     * core's diagnostics helper (headless fixtures run on the shipped
+     * default), so the pure helper stays unit-testable.
+     */
     static int detailX(int screenWidth) {
-        return screenWidth - screenWidth / 3;
+        int percent = ConfigDiagnostics.readOrDefault("menu.detailPaneWidthPercent",
+                () -> HotbarClientConfig.DETAIL_PANE_WIDTH_PERCENT.get(), 33);
+        return screenWidth - screenWidth * percent / 100;
     }
 
     private int detailX() {
@@ -1171,9 +1202,8 @@ public final class AbilityMenuScreen extends Screen {
      * the click's hit test share it.
      */
     static int[] rowToggleButtonRect(int rowY, int listWidth) {
-        return new int[] {LIST_LEFT + listWidth - 58, rowY + ROW_HEIGHT - 18, 56, 12};
+        return new int[] {LIST_LEFT + listWidth - 58, rowY + menuRowHeight() - 18, 56, 12};
     }
-
     /**
      * The rightmost third (owner's brief, superseding #27's no-sidebar
      * exclusion): the ability's name, activation requirement, tags + cost
@@ -1612,9 +1642,9 @@ public final class AbilityMenuScreen extends Screen {
         int y = slotY(slotCount);
         for (int i = 0; i < slotCount; i++) {
             int cellX = LIST_LEFT + (i % rowSlots) * cellWidth;
-            int cellY = y + (i / rowSlots) * (SLOT_HEIGHT + SLOT_GAP);
+            int cellY = y + (i / rowSlots) * (menuCellHeight() + SLOT_GAP);
             if (inside(mouseX, mouseY, cellX, cellY,
-                    cellWidth - 1, SLOT_HEIGHT)) {
+                    cellWidth - 1, menuCellHeight())) {
                 selectedSlot = i;
                 return true;
             }
@@ -1667,13 +1697,13 @@ public final class AbilityMenuScreen extends Screen {
         List<MenuQuery.Entry> rows = visibleRows();
         int listBottom = listBottom(slotCount);
         int relative = mouseX < detailX() - 6
-                ? rowIndexAt((int) mouseY, LIST_TOP, listBottom, ROW_HEIGHT)
+                ? rowIndexAt((int) mouseY, LIST_TOP, listBottom, menuRowHeight())
                 : -1;
         if (relative >= 0) {
             int offset = relative + scrollOffset;
             if (offset < rows.size()) {
                 MenuQuery.Entry row = rows.get(offset);
-                int rowY = LIST_TOP + relative * ROW_HEIGHT;
+                int rowY = LIST_TOP + relative * menuRowHeight();
                 if (informationalTab()) {
                     // info-only tab (owner's directive): rows never slot,
                     // cycle or toggle - the pane already follows the hover
@@ -1757,9 +1787,9 @@ public final class AbilityMenuScreen extends Screen {
             return true;
         }
         if (scrollY > 0) {
-            scrollOffset--;
+            scrollOffset -= HotbarClientConfig.LIST_SCROLL_ROWS.get();
         } else if (scrollY < 0) {
-            scrollOffset++;
+            scrollOffset += HotbarClientConfig.LIST_SCROLL_ROWS.get();
         }
         return true; // the wheel belongs to the list while the menu is open
     }
@@ -1776,21 +1806,22 @@ public final class AbilityMenuScreen extends Screen {
         if (pressedRowId != null) {
             // movement past the threshold promotes the press to a drag
             if (Math.abs(mouseX - pressStartX) + Math.abs(mouseY - pressStartY)
-                    > DRAG_THRESHOLD) {
+                    > HotbarClientConfig.DRAG_THRESHOLD_PX.get()) {
                 dragAbilityId = pressedRowId;
                 pressedRowId = null;
             }
             return true;
         }
         if (detailDragging) {
-            // pixels accumulate into whole lines at four pixels a step
-            // (owner: drag was too slow at one-to-one), the draw pass
-            // clamps the result to the real overflow every frame
+            // pixels accumulate into whole lines (owner: drag was too
+            // slow at one-to-one), the draw pass clamps the result to
+            // the real overflow every frame
+            int pixelsPerLine = HotbarClientConfig.DETAIL_DRAG_PIXELS_PER_LINE.get();
             detailDragRemainder += dragY;
-            int lines = (int) detailDragRemainder / 4;
+            int lines = (int) detailDragRemainder / pixelsPerLine;
             if (lines != 0) {
                 detailScroll = Math.max(0, detailScroll - lines);
-                detailDragRemainder -= lines * 4;
+                detailDragRemainder -= lines * pixelsPerLine;
             }
             return true;
         }
@@ -1865,7 +1896,9 @@ public final class AbilityMenuScreen extends Screen {
 
     @Override
     public boolean isPauseScreen() {
-        return false; // managing the bar must not freeze the world
+        // managing the bar must not freeze the world (menu.pauseGame:
+        // an operator's choice for their pack)
+        return HotbarClientConfig.PAUSE_GAME.get();
     }
 
     /** Assign or clear the selected slot of the named bar (server-validated). */
@@ -1995,10 +2028,10 @@ public final class AbilityMenuScreen extends Screen {
         return slotCount <= MAX_ROW_SLOTS ? 1 : 2;
     }
 
-    /** The strip's total height: rows of {@link #SLOT_HEIGHT} plus their gaps. */
+    /** The strip's total height: rows of {@link #menuCellHeight()} plus their gaps. */
     static int stripHeight(int slotCount) {
         int rows = rowsFor(slotCount);
-        return rows * SLOT_HEIGHT + (rows - 1) * SLOT_GAP;
+        return rows * menuCellHeight() + (rows - 1) * SLOT_GAP;
     }
 
     /** The bottom stack's slot-cell row top (shared with hit-testing). */

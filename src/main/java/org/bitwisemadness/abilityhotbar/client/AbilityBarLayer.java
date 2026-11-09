@@ -138,7 +138,8 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         // blend-managed draw, one line above the origin, and only while its
         // self-expiring window is open (display.switchToast gates recording).
         if (SwitchToast.isVisible(System.currentTimeMillis())) {
-            gui.drawString(mc.font, SwitchToast.message(), origin[0], origin[1] - 12, 0xFFFFFF);
+            gui.drawString(mc.font, SwitchToast.message(), origin[0],
+                    origin[1] - HotbarClientConfig.SWITCH_TOAST_OFFSET_Y.get(), 0xFFFFFF);
         }
     }
 
@@ -175,10 +176,12 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
                 id -> AvailabilityProviders.availabilityFor(mc.player, id),
                 AbilityDiscovery::get);
 
-        // Vanilla wraps its hotbar draw in enableBlend/disableBlend. Blend matters:
-        // a pack-replaced hud/hotbar_selection centre is semi-transparent white and
-        // renders opaque without it; never leak blend into the next frame's draw.
+        // Vanilla wraps its hotbar draw in enableBlend/disableBlend: a pack-
+        // replaced selection centre renders opaque without it. display.opacity
+        // rides the global shader tint for the bar's own draw.
+        float opacity = HotbarClientConfig.OPACITY.get().floatValue();
         RenderSystem.enableBlend();
+        RenderSystem.setShaderColor(1f, 1f, 1f, opacity);
         try {
             drawBarBackground(gui, layout, screenW, screenH, background);
             for (int i = 0; i < renderCount && i < slots.size(); i++) {
@@ -187,7 +190,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
                 drawSlot(gui, slot, rect, layout, selection);
             }
         } finally {
-            // Never leak blend state into the next frame's vanilla hotbar draw.
+            // Never leak blend state or the opacity tint into the next
+            // frame's vanilla hotbar draw.
+            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
             RenderSystem.disableBlend();
         }
         return new int[] {layout.originX(screenW), layout.originY(screenH)};
@@ -227,7 +232,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
                 HotbarClientConfig.OFFSET_Y.get(),
                 HotbarClientConfig.SCALE.get());
 
+        float opacity = HotbarClientConfig.OPACITY.get().floatValue();
         RenderSystem.enableBlend();
+        RenderSystem.setShaderColor(1f, 1f, 1f, opacity);
         try {
             if (plan.emptyTexture() == null) {
                 drawCellChromeClipped(gui, layout, screenW, screenH, background);
@@ -258,6 +265,8 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             }
             drawSeededOverlays(gui, mc, state, layout, screenW, screenH, barId, provider);
         } finally {
+            // never leak the opacity tint into the next frame's vanilla draw
+            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
             RenderSystem.disableBlend();
         }
         return new int[] {layout.originX(screenW), layout.originY(screenH)};
