@@ -1367,8 +1367,14 @@ public final class AbilityMenuScreen extends Screen {
             }
             Component displayName = Component.translatable(row.definition().displayNameKey());
             String name = displayName.getString();
-            Toggle toggle = presentationOf(row.id())
-                    .map(AbilityPresentation::toggle).orElse(null);
+            Optional<AbilityPresentation> presentation = presentationOf(row.id());
+            Toggle toggle = presentation.map(AbilityPresentation::toggle).orElse(null);
+            // The row's mastery meter (owner: beneath the name, value
+            // inside): the presentation's first PROGRESS field, none -> none
+            PresentationField mastery = presentation
+                    .map(AbilityPresentation::fields).orElse(List.of()).stream()
+                    .filter(field -> field.kind() == PresentationField.Kind.PROGRESS)
+                    .findFirst().orElse(null);
             // The row's mode pill: slotted multi-mode abilities cycle
             // from here (owner's brief) - the label is the current (or
             // default) mode, the click sends the slot's cycle request.
@@ -1383,12 +1389,32 @@ public final class AbilityMenuScreen extends Screen {
             int textY = toggle == null && modeRect == null
                     ? y + (menuRowHeight() - 9) / 2 : y + 6;
             gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
+            int masteryX = LIST_LEFT + 38;
             if (toggle != null) {
-                gui.drawString(this.font, Component.translatable(toggle.enabled()
+                Component stateLabel = Component.translatable(toggle.enabled()
                                 ? "ability_hotbar.menu.toggle_on"
-                                : "ability_hotbar.menu.toggle_off"),
-                        LIST_LEFT + 38, y + 19,
+                                : "ability_hotbar.menu.toggle_off");
+                gui.drawString(this.font, stateLabel, LIST_LEFT + 38, y + 19,
                         toggle.enabled() ? style.action() : style.muted());
+                masteryX += this.font.width(stateLabel) + 6;
+            }
+            if (mastery != null) {
+                // the bar owns the bottom line after the state text, clear
+                // of the mode pill and the Enable/Disable button
+                int limitX = (modeRect != null ? modeRect[0]
+                        : rowToggle != null ? rowToggle[0] : LIST_LEFT + listWidth) - 4;
+                int[] bar = masteryBarRect(y, masteryX, limitX);
+                MenuChrome.meter(gui, bar[0], bar[1], bar[2], bar[3], mastery.progress(),
+                        style, masteryBarColor(style,
+                                AbilityUnlocks.isLearned(this.minecraft.player, row.id()),
+                                mastery.progress()));
+                String value = this.font.plainSubstrByWidth(mastery.value(), bar[2] - 4);
+                if (!value.isEmpty()) {
+                    // the value rides INSIDE the bar (owner's brief)
+                    gui.drawString(this.font, value,
+                            bar[0] + (bar[2] - this.font.width(value)) / 2,
+                            bar[1] + (bar[3] - 9) / 2, style.text());
+                }
             }
             String cost = costText(row.definition());
             if (!cost.isEmpty()) {
@@ -1466,6 +1492,28 @@ public final class AbilityMenuScreen extends Screen {
      */
     static int[] rowToggleButtonRect(int rowY, int listWidth) {
         return new int[] {LIST_LEFT + listWidth - 58, rowY + menuRowHeight() - 18, 56, 12};
+    }
+
+    /**
+     * The row's mastery bar rect: the bottom line (under the name), from
+     * the given start to the pills' edge, capped at 96 and floored at 40
+     * so a squeezed row keeps a readable meter with its value inside.
+     */
+    static int[] masteryBarRect(int rowY, int startX, int limitX) {
+        int width = Math.max(40, Math.min(96, limitX - startX));
+        return new int[] {startX, rowY + menuRowHeight() - 18, width, 12};
+    }
+
+    /**
+     * The bar's state colour (owner's brief): mastered reads gold (the
+     * style's action), learned cyan (accent), known and unknown grey -
+     * the state comes from unlocks plus the fraction, never a string.
+     */
+    static int masteryBarColor(MenuStyle style, Optional<Boolean> learned, float fraction) {
+        if (fraction >= 1f) {
+            return style.action();
+        }
+        return learned.orElse(false) ? style.accent() : style.muted();
     }
     /**
      * The rightmost third (owner's brief, superseding #27's no-sidebar
@@ -1553,9 +1601,15 @@ public final class AbilityMenuScreen extends Screen {
                     this.font.plainSubstrByWidth(stats, wrapW), style.action()));
         }
         Optional<AbilityPresentation> presentation = presentationOf(id);
-        if (presentation.isPresent() && !presentation.get().fields().isEmpty()) {
+        // Mastery meters live on the row now (owner: remove them from the
+        // description section) - the pane keeps only the text fields
+        List<PresentationField> paneFields = presentation
+                .map(AbilityPresentation::fields).orElse(List.of()).stream()
+                .filter(field -> field.kind() != PresentationField.Kind.PROGRESS)
+                .toList();
+        if (!paneFields.isEmpty()) {
             rows.add(new PaneRow.Header("ability_hotbar.menu.section.status"));
-            for (PresentationField field : presentation.get().fields()) {
+            for (PresentationField field : paneFields) {
                 rows.add(new PaneRow.FieldRow(field));
             }
         }
