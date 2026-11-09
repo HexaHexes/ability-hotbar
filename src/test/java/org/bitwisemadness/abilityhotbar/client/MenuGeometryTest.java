@@ -218,4 +218,25 @@ class MenuGeometryTest {
         assertTrue(AbilityMenuScreen.detailX(960) < 960, "the pane reaches the right edge");
     }
 
+    @Test
+    void listTopGrowsWithTheFilterRow() {
+        // the filter row matches the slot pills' height (owner's brief):
+        // FILTER_Y 40 + the shipped cell height 32 + the standing 6px rule
+        assertEquals(78, AbilityMenuScreen.listTop(),
+                "the list starts 6px under the grown filter row");
+    }
+
+    @Test
+    void subStripScrollClampsToItsOverflow() {
+        // fixed 64px pills: overflow = count*64 - viewport, else nothing moves
+        assertEquals(0, AbilityMenuScreen.clampSubScroll(-5, 3, 400),
+                "a negative scroll never shows");
+        assertEquals(0, AbilityMenuScreen.clampSubScroll(40, 3, 400),
+                "a strip that fits does not scroll");
+        assertEquals(96, AbilityMenuScreen.clampSubScroll(999, 4, 160),
+                "overflow clamps to count*64 - viewport");
+        assertEquals(96, AbilityMenuScreen.clampSubScroll(96, 4, 160),
+                "the clamp is idempotent at the end");
+    }
+
 }
