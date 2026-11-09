@@ -47,6 +47,7 @@ import org.bitwisemadness.abilityhotbar.content.ContentPlan;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
+import org.bitwisemadness.abilityhotbar.network.ReorderSlotsPayload;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyle;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
@@ -228,6 +229,11 @@ public final class AbilityMenuScreen extends Screen {
     // The row's mode preview (owner: the row's mode button never writes
     // a hotbar slot) - a menu-local cycle, scoped to this screen's life
     private final Map<ResourceLocation, String> rowModePreview = new HashMap<>();
+    // Slot drag-reorder (owner: drag one slot onto another): a press on a
+    // filled slot arms it, the threshold promotes it to a drag whose ghost
+    // rides the cursor, and the release asks the server to swap the cells
+    private int pressedSlot = -1;
+    private int dragSlot = -1;
 
     public AbilityMenuScreen() {
         super(Component.translatable("ability_hotbar.menu.title"));
@@ -1995,6 +2001,17 @@ public final class AbilityMenuScreen extends Screen {
                 if (inside(mouseX, mouseY, cellX, cellY,
                         cellWidth - 1, menuCellHeight())) {
                     selectedSlot = i;
+                    // a FILLED slot arms the reorder (owner: drag one slot
+                    // onto another); empty cells and drag-to-assign off keep
+                    // the plain select
+                    var slotAssignment = target.assignment(i);
+                    if (HotbarClientConfig.DRAG_TO_ASSIGN.get()
+                            && slotAssignment != null
+                            && slotAssignment.isAssigned()) {
+                        pressedSlot = i;
+                        pressStartX = mouseX;
+                        pressStartY = mouseY;
+                    }
                     return true;
                 }
             }
@@ -2211,6 +2228,22 @@ public final class AbilityMenuScreen extends Screen {
             }
             return true;
         }
+        if (pressedSlot >= 0) {
+            // the same threshold promotes a slot press to a reorder drag,
+            // and the source cell's ability becomes the ghost (owner)
+            if (Math.abs(mouseX - pressStartX) + Math.abs(mouseY - pressStartY)
+                    > HotbarClientConfig.DRAG_THRESHOLD_PX.get()) {
+                dragSlot = pressedSlot;
+                pressedSlot = -1;
+                BarState slotState = ClientBarState.get();
+                Bar slotBar = slotState == null ? null : targetBar(slotState);
+                var slotAssignment = slotBar == null ? null : slotBar.assignment(dragSlot);
+                if (slotAssignment != null && slotAssignment.abilityId() != null) {
+                    dragAbilityId = slotAssignment.abilityId();
+                }
+            }
+            return true;
+        }
         if (detailDragging) {
             // pixels accumulate into whole lines (owner: drag was too
             // slow at one-to-one), the draw pass clamps the result to
@@ -2248,6 +2281,20 @@ public final class AbilityMenuScreen extends Screen {
             }
             return true;
         }
+        int slotFrom = dragSlot;
+        dragSlot = -1;
+        int slotPress = pressedSlot;
+        pressedSlot = -1;
+        if (slotFrom >= 0) {
+            // a slot drag resolves as a REORDER, never an assign (owner) -
+            // and the ghost's id belonged to the source cell: drop it too
+            dragAbilityId = null;
+            dropReordered(mouseX, mouseY, slotFrom);
+            return true;
+        }
+        if (slotPress >= 0) {
+            return true; // press in place: the selection happened on press
+        }
         ResourceLocation drag = dragAbilityId;
         ResourceLocation pressed = pressedRowId;
         dragAbilityId = null;
@@ -2283,6 +2330,26 @@ public final class AbilityMenuScreen extends Screen {
         if (slot >= 0) {
             PacketDistributor.sendToServer(
                     new AssignAbilityPayload(slot, id.toString(), selectedBar));
+        }
+    }
+
+    /**
+     * The reorder's resolution (owner: drag one slot onto another): a slot
+     * cell under the point swaps with the dragged one - the server moves
+     * whole cells, stored modes included - and any other release cancels
+     * the drag without touching the bar.
+     */
+    private void dropReordered(double mouseX, double mouseY, int from) {
+        BarState state = ClientBarState.get();
+        Bar target = state == null ? null : targetBar(state);
+        if (target == null || selectedBar == null) {
+            return;
+        }
+        int to = slotCellAt(mouseX, mouseY, target.slotCount(),
+                this.width, clusterWidth(), this.height);
+        if (to >= 0 && to != from) {
+            PacketDistributor.sendToServer(
+                    new ReorderSlotsPayload(selectedBar, from, to));
         }
     }
 

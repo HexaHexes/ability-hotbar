@@ -178,4 +178,55 @@ class BarAssignmentsTest {
         assertFalse(BarAssignments.assign(active, 0, "pseudocore_curios:press").isPresent(),
                 "even re-writing the same seeded id belongs to the owner, not the player");
     }
+
+    @Test
+    void swapExchangesWholeAssignmentsWithTheirModes() {
+        // A reorder moves whole cells: the stored mode travels with its
+        // ability, so dragging never resets a mode the player chose.
+        BarState base = BarState.empty(3);
+        SlotAssignment[] row = base.bars()[0].assignments().clone();
+        row[0] = new SlotAssignment(FIREBALL, "burst");
+        row[2] = new SlotAssignment(PRESS, "held");
+        BarState filled = base.withRow(base.activeBarId(), row);
+
+        BarState swapped = BarAssignments.swap(filled, filled.activeBarId(), 0, 2).orElseThrow();
+
+        assertEquals(PRESS, swapped.assignment(0).abilityId(), "the target moved to the source");
+        assertEquals("held", swapped.assignment(0).mode(), "and brought its mode");
+        assertEquals(FIREBALL, swapped.assignment(2).abilityId(), "the source moved to the target");
+        assertEquals("burst", swapped.assignment(2).mode(), "and brought its mode");
+        assertTrue(swapped.assignment(1).isEmpty(), "the middle cell is untouched");
+        assertEquals(FIREBALL, filled.assignment(0).abilityId(), "the original is untouched");
+    }
+
+    @Test
+    void swapWithAnEmptyCellMovesEmptinessNotAbilities() {
+        BarState base = BarState.empty(3).withAssignment(1, FIREBALL);
+
+        BarState swapped = BarAssignments.swap(base, base.activeBarId(), 0, 1).orElseThrow();
+
+        assertEquals(FIREBALL, swapped.assignment(0).abilityId(),
+                "the filled cell took the dragged slot's place");
+        assertTrue(swapped.assignment(1).isEmpty(), "the empty cell travelled to the target");
+    }
+
+    @Test
+    void swapIsValidatedFailClosed() {
+        BarState base = BarState.empty(3);
+
+        assertFalse(BarAssignments.swap(base, base.activeBarId(), 1, 1).isPresent(),
+                "a self-swap is refused");
+        assertFalse(BarAssignments.swap(base, base.activeBarId(), -1, 1).isPresent(),
+                "an out-of-range source is refused");
+        assertFalse(BarAssignments.swap(base, base.activeBarId(), 0, 3).isPresent(),
+                "an out-of-range target is refused");
+        HotbarRegistry.register(CURIOS, "pseudocore.bar.curios", false);
+        assertFalse(BarAssignments.swap(base, CURIOS, 0, 1).isPresent(),
+                "a non-assignable bar is refused");
+        HotbarRegistry.register(EXTRA, "otherpack.bar.extra", true);
+        assertFalse(BarAssignments.swap(base, EXTRA, 0, 1).isPresent(),
+                "an unstored bar is refused");
+        assertTrue(base.assignment(0).isEmpty() && base.assignment(1).isEmpty(),
+                "nothing was written");
+    }
 }

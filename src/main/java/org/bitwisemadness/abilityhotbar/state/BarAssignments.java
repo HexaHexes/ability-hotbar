@@ -90,4 +90,45 @@ public final class BarAssignments {
             return Optional.empty();
         }
     }
+
+    /**
+     * Resolves a slot reorder (owner: drag one hotbar slot onto another):
+     * the two cells exchange <b>whole</b> assignments - ability and stored
+     * mode travel together, so reordering never resets a mode the player
+     * set. The same fail-closed rules as {@link #assign} apply: a bar that
+     * is not stored and assignable, an out-of-range index and a self-swap
+     * all refuse before anything is written.
+     *
+     * @param current  the player's current bar state
+     * @param barId    the bar being reordered
+     * @param from     the dragged slot index
+     * @param to       the drop-target slot index
+     * @return the mutated state, or empty when the request is invalid
+     */
+    public static Optional<BarState> swap(BarState current, ResourceLocation barId, int from, int to) {
+        if (current == null || barId == null || from == to) {
+            return Optional.empty();
+        }
+        if (!HotbarRegistry.isAssignable(barId)) {
+            return Optional.empty();
+        }
+        Bar target = null;
+        for (Bar bar : current.bars()) {
+            if (bar.id().equals(barId)) {
+                target = bar;
+                break;
+            }
+        }
+        if (target == null) {
+            return Optional.empty();
+        }
+        if (from < 0 || from >= target.slotCount() || to < 0 || to >= target.slotCount()) {
+            return Optional.empty();
+        }
+        SlotAssignment[] row = target.assignments().clone();
+        SlotAssignment moved = row[from];
+        row[from] = row[to];
+        row[to] = moved;
+        return Optional.of(current.withRow(barId, row));
+    }
 }
