@@ -46,4 +46,9 @@ public record MenuStyle(int background, int raised, int text, int muted, int acc
     public int glass(int color) {
         return alpha(color, opacityPercent);
     }
+
+    /** The colour's RGB triple with the alpha byte stripped (TextColor's shape). */
+    public static int rgb(int argb) {
+        return argb & 0xFFFFFF;
+    }
 }

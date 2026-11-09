@@ -17,6 +17,8 @@ import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.TextColor;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.RandomSource;
@@ -45,7 +47,6 @@ import org.bitwisemadness.abilityhotbar.content.ContentPlan;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
-import org.bitwisemadness.abilityhotbar.network.CycleModePayload;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyle;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyles;
@@ -224,6 +225,9 @@ public final class AbilityMenuScreen extends Screen {
     private double subStripPressX;
     private int subStripScrollStart;
     private int pressedSubPill = -1;
+    // The row's mode preview (owner: the row's mode button never writes
+    // a hotbar slot) - a menu-local cycle, scoped to this screen's life
+    private final Map<ResourceLocation, String> rowModePreview = new HashMap<>();
 
     public AbilityMenuScreen() {
         super(Component.translatable("ability_hotbar.menu.title"));
@@ -991,27 +995,39 @@ public final class AbilityMenuScreen extends Screen {
             }
             drawSelectionRing(gui, boxX, boxY, side);
             String modeLabel = plan != null ? null : slotModeLabel(target, i);
+            // owner: the name and the mode wrap INTO each other - two
+            // lines total, the overflow truncated to fit the cell
             List<FormattedCharSequence> nameLines = plan != null ? List.of()
-                    : this.font.split(Component.literal(slotName(target, i)), nameWidth);
+                    : this.font.split(slotText(target, i, modeLabel,
+                            selected ? style.text() : style.muted()), nameWidth);
             // the block sits centred: its position follows how many
             // non-empty lines there actually are (owner) - never a fixed
-            // offset, so one line reads centred and three fill the cell
-            int lineCount = Math.min(nameLines.size(), 2)
-                    + (modeLabel == null ? 0 : 1);
+            // offset, so one line reads centred and two fill the cell
+            int lineCount = Math.min(nameLines.size(), 2);
             int nameY = cellY + Math.max(2, (menuCellHeight() - lineCount * 9) / 2);
-            for (int line = 0; line < nameLines.size() && line < 2; line++) {
+            for (int line = 0; line < lineCount; line++) {
                 gui.drawString(this.font, nameLines.get(line), nameX, nameY,
                         selected ? style.text() : style.muted());
                 nameY += 9;
             }
-            if (modeLabel != null) {
-                // exactly what an activation would send (stored id, else
-                // the declared default) - the line after the name lines
-                gui.drawString(this.font,
-                        this.font.plainSubstrByWidth(modeLabel, nameWidth),
-                        nameX, nameY, style.action());
-            }
         }
+    }
+
+    /**
+     * The cell's text flow (owner's brief): the name and the mode wrap
+     * INTO each other - two lines total, the overflow truncated to fit
+     * the cell. The mode keeps its action colour inside the flow.
+     */
+    private Component slotText(Bar target, int slot, @Nullable String modeLabel,
+            int nameColor) {
+        MutableComponent text = Component.literal(slotName(target, slot))
+                .withStyle(s -> s.withColor(TextColor.fromRgb(MenuStyle.rgb(nameColor))));
+        if (modeLabel != null) {
+            int modeColor = MenuStyle.rgb(style().action());
+            text.append(" ").append(Component.literal(modeLabel)
+                    .withStyle(s -> s.withColor(TextColor.fromRgb(modeColor))));
+        }
+        return text;
     }
 
     /**
@@ -1019,9 +1035,9 @@ public final class AbilityMenuScreen extends Screen {
      * stored mode when still declared, the first declared (default) when
      * stale - the wire's own rule - and null for no context, no
      * declarations, or an ability with <b>one</b> mode (owner: the slot
-     * pill takes a third line only when there is a mode to choose
-     * between; a lone mode is the ability's only shape, not a setting,
-     * so those cells stay two lines). Raw ids never render (#139).
+     * pill joins the cell's two-line flow only when there is a mode to
+     * choose between; a lone mode is the ability's only shape, not a
+     * setting). Raw ids never render (#139).
      */
     @Nullable
     static String modeLabelFor(ResourceLocation abilityId, @Nullable String storedMode) {
@@ -1058,7 +1074,8 @@ public final class AbilityMenuScreen extends Screen {
      * The slot of this ability on the target bar for mode cycling (the
      * selected slot wins when it holds it - the keybind's own slot), or
      * -1: no such slot, or the ability declares at most one mode (not
-     * cycleable). Owner's brief: the row button cycles slotted abilities.
+     * cycleable). Owner's brief: the row button previews that slot's
+     * mode - clicking never writes the slot itself.
      */
     private static int modeSlotFor(@Nullable Bar target, ResourceLocation id) {
         if (target == null || !AbilityModes.get(id)
@@ -1380,7 +1397,8 @@ public final class AbilityMenuScreen extends Screen {
             // default) mode, the click sends the slot's cycle request.
             int modeSlot = modeSlotFor(stripBar, row.id());
             String modeLabel = modeSlot < 0 ? null
-                    : modePillLabel(row.id(), storedModeAt(stripBar, modeSlot));
+                    : modePillLabel(row.id(), rowModePreview.getOrDefault(row.id(),
+                            storedModeAt(stripBar, modeSlot)));
             int[] rowToggle = toggle == null ? null : rowToggleButtonRect(y, listWidth);
             int[] modeRect = modeLabel == null ? null
                     : modePillRect(y, listWidth, modeLabel, rowToggle);
@@ -2053,22 +2071,22 @@ public final class AbilityMenuScreen extends Screen {
                         return true;
                     }
                 }
-                // the mode pill cycles the slotted ability's mode (owner's
-                // brief) - one server-validated cycle, the keybind's path;
-                // the bar id rides along: the tab shown may not be active
+                // the mode pill steps the ROW's own preview (owner: it
+                // never writes a hotbar slot - the wire path stays on
+                // the keybind, this is menu-local display state)
                 int modeSlot = selectedBar == null ? -1
                         : modeSlotFor(target, row.id());
                 if (modeSlot >= 0) {
                     String modeLabel = modePillLabel(row.id(),
-                            storedModeAt(target, modeSlot));
+                            rowModePreview.getOrDefault(row.id(),
+                                    storedModeAt(target, modeSlot)));
                     int[] toggleRect = toggle == null ? null
                             : rowToggleButtonRect(rowY, listWidth());
                     int[] modeRect = modeLabel == null ? null
                             : modePillRect(rowY, listWidth(), modeLabel, toggleRect);
                     if (modeRect != null && inside(mouseX, mouseY, modeRect[0],
                             modeRect[1], modeRect[2], modeRect[3])) {
-                        PacketDistributor.sendToServer(
-                                new CycleModePayload(selectedBar, modeSlot));
+                        cycleRowPreview(row.id(), target, modeSlot);
                         return true;
                     }
                 }
@@ -2087,6 +2105,29 @@ public final class AbilityMenuScreen extends Screen {
             }
         }
         return false;
+    }
+
+    /**
+     * Steps the row's menu-local mode preview to the next declared mode
+     * (owner: clicking the row's mode button must not change a hotbar
+     * slot's mode - only what this menu row shows). The preview starts
+     * from what the row already displays: the slot's stored mode, or the
+     * declared default the pill falls back to.
+     */
+    private void cycleRowPreview(ResourceLocation id, Bar target, int modeSlot) {
+        List<AbilityModes.Mode> modes = AbilityModes.get(id).orElse(List.of());
+        if (modes.isEmpty()) {
+            return;
+        }
+        String shown = rowModePreview.getOrDefault(id, storedModeAt(target, modeSlot));
+        int index = 0; // the pill's fallback: the first declared mode
+        for (int i = 0; i < modes.size(); i++) {
+            if (modes.get(i).id().equals(shown)) {
+                index = i;
+                break;
+            }
+        }
+        rowModePreview.put(id, modes.get((index + 1) % modes.size()).id());
     }
 
     /** The panel's Enable/Disable button: a MENU-source activation, no slot (#148). */
