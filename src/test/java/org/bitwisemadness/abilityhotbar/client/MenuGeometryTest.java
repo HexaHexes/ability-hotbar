@@ -186,14 +186,16 @@ class MenuGeometryTest {
     }
 
     @Test
-    void detailPaneReservesTheRightThird() {
-        // owner's brief #9: the pane owns exactly the rightmost third
-        assertEquals(640, AbilityMenuScreen.detailX(960), "two thirds for the list");
-        assertEquals(641, AbilityMenuScreen.detailX(961), "integer third, no rounding back");
-        assertEquals(642, AbilityMenuScreen.detailX(963), "exact thirds split evenly");
-        assertEquals(214, AbilityMenuScreen.detailX(320), "the minimum width keeps a third");
-        assertTrue(AbilityMenuScreen.detailX(960) + 960 / 3 == 960,
-                "the pane reaches the right edge");
+    void detailPaneReservesItsConfiguredShare() {
+        // owner's brief #9 (the rightmost third), later configurable as
+        // menu.detailPaneWidthPercent: 33% of the width, integer math
+        assertEquals(644, AbilityMenuScreen.detailX(960), "the rightmost 33 percent");
+        assertEquals(644, AbilityMenuScreen.detailX(961), "integer percent, no rounding back");
+        assertEquals(646, AbilityMenuScreen.detailX(963));
+        assertEquals(215, AbilityMenuScreen.detailX(320), "the minimum width keeps its share");
+        assertEquals(316, 960 - AbilityMenuScreen.detailX(960),
+                "the pane measures exactly 33 percent of the width");
+        assertTrue(AbilityMenuScreen.detailX(960) < 960, "the pane reaches the right edge");
     }
 
 }

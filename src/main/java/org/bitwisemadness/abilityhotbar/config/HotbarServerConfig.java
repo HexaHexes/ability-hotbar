@@ -36,6 +36,16 @@ public final class HotbarServerConfig {
                             + "mod-registered bars always ride along and are never clipped)")
                     .defineInRange("hotbar.maxBars", 10, 1, 10);
 
+    /**
+     * The server ceiling for a saved loadout preset's name length: a
+     * longer name is refused at the payload boundary (server policy,
+     * synced - clients cannot widen it).
+     */
+    public static final ModConfigSpec.IntValue MAX_PRESET_NAME_LENGTH =
+            BUILDER.comment("Maximum characters in a saved loadout preset's name "
+                            + "(longer names are refused)")
+                    .defineInRange("hotbar.maxPresetNameLength", 32, 8, 64);
+
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private HotbarServerConfig() {

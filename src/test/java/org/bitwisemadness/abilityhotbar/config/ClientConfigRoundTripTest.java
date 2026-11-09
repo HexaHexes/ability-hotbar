@@ -73,6 +73,14 @@ class ClientConfigRoundTripTest {
             #aboveStatus height: DYNAMIC tracks the player's hearts, armor and oxygen; FIXED uses the vanilla baseline (only read when display.anchor = aboveStatus)
             #Allowed Values: FIXED, DYNAMIC
             statusAnchorMode = "DYNAMIC"
+            #Milliseconds the bar's name stays on screen after a switch
+            # Default: 2500
+            # Range: 0 ~ 10000
+            switchToastDurationMs = 2500
+            #Pixels above the bar the switch toast sits
+            # Default: 12
+            # Range: 0 ~ 48
+            switchToastOffsetY = 12
             [menu]
             #Last menu tab chosen in the ability menu (empty = the All tab)
             lastTab = ""
@@ -88,6 +96,40 @@ class ClientConfigRoundTripTest {
             descriptionScrollLines = 16
             #Allow dragging an ability row onto a slot cell to assign it
             dragToAssign = true
+            #Ability list rows scrolled per wheel notch
+            # Default: 1
+            # Range: 1 ~ 8
+            listScrollRows = 1
+            #Whether opening the ability menu pauses the game (singleplayer)
+            pauseGame = false
+            #Detail pane width as a percent of the screen width
+            # Default: 33
+            # Range: 25 ~ 60
+            detailPaneWidthPercent = 33
+            #Alpha (0-255) of the selected row and cell highlight
+            # Default: 88
+            # Range: 0 ~ 255
+            selectionAlpha = 88
+            #Alpha (0-255) of the hovered row and cell highlight
+            # Default: 55
+            # Range: 0 ~ 255
+            hoverAlpha = 55
+            #Pixels a row must move before a press becomes a drag-to-assign
+            # Default: 6
+            # Range: 1 ~ 32
+            dragThresholdPx = 6
+            #Pixels of description-pane drag per scrolled line
+            # Default: 4
+            # Range: 1 ~ 20
+            detailDragPixelsPerLine = 4
+            #Ability list row height in pixels
+            # Default: 36
+            # Range: 24 ~ 64
+            rowHeight = 36
+            #Slot cell height in pixels (30 minimum - the three-line cell needs it)
+            # Default: 32
+            # Range: 30 ~ 48
+            slotCellHeight = 32
             """;
 
     private static CommentedConfig parse(String toml) {

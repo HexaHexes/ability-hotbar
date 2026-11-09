@@ -152,6 +152,62 @@ public final class HotbarClientConfig {
                             + "display.anchor = aboveStatus)")
                     .defineEnum("display.statusAnchorMode", StatusAnchorMode.DYNAMIC);
 
+    /** How long the bar-name switch toast stays on screen. */
+    public static final ModConfigSpec.IntValue SWITCH_TOAST_DURATION_MS =
+            BUILDER.comment("Milliseconds the bar's name stays on screen after a switch")
+                    .defineInRange("display.switchToastDurationMs", 2500, 0, 10000);
+
+    /** How far above the bar the switch toast sits. */
+    public static final ModConfigSpec.IntValue SWITCH_TOAST_OFFSET_Y =
+            BUILDER.comment("Pixels above the bar the switch toast sits")
+                    .defineInRange("display.switchToastOffsetY", 12, 0, 48);
+
+    /** Ability-list wheel speed, rows per notch. */
+    public static final ModConfigSpec.IntValue LIST_SCROLL_ROWS =
+            BUILDER.comment("Ability list rows scrolled per wheel notch")
+                    .defineInRange("menu.listScrollRows", 1, 1, 8);
+
+    /** Whether opening the menu pauses the game (singleplayer). */
+    public static final ModConfigSpec.BooleanValue PAUSE_GAME =
+            BUILDER.comment("Whether opening the ability menu pauses the game (singleplayer)")
+                    .define("menu.pauseGame", false);
+
+    /** Detail pane width as a percent of the screen. */
+    public static final ModConfigSpec.IntValue DETAIL_PANE_WIDTH_PERCENT =
+            BUILDER.comment("Detail pane width as a percent of the screen width")
+                    .defineInRange("menu.detailPaneWidthPercent", 33, 25, 60);
+
+    /** Selected row/cell highlight alpha. */
+    public static final ModConfigSpec.IntValue SELECTION_ALPHA =
+            BUILDER.comment("Alpha (0-255) of the selected row and cell highlight")
+                    .defineInRange("menu.selectionAlpha", 88, 0, 255);
+
+    /** Hovered row/cell highlight alpha. */
+    public static final ModConfigSpec.IntValue HOVER_ALPHA =
+            BUILDER.comment("Alpha (0-255) of the hovered row and cell highlight")
+                    .defineInRange("menu.hoverAlpha", 55, 0, 255);
+
+    /** Drag distance before a press becomes a drag-to-assign. */
+    public static final ModConfigSpec.IntValue DRAG_THRESHOLD_PX =
+            BUILDER.comment("Pixels a row must move before a press becomes a drag-to-assign")
+                    .defineInRange("menu.dragThresholdPx", 6, 1, 32);
+
+    /** Description-pane press-drag speed. */
+    public static final ModConfigSpec.IntValue DETAIL_DRAG_PIXELS_PER_LINE =
+            BUILDER.comment("Pixels of description-pane drag per scrolled line")
+                    .defineInRange("menu.detailDragPixelsPerLine", 4, 1, 20);
+
+    /** Ability-list row height. */
+    public static final ModConfigSpec.IntValue ROW_HEIGHT =
+            BUILDER.comment("Ability list row height in pixels")
+                    .defineInRange("menu.rowHeight", 36, 24, 64);
+
+    /** Slot-cell height (30 is the floor: the three-line cell needs it). */
+    public static final ModConfigSpec.IntValue SLOT_CELL_HEIGHT =
+            BUILDER.comment("Slot cell height in pixels (30 minimum - the three-line cell "
+                            + "needs it)")
+                    .defineInRange("menu.slotCellHeight", 32, 30, 48);
+
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     private HotbarClientConfig() {
