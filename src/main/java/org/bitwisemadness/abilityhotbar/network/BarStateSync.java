@@ -8,7 +8,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.bitwisemadness.abilitycore.api.AbilityModes;
 import org.bitwisemadness.abilitycore.api.ModeContract;
+import org.bitwisemadness.abilitycore.config.ConfigDiagnostics;
 import org.bitwisemadness.abilityhotbar.UnlockReconciler;
+import org.bitwisemadness.abilityhotbar.config.HotbarServerConfig;
 import org.bitwisemadness.abilityhotbar.state.Bar;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.bitwisemadness.abilityhotbar.state.BarStateAttachments;
@@ -36,10 +38,40 @@ public final class BarStateSync {
     private BarStateSync() {
     }
 
+    /**
+     * The state with every bar's row grown to the server's slot ceiling:
+     * a save written under an older, smaller ceiling keeps its shorter
+     * rows forever, so the bar drew nine slots whatever both configs said
+     * (owner's report). Growing grants the empty slots the current
+     * ceiling allows - the render still clamps to the client preference,
+     * so this never shows more than the player asked for. Idempotent: a
+     * row at or beyond the ceiling passes through untouched.
+     * Package-private for the fixture (the caller is server-side).
+     */
+    static BarState paddedToCeiling(BarState state) {
+        int slots = ConfigDiagnostics.readOrDefault("hotbar.maxSlots",
+                () -> HotbarServerConfig.MAX_HOTBAR_SLOTS.get(), 18);
+        BarState out = state;
+        for (Bar bar : state.bars()) {
+            SlotAssignment[] row = bar.assignments();
+            if (row.length >= slots) {
+                continue;
+            }
+            SlotAssignment[] grown = new SlotAssignment[slots];
+            System.arraycopy(row, 0, grown, 0, row.length);
+            for (int slot = row.length; slot < slots; slot++) {
+                grown[slot] = SlotAssignment.empty();
+            }
+            out = out.withRow(bar.id(), grown);
+        }
+        return out;
+    }
+
     /** Sends the player's current bar state to their client (unlock-reconciled first). */
     public static void sendSnapshot(ServerPlayer player) {
         BarState current = player.getData(BarStateAttachments.BAR_STATE);
-        BarState effective = UnlockReconciler.reconcile(player, current).orElse(current);
+        BarState effective = paddedToCeiling(UnlockReconciler.reconcile(player, current)
+                .orElse(current));
         if (effective != current) {
             player.setData(BarStateAttachments.BAR_STATE, effective);
         }
