@@ -96,11 +96,17 @@ final class MenuChrome {
     /** A meter: dark track, accent fill, and a top highlight line. */
     static void meter(GuiGraphics gui, int x, int y, int w, int h, float fraction,
             MenuStyle style) {
+        meter(gui, x, y, w, h, fraction, style, style.accent());
+    }
+
+    /** A meter with an explicit fill - the row bar's state colour. */
+    static void meter(GuiGraphics gui, int x, int y, int w, int h, float fraction,
+            MenuStyle style, int fill) {
         chamferFill(gui, x, y, w, h, Math.min(2, h / 2),
                 MenuStyle.alpha(style.background(), 75));
         int fillWidth = meterFillWidth(w, fraction);
         if (fillWidth > 0) {
-            chamferFill(gui, x + 1, y + 1, fillWidth, h - 2, 0, style.accent());
+            chamferFill(gui, x + 1, y + 1, fillWidth, h - 2, 0, fill);
             gui.fill(x + 1, y + 1, x + 1 + fillWidth, y + 2,
                     MenuStyle.alpha(style.text(), 45));
         }

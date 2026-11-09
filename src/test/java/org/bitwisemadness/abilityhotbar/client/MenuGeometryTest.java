@@ -3,6 +3,8 @@ package org.bitwisemadness.abilityhotbar.client;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Optional;
+import org.bitwisemadness.abilityhotbar.registry.MenuStyle;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -237,6 +239,30 @@ class MenuGeometryTest {
                 "overflow clamps to count*64 - viewport");
         assertEquals(96, AbilityMenuScreen.clampSubScroll(96, 4, 160),
                 "the clamp is idempotent at the end");
+    }
+
+    @Test
+    void masteryBarColoursTheThreeStates() {
+        MenuStyle style = MenuStyle.TRS_SAODARK;
+        assertEquals(style.action(), AbilityMenuScreen.masteryBarColor(style,
+                Optional.of(true), 1f), "mastered reads gold");
+        assertEquals(style.accent(), AbilityMenuScreen.masteryBarColor(style,
+                Optional.of(true), 0.4f), "learned reads cyan");
+        assertEquals(style.muted(), AbilityMenuScreen.masteryBarColor(style,
+                Optional.of(false), 0.4f), "known reads grey");
+        assertEquals(style.muted(), AbilityMenuScreen.masteryBarColor(style,
+                Optional.empty(), 0.4f), "unknown never guesses a state");
+    }
+
+    @Test
+    void masteryBarSitsOnTheBottomLine() {
+        int[] bar = AbilityMenuScreen.masteryBarRect(100, 46, 300);
+        assertEquals(46, bar[0], "starts where the state text left off");
+        assertEquals(100 + 36 - 18, bar[1], "the row's bottom line");
+        assertEquals(96, bar[2], "capped width");
+        assertEquals(12, bar[3], "room for the value inside");
+        assertEquals(40, AbilityMenuScreen.masteryBarRect(100, 46, 80)[2],
+                "a squeezed row keeps the floor");
     }
 
 }
