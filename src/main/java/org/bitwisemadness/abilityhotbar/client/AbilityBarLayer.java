@@ -2,7 +2,6 @@ package org.bitwisemadness.abilityhotbar.client;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import java.util.List;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -350,11 +349,10 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
     private static void drawSelectionFrame(GuiGraphics gui, BarLayout layout, int[] rect,
             ResourceLocation selection) {
         int[] frame = selectionFrameRect(rect, layout.horizontal(), layout.scale());
-        if (frame[4] == 0) {
-            gui.blitSprite(selection, frame[0], frame[1], frame[2], frame[3]);
-        } else {
-            blitTurned(gui, selection, frame[0], frame[1], frame[2], frame[3], frame[4]);
-        }
+        // the sprite's white window is subtracted so the icon under it
+        // stays visible (owner: pseudocore items washed by the selector) -
+        // the same cut the menu's pills take, shared so the two can't drift
+        SpriteDraw.ring(gui, selection, frame[0], frame[1], frame[2], frame[3], frame[4]);
     }
 
     /**
@@ -451,41 +449,7 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         if (layout.horizontal()) {
             gui.blitSprite(background, dx, dy, w, h);
         } else {
-            blitTurned(gui, background, dx, dy, w, h, 90f);
-        }
-    }
-
-    /**
-     * Blits a landscape sprite turned a quarter turn (or three), so it keeps
-     * its native proportions instead of being squashed into a portrait box.
-     *
-     * <p>The sprite is drawn at {@code (nativeW, nativeH)} and turned about
-     * its centre, so it occupies {@code (nativeH, nativeW)} starting at
-     * {@code (dx, dy)} - any quarter turn swaps width and height the same
-     * way, so the footprint is identical for 90 and 270 degrees; only the
-     * content's orientation differs.</p>
-     *
-     * <p>90 degrees (the bar background) maps +X to +Y, and GUI +Y points
-     * down, so the sprite's left cap lands at the top: cell 1 under slot 0,
-     * at the top of a vertical bar just as at the left of a horizontal one.
-     * 270 degrees (the selection frame - 90 plus hotbar#109's 180-degree
-     * flip) presents the sprite the other way round.</p>
-     */
-    private static void blitTurned(
-            GuiGraphics gui, ResourceLocation sprite, int dx, int dy, int nativeW, int nativeH,
-            float degrees) {
-        PoseStack pose = gui.pose();
-        pose.pushPose();
-        try {
-            // Centre of the box the sprite fills once turned: a quarter turn
-            // swaps its width and height, so anchor on the swapped half-extents.
-            pose.translate(dx + nativeH / 2.0, dy + nativeW / 2.0, 0.0);
-            pose.mulPose(Axis.ZP.rotationDegrees(degrees));
-            pose.translate(-nativeW / 2.0, -nativeH / 2.0, 0.0);
-            gui.blitSprite(sprite, 0, 0, nativeW, nativeH);
-        } finally {
-            // Never leak the transform into the next sprite's draw.
-            pose.popPose();
+            SpriteDraw.turned(gui, background, dx, dy, w, h, 90f);
         }
     }
 
