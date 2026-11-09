@@ -12,9 +12,11 @@ import org.bitwisemadness.abilitycore.api.ModeChangeHandlers;
 import org.bitwisemadness.abilitycore.api.ModeChangeRequest;
 import org.bitwisemadness.abilitycore.api.ModeContract;
 import org.bitwisemadness.abilityhotbar.AbilityHotbar;
+import org.bitwisemadness.abilityhotbar.state.Bar;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.bitwisemadness.abilityhotbar.state.BarStateAttachments;
 import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Client-to-server ability-mode cycle request (REQ-HOT-16, tracked as
@@ -63,6 +65,11 @@ public record CycleModePayload(ResourceLocation barId, int slot)
                     BarStateSync.sendSnapshot(player);
                     return;
                 }
+                // Unset instances follow the live projection, so a cycle
+                // would move all of them at once (owner's report): freeze
+                // them at what they showed - only the cycled slot moves
+                String before = ModeContract.currentMode(player, assignment.abilityId())
+                        .orElse(null);
                 var result = ModeChangeHandlers.run(
                         new ModeChangeRequest(assignment.abilityId(),
                                 payload.slot(), payload.barId()), player);
@@ -70,16 +77,52 @@ public record CycleModePayload(ResourceLocation barId, int slot)
                     BarStateSync.sendSnapshot(player);
                     return;
                 }
+                BarState next = frozenUnsetModes(current, assignment.abilityId(), before);
                 // the SLOT-scoped read (core#133): the cycle stepped this
                 // slot's own preset position, so store that slot's mode -
                 // never another slot's (owner: each slot sets its mode)
-                BarState next = ModeContract
+                BarState cycled = ModeContract
                         .currentMode(player, assignment.abilityId(), payload.slot())
-                        .map(mode -> current.withSlotMode(
+                        .map(mode -> next.withSlotMode(
                                 payload.barId(), payload.slot(), mode))
-                        .orElse(current);
-                BarStateSync.acceptAssignment(player, next);
+                        .orElse(next);
+                BarStateSync.acceptAssignment(player, cycled);
             }
         });
+    }
+
+    /**
+     * The state with every <b>still-unset</b> slot of {@code abilityId}
+     * holding {@code mode} (the pre-cycle live value): those slots were
+     * displaying it through the hydration fill, so freezing them keeps
+     * their display exactly as it was while the cycled slot moves. Null
+     * mode (no projection) changes nothing. Package-private for the
+     * fixture (the handler itself needs a ServerPlayer).
+     */
+    static BarState frozenUnsetModes(BarState state, ResourceLocation abilityId,
+            @Nullable String mode) {
+        if (mode == null) {
+            return state;
+        }
+        BarState out = state;
+        for (Bar bar : state.bars()) {
+            SlotAssignment[] row = bar.assignments();
+            SlotAssignment[] next = null;
+            for (int slot = 0; slot < row.length; slot++) {
+                SlotAssignment assignment = row[slot];
+                if (assignment != null && assignment.isAssigned()
+                        && abilityId.equals(assignment.abilityId())
+                        && assignment.mode() == null) {
+                    if (next == null) {
+                        next = row.clone();
+                    }
+                    next[slot] = assignment.withMode(mode);
+                }
+            }
+            if (next != null) {
+                out = out.withRow(bar.id(), next);
+            }
+        }
+        return out;
     }
 }
