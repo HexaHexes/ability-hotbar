@@ -93,7 +93,9 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
 
     @SubscribeEvent
     public static void onRegisterLayers(RegisterGuiLayersEvent event) {
-        event.registerAbove(VanillaGuiLayers.EXPERIENCE_BAR,
+        // owner: our bar sits BELOW vanilla's hotbar on the Z axis, so
+        // wherever the two overlap the vanilla hotbar draws over ours
+        event.registerBelow(VanillaGuiLayers.HOTBAR,
                 ResourceLocation.fromNamespaceAndPath(AbilityHotbar.MOD_ID, "ability_bar"),
                 new AbilityBarLayer());
     }
