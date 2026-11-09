@@ -23,6 +23,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
 import org.bitwisemadness.abilitycore.api.AbilityModes;
@@ -111,14 +112,10 @@ public final class AbilityMenuScreen extends Screen {
                 () -> HotbarClientConfig.ROW_HEIGHT.get(), DEFAULT_ROW_HEIGHT);
     }
     private static final int LIST_LEFT = 8;
-    /** The list starts 6px under the collapsed filter strip (#141). */
-    private static final int LIST_TOP = 64;
     private static final int INERT_COLOR = 0xFFFF5555;
     /** The filter strip row (search pill + subcategory tabs). */
     private static final int FILTER_Y = 40;
-    private static final int CHIP_HEIGHT = 18;
     private static final int SEARCH_X = 8;
-    private static final int SEARCH_Y = 44;
     private static final int SEARCH_WIDTH = 140;
     /** The bottom bar chip beside the slot strip (cycles the bar on click). */
     private static final int BAR_CHIP_HEIGHT = 14;
@@ -156,6 +153,31 @@ public final class AbilityMenuScreen extends Screen {
     /** The prev/next bar buttons beside the strip (issue #157): 14px cells. */
     private static final int BAR_NAV_SIZE = 14;
     private static final int BAR_NAV_GAP = 2;
+    /**
+     * One subcategory pill's step width (owner: the pills match the
+     * hotbar slot pills' height and, once arrows and drag-scroll exist,
+     * keep a fixed width - overflow scrolls instead of shrinking).
+     */
+    private static final int SUB_PILL_WIDTH = 64;
+
+    /**
+     * The filter row's pill height: the hotbar slot pills' own height
+     * (owner's brief - the search bar and subcategory pills match them).
+     */
+    private static int filterPillHeight() {
+        return menuCellHeight();
+    }
+
+    /** The list starts 6px under the filter strip (#141) - grown with its pills. */
+    static int listTop() {
+        return FILTER_Y + filterPillHeight() + 6;
+    }
+
+    /** The subcategory strip's scroll position, clamped to its overflow. */
+    static int clampSubScroll(int scroll, int count, int viewportWidth) {
+        int max = Math.max(0, count * SUB_PILL_WIDTH - viewportWidth);
+        return Math.max(0, Math.min(max, scroll));
+    }
 
     private ResourceLocation selectedBar;
     private int selectedSlot;
@@ -193,6 +215,15 @@ public final class AbilityMenuScreen extends Screen {
     private ResourceLocation dragAbilityId;
     private double pressStartX;
     private double pressStartY;
+    // The subcategory strip's scroll (owner: arrows + drag-scroll): a
+    // press in the viewport arms it, movement past the threshold turns
+    // it into a horizontal scroll, release activates an un-dragged pill
+    private int subStripScroll;
+    private boolean subStripArmed;
+    private boolean subStripDragging;
+    private double subStripPressX;
+    private int subStripScrollStart;
+    private int pressedSubPill = -1;
 
     public AbilityMenuScreen() {
         super(Component.translatable("ability_hotbar.menu.title"));
@@ -245,7 +276,8 @@ public final class AbilityMenuScreen extends Screen {
     protected void init() {
         // Borderless: MenuChrome draws the search pill behind the text, so
         // the widget contributes only its text, cursor and hint.
-        searchBox = new EditBox(this.font, SEARCH_X, SEARCH_Y, SEARCH_WIDTH, 16,
+        searchBox = new EditBox(this.font, SEARCH_X, FILTER_Y + 3, SEARCH_WIDTH,
+                filterPillHeight() - 6,
                 Component.translatable("ability_hotbar.menu.search"));
         searchBox.setBordered(false);
         searchBox.setMaxLength(64);
@@ -272,7 +304,7 @@ public final class AbilityMenuScreen extends Screen {
         super.renderBackground(gui, mouseX, mouseY, partialTick);
         MenuStyle style = style();
         MenuChrome.backdrop(gui, this.width, this.height, style);
-        MenuChrome.glass(gui, SEARCH_X - 2, FILTER_Y, SEARCH_WIDTH + 4, CHIP_HEIGHT,
+        MenuChrome.glass(gui, SEARCH_X - 2, FILTER_Y, SEARCH_WIDTH + 4, filterPillHeight(),
                 style, false);
     }
 
@@ -291,7 +323,7 @@ public final class AbilityMenuScreen extends Screen {
         BarState state = ClientBarState.get();
         if (state == null) {
             gui.drawString(this.font, Component.translatable("ability_hotbar.menu.waiting"),
-                    LIST_LEFT, LIST_TOP, style.muted());
+                    LIST_LEFT, listTop(), style.muted());
             return;
         }
 
@@ -383,41 +415,143 @@ public final class AbilityMenuScreen extends Screen {
         }
         MenuStyle style = style();
         int count = types.size() + 1;
-        for (int i = 0; i < count; i++) {
-            boolean all = i == 0;
-            String typeTag = all ? null : types.get(i - 1);
-            int[] rect = subTypeRect(i, count);
-            boolean active = all ? subCategoryFilter == null : typeTag.equals(subCategoryFilter);
-            boolean hovered = inside(mouseX, mouseY, rect[0], FILTER_Y, rect[1], CHIP_HEIGHT);
-            MenuChrome.glass(gui, rect[0], FILTER_Y, rect[1], CHIP_HEIGHT, style, active || hovered);
-            Component label = all
-                    ? Component.translatable("ability_hotbar.menu.subcategory_any")
-                    : MenuLabels.subcategory(typeTag);
-            // Provider chip icons (owner): the tab strip's identifier rule
-            // on the subcategory strip - stack, sprite, else text-only
-            int textX = rect[0] + 4;
-            if (typeTag != null) {
-                MenuTabs.ChipIcon icon = MenuTabs.subCategoryIcon(typeTag).orElse(null);
-                if (icon != null) {
-                    textX = drawIdentifier(gui, icon.iconId(), icon.icon(),
-                            rect[0] + 4, FILTER_Y + (CHIP_HEIGHT - 12) / 2, 12);
+        int pillHeight = filterPillHeight();
+        subStripScroll = clampSubScroll(subStripScroll, count, subViewportWidth());
+        // the arrows step the strip one pill at a time (owner: buttons
+        // before and after, wearing the bar-nav's own glyphs)
+        drawSubStripArrow(gui, mouseX, mouseY, subStripX(), true, subStripScroll > 0);
+        drawSubStripArrow(gui, mouseX, mouseY, subStripEnd() - BAR_NAV_SIZE, false,
+                subStripScroll < clampSubScroll(Integer.MAX_VALUE, count, subViewportWidth()));
+        // the pills clip to their viewport: past it they scroll, never
+        // overflow into the detail pane (owner's strip brief)
+        int viewX = subViewportX();
+        gui.enableScissor(viewX, FILTER_Y, viewX + subViewportWidth(), FILTER_Y + pillHeight);
+        try {
+            for (int i = 0; i < count; i++) {
+                boolean all = i == 0;
+                String typeTag = all ? null : types.get(i - 1);
+                int[] rect = subTypeRect(i);
+                boolean active = all ? subCategoryFilter == null : typeTag.equals(subCategoryFilter);
+                boolean hovered = inside(mouseX, mouseY, rect[0], FILTER_Y, rect[1], pillHeight);
+                MenuChrome.glass(gui, rect[0], FILTER_Y, rect[1], pillHeight, style,
+                        active || hovered);
+                Component label = all
+                        ? Component.translatable("ability_hotbar.menu.subcategory_any")
+                        : MenuLabels.subcategory(typeTag);
+                // Provider chip icons (owner): the tab strip's identifier
+                // rule on this strip - the All pill wears its category's
+                // icon, or the All category's Nether Star
+                int textX = rect[0] + 4;
+                if (typeTag != null) {
+                    MenuTabs.ChipIcon icon = MenuTabs.subCategoryIcon(typeTag).orElse(null);
+                    if (icon != null) {
+                        textX = drawIdentifier(gui, icon.iconId(), icon.icon(),
+                                rect[0] + 4, FILTER_Y + (pillHeight - TAB_ICON) / 2, TAB_ICON);
+                    }
+                } else {
+                    textX = drawAllSubcategoryIcon(gui, rect[0] + 4,
+                            FILTER_Y + (pillHeight - TAB_ICON) / 2);
                 }
+                int budget = Math.max(4, rect[0] + rect[1] - 3 - textX);
+                gui.drawString(this.font,
+                        this.font.plainSubstrByWidth(label.getString(), budget),
+                        textX, FILTER_Y + (pillHeight - 9) / 2,
+                        active ? style.action() : hovered ? style.text() : style.muted());
             }
-            int budget = Math.max(4, rect[0] + rect[1] - 3 - textX);
-            gui.drawString(this.font,
-                    this.font.plainSubstrByWidth(label.getString(), budget),
-                    textX, FILTER_Y + (CHIP_HEIGHT - 9) / 2,
-                    active ? style.action() : hovered ? style.text() : style.muted());
+        } finally {
+            gui.disableScissor();
         }
     }
 
-    /** One subcategory tab's rect (draw and hit share it): sized to fit the row. */
-    private int[] subTypeRect(int index, int count) {
-        int x = SEARCH_X + SEARCH_WIDTH + 6;
-        // confined to the left two thirds: the rightmost third is the pane
-        int available = detailX() - 6 - x;
-        int width = Math.max(16, Math.min(64, available / count));
-        return new int[] {x + index * width, width - 2};
+    /**
+     * The strip's arrow button: the bar-nav's 14px cell and glyph at the
+     * row's height, dimmed and inert when it has nowhere to scroll.
+     */
+    private void drawSubStripArrow(GuiGraphics gui, int mouseX, int mouseY, int x,
+            boolean left, boolean enabled) {
+        MenuStyle style = style();
+        int height = filterPillHeight();
+        boolean hovered = enabled && inside(mouseX, mouseY, x, FILTER_Y, BAR_NAV_SIZE, height);
+        MenuChrome.glass(gui, x, FILTER_Y, BAR_NAV_SIZE, height, style, hovered);
+        if (!enabled) {
+            gui.fill(x, FILTER_Y, x + BAR_NAV_SIZE, FILTER_Y + height,
+                    MenuStyle.alpha(style.raised(), 60));
+        }
+        int glyph = !enabled ? MenuStyle.alpha(style.muted(), 140)
+                : hovered ? MenuStyle.alpha(style.text(), 255)
+                : MenuStyle.alpha(style.muted(), 255);
+        drawBarNavGlyph(gui, x, FILTER_Y + (height - BAR_NAV_SIZE) / 2, left, glyph);
+    }
+
+    /**
+     * The All subcategory pill's icon: its category's own (the selected
+     * tab's identifier), or the All category's Nether Star when no
+     * category is selected - a category without an icon stays text-only.
+     */
+    private int drawAllSubcategoryIcon(GuiGraphics gui, int x, int y) {
+        if (selectedTab != null) {
+            MenuTabs.MenuTab tab = MenuTabs.get(selectedTab).orElse(null);
+            return tab != null && tab.hasIcon()
+                    ? drawIdentifier(gui, tab.iconId(), tab.icon(), x, y, TAB_ICON)
+                    : x;
+        }
+        return drawIdentifier(gui, null, new ItemStack(Items.NETHER_STAR), x, y, TAB_ICON);
+    }
+
+    /** The strip's left edge (right of the search pill). */
+    private int subStripX() {
+        return SEARCH_X + SEARCH_WIDTH + 6;
+    }
+
+    /** The pill viewport's left edge (after the prev arrow). */
+    private int subViewportX() {
+        return subStripX() + BAR_NAV_SIZE + 2;
+    }
+
+    /** The strip's right edge (the detail pane keeps its6px). */
+    private int subStripEnd() {
+        return detailX() - 6;
+    }
+
+    /** The visible pill width: the strip minus both arrows and their gaps. */
+    private int subViewportWidth() {
+        return Math.max(0, subStripEnd() - BAR_NAV_SIZE - 2 - subViewportX());
+    }
+
+    /**
+     * One subcategory tab's rect (draw and hit share it), scroll-applied:
+     * a fixed {@link #SUB_PILL_WIDTH} step - overflow scrolls the strip
+     * instead of shrinking the pills (owner's size brief).
+     */
+    private int[] subTypeRect(int index) {
+        return new int[] {subViewportX() + index * SUB_PILL_WIDTH - subStripScroll,
+                SUB_PILL_WIDTH - 2};
+    }
+
+    /** The pill under the point, or -1 when the point sits in a gap. */
+    private int subPillAt(double mouseX, double mouseY, int count) {
+        for (int i = 0; i < count; i++) {
+            int[] rect = subTypeRect(i);
+            if (inside(mouseX, mouseY, rect[0], FILTER_Y, rect[1], filterPillHeight())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The arrow's click: one pill towards that end, when it can move. */
+    private boolean stepSubStrip(double mouseX, double mouseY, boolean left, int count) {
+        int x = left ? subStripX() : subStripEnd() - BAR_NAV_SIZE;
+        if (!inside(mouseX, mouseY, x, FILTER_Y, BAR_NAV_SIZE, filterPillHeight())) {
+            return false;
+        }
+        int next = subStripScroll + (left ? -SUB_PILL_WIDTH : SUB_PILL_WIDTH);
+        int clamped = clampSubScroll(next, count, subViewportWidth());
+        if (clamped == subStripScroll) {
+            return true; // inert but claimed: the press does nothing else
+        }
+        subStripScroll = clamped;
+        return true;
     }
 
     /**
@@ -480,7 +614,11 @@ public final class AbilityMenuScreen extends Screen {
                         MenuStyle.alpha(style.raised(), 55));
             }
             int textX = x + 3;
-            if (!all && tab.hasIcon()) {
+            if (all) {
+                // owner: the All category wears a Nether Star
+                textX = drawIdentifier(gui, null, new ItemStack(Items.NETHER_STAR),
+                        x + 3, STYLE_PILL_Y + 1, TAB_ICON);
+            } else if (tab.hasIcon()) {
                 textX = drawTabIcon(gui, tab, x + 3, STYLE_PILL_Y + 1);
             }
             Component label = all
@@ -1189,14 +1327,14 @@ public final class AbilityMenuScreen extends Screen {
         int listWidth = listWidth();
         Bar stripBar = targetBar(state);
         int listBottom = listBottom(stripSlotCount(stripBar));
-        int visible = Math.max(0, (listBottom - LIST_TOP) / menuRowHeight());
+        int visible = Math.max(0, (listBottom - listTop()) / menuRowHeight());
         scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, rows.size() - visible)));
         if (rows.isEmpty()) {
             gui.drawString(this.font, Component.translatable("ability_hotbar.menu.no_results"),
-                    LIST_LEFT, LIST_TOP, style.muted());
+                    LIST_LEFT, listTop(), style.muted());
             return;
         }
-        int y = LIST_TOP;
+        int y = listTop();
         int hoveredIndex = -1;
         for (int i = scrollOffset;
                 i < rows.size() && y + menuRowHeight() <= listBottom;
@@ -1742,17 +1880,25 @@ public final class AbilityMenuScreen extends Screen {
                 tabX += tabWidth;
             }
         }
-        // subcategory tabs (beside the search bar) select the subfilter
+        // subcategory strip (beside the search bar): the arrows step it, a
+        // press in the viewport defers to release so a drag can scroll it
+        // (owner's brief: arrow buttons + drag-scrolling)
         List<String> subTypes = subTypeTags();
         if (!subTypes.isEmpty()) {
             int count = subTypes.size() + 1;
-            for (int i = 0; i < count; i++) {
-                int[] rect = subTypeRect(i, count);
-                if (inside(mouseX, mouseY, rect[0], FILTER_Y, rect[1], CHIP_HEIGHT)) {
-                    subCategoryFilter = i == 0 ? null : subTypes.get(i - 1);
-                    scrollOffset = 0;
-                    return true;
-                }
+            subStripScroll = clampSubScroll(subStripScroll, count, subViewportWidth());
+            if (stepSubStrip(mouseX, mouseY, true, count)
+                    || stepSubStrip(mouseX, mouseY, false, count)) {
+                return true;
+            }
+            if (inside(mouseX, mouseY, subViewportX(), FILTER_Y, subViewportWidth(),
+                    filterPillHeight())) {
+                pressedSubPill = subPillAt(mouseX, mouseY, count);
+                subStripArmed = true;
+                subStripDragging = false;
+                subStripPressX = mouseX;
+                subStripScrollStart = subStripScroll;
+                return true;
             }
         }
         // bar texture-style cycler (issue #127): header line 2 right
@@ -1829,13 +1975,13 @@ public final class AbilityMenuScreen extends Screen {
         List<MenuQuery.Entry> rows = visibleRows();
         int listBottom = listBottom(stripSlotCount(target));
         int relative = mouseX < detailX() - 6
-                ? rowIndexAt((int) mouseY, LIST_TOP, listBottom, menuRowHeight())
+                ? rowIndexAt((int) mouseY, listTop(), listBottom, menuRowHeight())
                 : -1;
         if (relative >= 0) {
             int offset = relative + scrollOffset;
             if (offset < rows.size()) {
                 MenuQuery.Entry row = rows.get(offset);
-                int rowY = LIST_TOP + relative * menuRowHeight();
+                int rowY = listTop() + relative * menuRowHeight();
                 if (informationalTab()) {
                     // info-only tab (owner's directive): rows never slot,
                     // cycle or toggle - the pane already follows the hover
@@ -1902,6 +2048,18 @@ public final class AbilityMenuScreen extends Screen {
         if (super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) {
             return true;
         }
+        // the subcategory strip owns the wheel while the pointer is on it
+        // (owner's brief: it scrolls - one pill a notch, clamped)
+        List<String> subStripTypes = subTypeTags();
+        if (!subStripTypes.isEmpty()
+                && inside(mouseX, mouseY, subViewportX(), FILTER_Y, subViewportWidth(),
+                        filterPillHeight())) {
+            int subCount = subStripTypes.size() + 1;
+            subStripScroll = clampSubScroll(
+                    subStripScroll + (scrollY > 0 ? -SUB_PILL_WIDTH : SUB_PILL_WIDTH),
+                    subCount, subViewportWidth());
+            return true;
+        }
         // the detail pane owns the wheel while the pointer sits in it (its
         // description scrolls only while it actually overflows - max is
         // computed by the draw pass)
@@ -1935,6 +2093,20 @@ public final class AbilityMenuScreen extends Screen {
         if (dragAbilityId != null) {
             return true; // the ghost rides the cursor; cells read the hover
         }
+        if (subStripArmed) {
+            // movement past the threshold promotes the press to a scroll
+            // (owner: drag-scrolling the subcategory strip)
+            if (!subStripDragging && Math.abs(mouseX - subStripPressX)
+                    > HotbarClientConfig.DRAG_THRESHOLD_PX.get()) {
+                subStripDragging = true;
+            }
+            if (subStripDragging) {
+                subStripScroll = clampSubScroll(
+                        subStripScrollStart - (int) (mouseX - subStripPressX),
+                        subTypeTags().size() + 1, subViewportWidth());
+            }
+            return true;
+        }
         if (pressedRowId != null) {
             // movement past the threshold promotes the press to a drag
             if (Math.abs(mouseX - pressStartX) + Math.abs(mouseY - pressStartY)
@@ -1963,6 +2135,24 @@ public final class AbilityMenuScreen extends Screen {
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         detailDragging = false;
+        boolean subPress = subStripArmed;
+        boolean subDragged = subStripDragging;
+        int subPill = pressedSubPill;
+        subStripArmed = false;
+        subStripDragging = false;
+        pressedSubPill = -1;
+        if (subPress) {
+            // press + release in place activates the pill; a drag that
+            // scrolled consumes the release instead (owner: drag-scroll)
+            if (!subDragged && subPill >= 0) {
+                List<String> subTypes = subTypeTags();
+                if (subPill - 1 < subTypes.size()) {
+                    subCategoryFilter = subPill == 0 ? null : subTypes.get(subPill - 1);
+                    scrollOffset = 0;
+                }
+            }
+            return true;
+        }
         ResourceLocation drag = dragAbilityId;
         ResourceLocation pressed = pressedRowId;
         dragAbilityId = null;
