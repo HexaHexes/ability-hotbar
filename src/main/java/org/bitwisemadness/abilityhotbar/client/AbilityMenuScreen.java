@@ -1033,57 +1033,25 @@ public final class AbilityMenuScreen extends Screen {
 
     /**
      * The stretched selection sprite's <b>window</b> in box coordinates
-     * ({@code {x, y, w, h}}) - the sprite's own 16x16 window at (4,4) of
-     * 24x23, solved for nearest sampling, <b>grown one pixel on the left,
-     * right and bottom</b>: the owner observed a one-pixel white remnant
-     * of the window surviving on exactly those sides (the top edge is
-     * exact), so the subtraction must reach the window as the GPU
-     * actually rasterizes it - anything narrower leaves the white line,
-     * anything wider would eat the frame.
+     * ({@code {x, y, w, h}}) - the shared solve ({@link SpriteDraw}),
+     * grown one pixel on the left, right and bottom because the owner
+     * observed a white remnant of the window surviving on exactly those
+     * sides (the top edge is exact).
      */
     static int[] selectorWindow(int side) {
-        int x0 = (int) Math.ceil(4 * side / 24.0 - 0.5) - 1;
-        int x1 = (int) Math.ceil(20 * side / 24.0 - 0.5) + 1;
-        int y0 = (int) Math.ceil(4 * side / 23.0 - 0.5);
-        int y1 = (int) Math.ceil(20 * side / 23.0 - 0.5) + 1;
-        return new int[] {
-                Math.max(0, x0),
-                Math.max(0, y0),
-                Math.max(0, Math.min(side, x1) - Math.max(0, x0)),
-                Math.max(0, Math.min(side, y1) - Math.max(0, y0))};
+        return SpriteDraw.window(side, side);
     }
 
     /**
      * The selection sprite with its window <b>subtracted</b> (owner:
-     * dynamically remove the white square): the sprite blits four times,
-     * each scissored to one band around the window, so only the frame
-     * draws. Whatever pack overrides {@code hud/hotbar_selection} -
-     * Excalibur's window is a white wash, vanilla's is transparent - the
-     * pill's background shows through the middle and the icon stays crisp.
+     * dynamically remove the white square): four scissored bands around
+     * the window, so only the frame draws. Whatever pack overrides
+     * {@code hud/hotbar_selection} - Excalibur's window is a white wash,
+     * vanilla's is transparent - the pill's background shows through the
+     * middle and the icon stays crisp. Shared with the bar's frames.
      */
     private static void drawSelectionRing(GuiGraphics gui, int x, int y, int side) {
-        int[] window = selectorWindow(side);
-        int top = window[1];
-        int left = window[0];
-        int right = left + window[2];
-        int bottom = top + window[3];
-        int[][] bands = {
-                {x, y, side, top},
-                {x, y + bottom, side, side - bottom},
-                {x, y + top, left, window[3]},
-                {x + right, y + top, side - right, window[3]}
-        };
-        for (int[] band : bands) {
-            if (band[2] <= 0 || band[3] <= 0) {
-                continue;
-            }
-            gui.enableScissor(band[0], band[1], band[0] + band[2], band[1] + band[3]);
-            try {
-                gui.blitSprite(VANILLA_SELECTION, x, y, side, side);
-            } finally {
-                gui.disableScissor();
-            }
-        }
+        SpriteDraw.ring(gui, VANILLA_SELECTION, x, y, side, side, 0);
     }
 
     /**
