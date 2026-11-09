@@ -43,6 +43,32 @@ versionRange = "[1.0.0-alpha.34,)"
 ordering = "AFTER"
 side = "BOTH"
 
+# The README's three content rows: Tensura abilities, ISS spell cells and
+# Battlewills payloads all ride this bar, each detected through the core
+# seam (requiredModId / isLoaded) so absence no-ops the content.
+[[dependencies.${mod_id}]]
+modId = "tensura"
+type = "optional"
+versionRange = "[2.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "irons_spellbooks"
+type = "optional"
+# ISS versions carry the Minecraft prefix (1.21.1-3.16.3), same rule as
+# ability-iss' own floor.
+versionRange = "[1.21.1-3.16.3,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.${mod_id}]]
+modId = "ability_tensura"
+type = "optional"
+versionRange = "[0.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
 # Add your mod's dependencies below. Use type = "optional" for anything the mod
 # works without, and gate the code that touches it (mixins, registrations) so it
 # no-ops when the dependency is absent.
