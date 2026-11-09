@@ -40,6 +40,9 @@ import org.bitwisemadness.abilityhotbar.UnlockRule;
 import org.bitwisemadness.abilityhotbar.compat.CoreActivationCompat;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
+import org.bitwisemadness.abilityhotbar.content.ContentPlan;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
+import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
 import org.bitwisemadness.abilityhotbar.network.CycleModePayload;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
@@ -293,6 +296,10 @@ public final class AbilityMenuScreen extends Screen {
         }
 
         Bar target = targetBar(state);
+        // the selected tab's provider bar (owner: the ISS tab shows its
+        // spellbook's cells instead of the assignable bar's) - computed
+        // once here so the strip, its chrome and the mouse agree
+        stripPlan = providerPlan();
         drawHeader(gui, target);
         drawProviderTabs(gui, mouseX, mouseY);
         if (styleCyclerVisible()) {
@@ -336,8 +343,8 @@ public final class AbilityMenuScreen extends Screen {
      * nine-point brief).
      */
     private void drawHeader(GuiGraphics gui, @Nullable Bar target) {
-        if (target == null) {
-            return;
+        if (target == null || stripPlan != null) {
+            return; // a provider strip shows its own bar, not this meter
         }
         MenuStyle style = style();
         float fraction = usedSlots(target) / (float) Math.max(1, target.slotCount());
@@ -736,9 +743,47 @@ public final class AbilityMenuScreen extends Screen {
         HotbarClientConfig.SPEC.save();
     }
 
+    /** The selected tab's provider plan for this frame, or null (assignable strip). */
+    @Nullable
+    private ContentPlan stripPlan;
+
+    /**
+     * The strip's cell count: the selected tab's provider bar when it
+     * declares one (the owner's ISS directive), else the target bar's.
+     * Every strip-derived layout (the strip itself, the list's bottom
+     * edge, the pane's drag region) follows this one number, or the list
+     * would overlap a strip of a different height.
+     */
+    private int stripSlotCount(@Nullable Bar target) {
+        return stripPlan != null ? stripPlan.slotCount()
+                : target == null ? 0 : target.slotCount();
+    }
+
+    /**
+     * The provider bar the selected tab declares (the owner's ISS
+     * directive: the Spells tab shows the spellbook's cells, not the
+     * assignable bar's), as a content plan - null when the tab keeps the
+     * assignable bar, the provider is absent, or it has no content.
+     */
+    @Nullable
+    private ContentPlan providerPlan() {
+        ResourceLocation barId = selectedTab == null ? null
+                : MenuTabs.barForTab(selectedTab).orElse(null);
+        if (barId == null) {
+            return null;
+        }
+        HotbarContentProvider provider = HotbarContentProviders.get(barId).orElse(null);
+        if (provider == null) {
+            return null;
+        }
+        ContentPlan plan = ContentPlan.build(barId, provider, -1);
+        return plan.isEmpty() ? null : plan;
+    }
+
     /** The bottom stack's chamfered slot cells: click selects the target slot. */
     private void drawSlotCells(GuiGraphics gui, int mouseX, int mouseY, @Nullable Bar target) {
-        int slotCount = target == null ? 0 : target.slotCount();
+        ContentPlan plan = stripPlan;
+        int slotCount = stripSlotCount(target);
         if (slotCount == 0) {
             return;
         }
@@ -749,7 +794,7 @@ public final class AbilityMenuScreen extends Screen {
         for (int i = 0; i < slotCount; i++) {
             int x = LIST_LEFT + (i % rowSlots) * cellWidth;
             int cellY = y + (i / rowSlots) * (menuCellHeight() + SLOT_GAP);
-            boolean selected = i == selectedSlot;
+            boolean selected = plan == null && i == selectedSlot;
             boolean hovered = inside(mouseX, mouseY, x, cellY, cellWidth - 1, menuCellHeight());
             MenuChrome.glass(gui, x, cellY, cellWidth - 1, menuCellHeight(), style, false);
             if (selected) {
@@ -764,9 +809,14 @@ public final class AbilityMenuScreen extends Screen {
                         Math.max(0, MenuChrome.CHAMFER - 1),
                         MenuStyle.alpha(style.raised(), HotbarClientConfig.HOVER_ALPHA.get()));
             }
-            var assignment = target.assignment(i);
-            boolean filled = assignment != null && assignment.isAssigned();
-            boolean dropHover = filled && dragAbilityId != null && hovered;
+            // the provider strip carries icons only (the HUD's provider
+            // cells have no names or modes to line up beside them)
+            var assignment = plan != null ? null : target.assignment(i);
+            boolean filled = plan != null
+                    ? plan.iconAt(i) != null
+                    : assignment != null && assignment.isAssigned();
+            boolean dropHover = plan == null && filled
+                    && dragAbilityId != null && hovered;
             // The vanilla selector marks the slot on EVERY cell (owner):
             // an icon-sized box like the world hotbar - only the icon or
             // the number lives inside; a drag shows the bare box target
@@ -791,7 +841,7 @@ public final class AbilityMenuScreen extends Screen {
             // Filled: the icon fills the selector's WINDOW (see
             // slotIconRect), the box then draws OVER it (owner: as the
             // ISS hotbar does); name lines follow, the mode line last
-            ResourceLocation icon = slotIcon(target, i);
+            ResourceLocation icon = plan != null ? plan.iconAt(i) : slotIcon(target, i);
             boolean iconDrawn = icon != null && HotbarClientConfig.SHOW_ICONS.get()
                     && slotIconFits(cellWidth);
             int nameX = boxX + side + 2;
@@ -802,9 +852,9 @@ public final class AbilityMenuScreen extends Screen {
                         0, 0, iconRect[2], iconRect[2], iconRect[2], iconRect[2]);
             }
             drawSelectionRing(gui, boxX, boxY, side);
-            String modeLabel = slotModeLabel(target, i);
-            List<FormattedCharSequence> nameLines = this.font.split(
-                    Component.literal(slotName(target, i)), nameWidth);
+            String modeLabel = plan != null ? null : slotModeLabel(target, i);
+            List<FormattedCharSequence> nameLines = plan != null ? List.of()
+                    : this.font.split(Component.literal(slotName(target, i)), nameWidth);
             // the block sits centred: its position follows how many
             // non-empty lines there actually are (owner) - never a fixed
             // offset, so one line reads centred and three fill the cell
@@ -1132,8 +1182,8 @@ public final class AbilityMenuScreen extends Screen {
      */
     private void drawClearButton(GuiGraphics gui, int mouseX, int mouseY,
             @Nullable Bar target) {
-        if (target == null) {
-            return;
+        if (target == null || stripPlan != null) {
+            return; // an editable-bar tool: absent while a provider strip shows
         }
         MenuStyle style = style();
         int[] clear = clearRect(target.slotCount());
@@ -1162,7 +1212,7 @@ public final class AbilityMenuScreen extends Screen {
         // reserved for the detail pane (owner's nine-point brief)
         int listWidth = listWidth();
         Bar stripBar = targetBar(state);
-        int listBottom = listBottom(stripBar == null ? 0 : stripBar.slotCount());
+        int listBottom = listBottom(stripSlotCount(stripBar));
         int visible = Math.max(0, (listBottom - LIST_TOP) / menuRowHeight());
         scrollOffset = Math.max(0, Math.min(scrollOffset, Math.max(0, rows.size() - visible)));
         if (rows.isEmpty()) {
@@ -1318,7 +1368,7 @@ public final class AbilityMenuScreen extends Screen {
         MenuStyle style = style();
         int x0 = detailX();
         int top = FILTER_Y;
-        int bottom = listBottom(target == null ? 0 : target.slotCount());
+        int bottom = listBottom(stripSlotCount(target));
         int paneW = this.width - 8 - x0;
         if (paneW < 70 || bottom - top < 40) {
             return;
@@ -1596,8 +1646,8 @@ public final class AbilityMenuScreen extends Screen {
      */
     private void drawBarNav(GuiGraphics gui, int mouseX, int mouseY, @Nullable Bar target) {
         List<ResourceLocation> bars = manageableBars();
-        if (bars.isEmpty()) {
-            return;
+        if (bars.isEmpty() || stripPlan != null) {
+            return; // the chip edits the assignable bar: hidden on a provider strip
         }
         MenuStyle style = style();
         int[] chip = barChipRect(target == null ? 0 : target.slotCount());
@@ -1734,22 +1784,26 @@ public final class AbilityMenuScreen extends Screen {
                 return true;
             }
         }
-        // slot cells (bottom stack; two rows beyond nine - owner's brief)
+        // slot cells (bottom stack; two rows beyond nine - owner's brief):
+        // a provider strip is a preview - it never retargets the bar, and
+        // the editable-bar tools below are hidden while it shows
         int slotCount = target == null ? 0 : target.slotCount();
         int cellWidth = slotWidth(slotCount, this.width, clusterWidth());
         int rowSlots = Math.min(slotCount, MAX_ROW_SLOTS);
         int y = slotY(slotCount);
-        for (int i = 0; i < slotCount; i++) {
-            int cellX = LIST_LEFT + (i % rowSlots) * cellWidth;
-            int cellY = y + (i / rowSlots) * (menuCellHeight() + SLOT_GAP);
-            if (inside(mouseX, mouseY, cellX, cellY,
-                    cellWidth - 1, menuCellHeight())) {
-                selectedSlot = i;
-                return true;
+        if (stripPlan == null) {
+            for (int i = 0; i < slotCount; i++) {
+                int cellX = LIST_LEFT + (i % rowSlots) * cellWidth;
+                int cellY = y + (i / rowSlots) * (menuCellHeight() + SLOT_GAP);
+                if (inside(mouseX, mouseY, cellX, cellY,
+                        cellWidth - 1, menuCellHeight())) {
+                    selectedSlot = i;
+                    return true;
+                }
             }
         }
         // clear button (below the bar chip, owner's brief)
-        if (target != null) {
+        if (target != null && stripPlan == null) {
             int[] clear = clearRect(target.slotCount());
             if (inside(mouseX, mouseY, clear[0], clear[1], clear[2], clear[3])) {
                 sendAssignment("");
@@ -1759,7 +1813,7 @@ public final class AbilityMenuScreen extends Screen {
         // bottom bar selector: the chip beside the strip cycles the bar,
         // the prev/next buttons below it step (owner's nine-point brief)
         List<ResourceLocation> navBars = manageableBars();
-        if (!navBars.isEmpty()) {
+        if (!navBars.isEmpty() && stripPlan == null) {
             int[] chip = barChipRect(target == null ? 0 : target.slotCount());
             if (inside(mouseX, mouseY, chip[0], chip[1], chip[2], chip[3])) {
                 cycleBar();
@@ -1784,7 +1838,7 @@ public final class AbilityMenuScreen extends Screen {
         // are x-bounded below, so the pane region has nothing else to catch
         BarState paneState = ClientBarState.get();
         Bar paneBar = paneState == null ? null : targetBar(paneState);
-        int paneBottom = listBottom(paneBar == null ? 0 : paneBar.slotCount());
+        int paneBottom = listBottom(stripSlotCount(paneBar));
         if (inside(mouseX, mouseY, detailX(), FILTER_Y,
                 this.width - 8 - detailX(), paneBottom - FILTER_Y)) {
             detailDragging = true;
@@ -1794,7 +1848,7 @@ public final class AbilityMenuScreen extends Screen {
         // ability rows (left two thirds only: a click inside the detail
         // pane must never assign)
         List<MenuQuery.Entry> rows = visibleRows();
-        int listBottom = listBottom(slotCount);
+        int listBottom = listBottom(stripSlotCount(target));
         int relative = mouseX < detailX() - 6
                 ? rowIndexAt((int) mouseY, LIST_TOP, listBottom, menuRowHeight())
                 : -1;
@@ -1875,7 +1929,7 @@ public final class AbilityMenuScreen extends Screen {
         int x0 = detailX();
         BarState scrollState = ClientBarState.get();
         Bar scrollBar = scrollState == null ? null : targetBar(scrollState);
-        int scrollBottom = listBottom(scrollBar == null ? 0 : scrollBar.slotCount());
+        int scrollBottom = listBottom(stripSlotCount(scrollBar));
         if (detailScrollMax > 0 && inside(mouseX, mouseY, x0, FILTER_Y,
                 this.width - 8 - x0, scrollBottom - FILTER_Y)) {
             // owner's brief: configurable wheel speed (default 16 lines a
