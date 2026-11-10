@@ -541,12 +541,13 @@ public final class AbilityMenuScreen extends Screen {
 
     /**
      * One subcategory tab's rect (draw and hit share it), scroll-applied:
-     * a fixed {@link #subPillWidth()} step - overflow scrolls the strip
-     * instead of shrinking the pills (owner's size brief).
+     * a fixed {@link #subPillWidth()} step drawn one pixel narrower - the
+     * exact cell-to-cell parity with the hotbar slot pills, which draw at
+     * {@code cellWidth - 1} (owner: the pills must match the slots).
      */
     private int[] subTypeRect(int index) {
         int step = subPillWidth();
-        return new int[] {subViewportX() + index * step - subStripScroll, step - 2};
+        return new int[] {subViewportX() + index * step - subStripScroll, step - 1};
     }
 
     /** The pill under the point, or -1 when the point sits in a gap. */
