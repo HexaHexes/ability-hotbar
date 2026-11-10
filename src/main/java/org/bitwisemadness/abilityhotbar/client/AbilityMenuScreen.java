@@ -1444,11 +1444,11 @@ public final class AbilityMenuScreen extends Screen {
                 int[] bar = masteryBarRect(y, LIST_LEFT + 38, limitX);
                 float fraction = mastery != null ? mastery.progress() : 0f;
                 int stateColor = masteryBarColor(style, learned, fraction);
-                // the track carries the state colour too, so the bar reads
-                // as its state at any progress (owner: never the same
-                // colour regardless of known/learned/mastered)
+                // the track stays neutral; the fill alone carries the state
+                // colour and grows with progress (owner: the bar fills up
+                // instead of the whole bar being coloured)
                 MenuChrome.meter(gui, bar[0], bar[1], bar[2], bar[3], fraction,
-                        style, stateColor, MenuStyle.alpha(stateColor, 40));
+                        style, stateColor);
                 if (mastery != null) {
                     String value = this.font.plainSubstrByWidth(mastery.value(), bar[2] - 4);
                     if (!value.isEmpty()) {

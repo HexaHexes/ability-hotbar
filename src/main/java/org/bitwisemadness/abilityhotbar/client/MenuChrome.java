@@ -108,11 +108,11 @@ final class MenuChrome {
     }
 
     /**
-     * A meter with an explicit fill <b>and track</b>: the row bar tints
-     * both with its state colour, so the state reads even where progress
-     * is a sliver (owner: never the same colour in every state).
+     * The meter core: explicit fill over an explicit track. Private - no
+     * caller customises the track any more, so a bar's state reads through
+     * its fill alone, growing as progress approaches the maximum.
      */
-    static void meter(GuiGraphics gui, int x, int y, int w, int h, float fraction,
+    private static void meter(GuiGraphics gui, int x, int y, int w, int h, float fraction,
             MenuStyle style, int fill, int track) {
         chamferFill(gui, x, y, w, h, Math.min(2, h / 2), track);
         int fillWidth = meterFillWidth(w, fraction);
