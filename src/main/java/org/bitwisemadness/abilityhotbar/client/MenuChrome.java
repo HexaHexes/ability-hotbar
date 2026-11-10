@@ -110,14 +110,16 @@ final class MenuChrome {
     /**
      * The meter core: explicit fill over an explicit track. Private - no
      * caller customises the track any more, so a bar's state reads through
-     * its fill alone, growing as progress approaches the maximum.
+     * its fill alone, growing as progress approaches the maximum. Palette
+     * colours carry no alpha byte, so both sides go through
+     * {@link MenuStyle#opaque} - an absent alpha would draw nothing.
      */
     private static void meter(GuiGraphics gui, int x, int y, int w, int h, float fraction,
             MenuStyle style, int fill, int track) {
-        chamferFill(gui, x, y, w, h, Math.min(2, h / 2), track);
+        chamferFill(gui, x, y, w, h, Math.min(2, h / 2), MenuStyle.opaque(track));
         int fillWidth = meterFillWidth(w, fraction);
         if (fillWidth > 0) {
-            chamferFill(gui, x + 1, y + 1, fillWidth, h - 2, 0, fill);
+            chamferFill(gui, x + 1, y + 1, fillWidth, h - 2, 0, MenuStyle.opaque(fill));
             gui.fill(x + 1, y + 1, x + 1 + fillWidth, y + 2,
                     MenuStyle.alpha(style.text(), 45));
         }

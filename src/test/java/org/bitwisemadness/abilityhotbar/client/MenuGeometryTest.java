@@ -188,6 +188,18 @@ class MenuGeometryTest {
     }
 
     @Test
+    void meterColoursWithoutAnAlphaByteReadAsOpaque() {
+        // the play-test report: mastery bars had no visible progress overlay
+        // because the palette triple's zero alpha drew a fully transparent fill
+        assertEquals(0xFF000000 | MenuStyle.DEFAULT.accent(),
+                MenuStyle.opaque(MenuStyle.DEFAULT.accent()),
+                "a palette triple must draw as a visible fill");
+        int translucent = MenuStyle.alpha(MenuStyle.DEFAULT.background(), 40);
+        assertEquals(translucent, MenuStyle.opaque(translucent),
+                "an intentional alpha is never flattened");
+    }
+
+    @Test
     void selectorWindowMatchesTheRasterizedSpriteWindow() {
         // the sprite is 24x23 with a 16x16 window at (4,4); the owner saw
         // white survive one pixel beyond the centre solve on left/right/

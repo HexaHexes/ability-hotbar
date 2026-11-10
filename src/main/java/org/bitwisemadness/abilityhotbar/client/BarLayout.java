@@ -21,8 +21,9 @@ import org.bitwisemadness.abilityhotbar.config.BarAnchor;
  * ({@code 0,1}); right anchors mirror it so cell 0 meets the right edge
  * ({@code 1,0} reading left to right); bottom anchors grow <em>away</em> from
  * the screen edge - horizontal bars stack their segments as rows above each
- * other ({@code 1 above 0}, an 18-slot bar becoming a 9-wide, 2-row block)
- * and vertical columns grow upward from the bottom. Side anchors with a
+ * other ({@code 1 above 0}, an 18-slot bar becoming a 9-wide, 2-row block
+ * with {@link #SEGMENT_GAP} of clear air between the rows) and vertical
+ * columns grow upward from the bottom. Side anchors with a
  * vertical orientation keep the downward column. A bar of nine or fewer slots
  * takes the same single-row/single-column path as before under every anchor.</p>
  *
@@ -63,6 +64,19 @@ public record BarLayout(
 
     /** Cells per vanilla hotbar segment - the texture's own nine cells. */
     public static final int CELLS_PER_SEGMENT = 9;
+
+    /**
+     * Pixels of clear air where two stacked segments meet (owner: "a couple
+     * of pixels between them") - the sprite frames would otherwise kiss
+     * across the seam at any gap the slot grid allows.
+     */
+    private static final int SEGMENT_GAP = 2;
+
+    /**
+     * Pixels the bar's box keeps from whatever it stacks over (owner: never
+     * flush against the vanilla hotbar).
+     */
+    private static final int ANCHOR_CLEARANCE = 2;
 
     public BarLayout {
         if (slotCount < 1) {
@@ -148,9 +162,10 @@ public record BarLayout(
                     (slotCount - CELLS_PER_SEGMENT * (segment + 1)) * stride(), 0};
             }
             if (isBottomAnchor()) {
-                // stacked rows: segment 0 is the bottom row, one stride down
-                // from the block's top
-                return new int[] {0, (segmentCount() - 1 - segment) * stride()};
+                // stacked rows: segment 0 is the bottom row, a stride plus
+                // the segment gap down from the block's top
+                return new int[] {
+                    0, (segmentCount() - 1 - segment) * (stride() + SEGMENT_GAP)};
             }
             return new int[] {segment * CELLS_PER_SEGMENT * stride(), 0};
         }
@@ -211,7 +226,8 @@ public record BarLayout(
      * shave the cell-only box caused). The growth is clamped to half a
      * scaled cell, so a partial segment's ghost cells - a full cell further
      * in - still clip away, and adjacent segments' boxes overlap by at most
-     * twice the border (the seam where both frames draw).
+     * twice the border (the seam where both frames draw). A stacked row's
+     * {@link #SEGMENT_GAP} keeps those frames meeting rather than overlapping.
      *
      * @param segment     the segment whose box to grow
      * @param screenWidth  current screen width
@@ -246,7 +262,8 @@ public record BarLayout(
     private int barHeight() {
         if (horizontal) {
             if (isBottomAnchor()) {
-                return scaledExtent(segmentCount());
+                // stacked rows grow by the gap between them, seam count - 1
+                return scaledExtent(segmentCount()) + (segmentCount() - 1) * SEGMENT_GAP;
             }
             return scaledSlotSize();
         }
@@ -265,10 +282,13 @@ public record BarLayout(
 
     /** @return the bar's origin Y (top-left of its box) for a screen size. */
     public int originY(int screenHeight) {
+        // bottom anchors keep ANCHOR_CLEARANCE of air over their neighbour -
+        // the vanilla hotbar, XP bar or status cluster the box would
+        // otherwise sit flush against (owner's play-test report)
         int base = switch (anchor) {
-            case ABOVE_HOTBAR -> screenHeight - barHeight() - HOTBAR_DEPTH;
-            case ABOVE_XP -> screenHeight - barHeight() - XP_DEPTH;
-            case ABOVE_STATUS -> screenHeight - barHeight() - statusDepth;
+            case ABOVE_HOTBAR -> screenHeight - barHeight() - HOTBAR_DEPTH - ANCHOR_CLEARANCE;
+            case ABOVE_XP -> screenHeight - barHeight() - XP_DEPTH - ANCHOR_CLEARANCE;
+            case ABOVE_STATUS -> screenHeight - barHeight() - statusDepth - ANCHOR_CLEARANCE;
             case LEFT_EDGE, RIGHT_EDGE -> (screenHeight - barHeight()) / 2;
         };
         return base + offsetY;
@@ -298,7 +318,8 @@ public record BarLayout(
                 x += (slotCount - 1 - index) * stride();
             } else if (isBottomAnchor()) {
                 x += (index % CELLS_PER_SEGMENT) * stride();
-                y += (segmentCount() - 1 - index / CELLS_PER_SEGMENT) * stride();
+                y += (segmentCount() - 1 - index / CELLS_PER_SEGMENT)
+                        * (stride() + SEGMENT_GAP);
             } else {
                 x += index * stride();
             }
