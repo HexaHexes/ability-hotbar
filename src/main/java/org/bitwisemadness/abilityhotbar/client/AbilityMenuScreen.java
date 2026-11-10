@@ -155,12 +155,6 @@ public final class AbilityMenuScreen extends Screen {
     /** The prev/next bar buttons beside the strip (issue #157): 14px cells. */
     private static final int BAR_NAV_SIZE = 14;
     private static final int BAR_NAV_GAP = 2;
-    /**
-     * One subcategory pill's step width (owner: the pills match the
-     * hotbar slot pills' height and, once arrows and drag-scroll exist,
-     * keep a fixed width - overflow scrolls instead of shrinking).
-     */
-    private static final int SUB_PILL_WIDTH = 64;
 
     /**
      * The filter row's pill height: the hotbar slot pills' own height
@@ -176,8 +170,8 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /** The subcategory strip's scroll position, clamped to its overflow. */
-    static int clampSubScroll(int scroll, int count, int viewportWidth) {
-        int max = Math.max(0, count * SUB_PILL_WIDTH - viewportWidth);
+    static int clampSubScroll(int scroll, int count, int viewportWidth, int pillWidth) {
+        int max = Math.max(0, count * pillWidth - viewportWidth);
         return Math.max(0, Math.min(max, scroll));
     }
 
@@ -284,10 +278,12 @@ public final class AbilityMenuScreen extends Screen {
 
     @Override
     protected void init() {
-        // Borderless: MenuChrome draws the search pill behind the text, so
-        // the widget contributes only its text, cursor and hint.
-        searchBox = new EditBox(this.font, SEARCH_X, FILTER_Y + 3, SEARCH_WIDTH,
-                filterPillHeight() - 6,
+        // Borderless: vanilla draws at the RAW widget x/y (no centering
+        // or inset - EditBox.renderWidget), so the widget itself sits
+        // where the text should: centred in the pill, four pixels in
+        int textY = FILTER_Y + (filterPillHeight() - 9) / 2;
+        searchBox = new EditBox(this.font, SEARCH_X + 4, textY, SEARCH_WIDTH - 4,
+                FILTER_Y + filterPillHeight() - textY,
                 Component.translatable("ability_hotbar.menu.search"));
         searchBox.setBordered(false);
         searchBox.setMaxLength(64);
@@ -426,12 +422,14 @@ public final class AbilityMenuScreen extends Screen {
         MenuStyle style = style();
         int count = types.size() + 1;
         int pillHeight = filterPillHeight();
-        subStripScroll = clampSubScroll(subStripScroll, count, subViewportWidth());
+        subStripScroll = clampSubScroll(subStripScroll, count, subViewportWidth(),
+                subPillWidth());
         // the arrows step the strip one pill at a time (owner: buttons
         // before and after, wearing the bar-nav's own glyphs)
         drawSubStripArrow(gui, mouseX, mouseY, subStripX(), true, subStripScroll > 0);
         drawSubStripArrow(gui, mouseX, mouseY, subStripEnd() - BAR_NAV_SIZE, false,
-                subStripScroll < clampSubScroll(Integer.MAX_VALUE, count, subViewportWidth()));
+                subStripScroll < clampSubScroll(Integer.MAX_VALUE, count, subViewportWidth(),
+                        subPillWidth()));
         // the pills clip to their viewport: past it they scroll, never
         // overflow into the detail pane (owner's strip brief)
         int viewX = subViewportX();
@@ -529,13 +527,26 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
+     * One subcategory pill's step width: the hotbar slot pill's own cell
+     * width (owner's brief - the strip matches the slots), with a
+     * nine-slot bar's cell as the fallback while no bar is loaded.
+     */
+    private int subPillWidth() {
+        BarState state = ClientBarState.get();
+        Bar target = state == null ? null : targetBar(state);
+        int slotCount = target == null ? 0 : target.slotCount();
+        int width = slotWidth(slotCount, this.width, clusterWidth());
+        return width > 0 ? width : slotWidth(MAX_ROW_SLOTS, this.width, clusterWidth());
+    }
+
+    /**
      * One subcategory tab's rect (draw and hit share it), scroll-applied:
-     * a fixed {@link #SUB_PILL_WIDTH} step - overflow scrolls the strip
+     * a fixed {@link #subPillWidth()} step - overflow scrolls the strip
      * instead of shrinking the pills (owner's size brief).
      */
     private int[] subTypeRect(int index) {
-        return new int[] {subViewportX() + index * SUB_PILL_WIDTH - subStripScroll,
-                SUB_PILL_WIDTH - 2};
+        int step = subPillWidth();
+        return new int[] {subViewportX() + index * step - subStripScroll, step - 2};
     }
 
     /** The pill under the point, or -1 when the point sits in a gap. */
@@ -555,8 +566,8 @@ public final class AbilityMenuScreen extends Screen {
         if (!inside(mouseX, mouseY, x, FILTER_Y, BAR_NAV_SIZE, filterPillHeight())) {
             return false;
         }
-        int next = subStripScroll + (left ? -SUB_PILL_WIDTH : SUB_PILL_WIDTH);
-        int clamped = clampSubScroll(next, count, subViewportWidth());
+        int next = subStripScroll + (left ? -subPillWidth() : subPillWidth());
+        int clamped = clampSubScroll(next, count, subViewportWidth(), subPillWidth());
         if (clamped == subStripScroll) {
             return true; // inert but claimed: the press does nothing else
         }
@@ -1408,36 +1419,44 @@ public final class AbilityMenuScreen extends Screen {
             int[] rowToggle = toggle == null ? null : rowToggleButtonRect(y, listWidth);
             int[] modeRect = modeLabel == null ? null
                     : modePillRect(y, listWidth, modeLabel, rowToggle);
-            // Toggleable rows (and rows carrying a mode pill) lift the name
-            // so state + buttons own the bottom line (owner's brief).
-            int textY = toggle == null && modeRect == null
+            // The unlock read drives the meter's state colour; unknown
+            // never guesses a state (core's never-guess rule).
+            Optional<Boolean> learned =
+                    AbilityUnlocks.isLearned(this.minecraft.player, row.id());
+            // The bottom-line meter: the presentation's progress, or a
+            // zero bar for a provably known-but-unlearned art that still
+            // presents itself (owner: known rows show the bar too)
+            boolean knownBar = mastery == null && learned.isPresent() && !learned.get()
+                    && presentation.map(p -> !p.fields().isEmpty()).orElse(false);
+            boolean bottomBar = mastery != null || knownBar;
+            // Toggleable rows, mode pills and the meter lift the name so
+            // the bottom line owns its chrome (owner: no name/bar overlap).
+            int textY = toggle == null && modeRect == null && !bottomBar
                     ? y + (menuRowHeight() - 9) / 2 : y + 6;
             gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
-            int masteryX = LIST_LEFT + 38;
-            if (toggle != null) {
-                Component stateLabel = Component.translatable(toggle.enabled()
-                                ? "ability_hotbar.menu.toggle_on"
-                                : "ability_hotbar.menu.toggle_off");
-                gui.drawString(this.font, stateLabel, LIST_LEFT + 38, y + 19,
-                        toggle.enabled() ? style.action() : style.muted());
-                masteryX += this.font.width(stateLabel) + 6;
-            }
-            if (mastery != null) {
-                // the bar owns the bottom line after the state text, clear
-                // of the mode pill and the Enable/Disable button
+            if (bottomBar) {
+                // the meter owns the bottom line's left side, clear of the
+                // mode pill and the Enable/Disable button - the old enabled
+                // text is gone, the button already says the state (owner)
                 int limitX = (modeRect != null ? modeRect[0]
                         : rowToggle != null ? rowToggle[0] : LIST_LEFT + listWidth) - 4;
-                int[] bar = masteryBarRect(y, masteryX, limitX);
-                MenuChrome.meter(gui, bar[0], bar[1], bar[2], bar[3], mastery.progress(),
-                        style, masteryBarColor(style,
-                                AbilityUnlocks.isLearned(this.minecraft.player, row.id()),
-                                mastery.progress()));
-                String value = this.font.plainSubstrByWidth(mastery.value(), bar[2] - 4);
-                if (!value.isEmpty()) {
-                    // the value rides INSIDE the bar (owner's brief)
-                    gui.drawString(this.font, value,
-                            bar[0] + (bar[2] - this.font.width(value)) / 2,
-                            bar[1] + (bar[3] - 9) / 2, style.text());
+                int[] bar = masteryBarRect(y, LIST_LEFT + 38, limitX);
+                float fraction = mastery != null ? mastery.progress() : 0f;
+                int stateColor = masteryBarColor(style, learned, fraction);
+                // the track carries the state colour too, so the bar reads
+                // as its state at any progress (owner: never the same
+                // colour regardless of known/learned/mastered)
+                MenuChrome.meter(gui, bar[0], bar[1], bar[2], bar[3], fraction,
+                        style, stateColor, MenuStyle.alpha(stateColor, 40));
+                if (mastery != null) {
+                    String value = this.font.plainSubstrByWidth(mastery.value(), bar[2] - 4);
+                    if (!value.isEmpty()) {
+                        // the value rides INSIDE the bar, centred with the
+                        // same margin above and below (owner's brief)
+                        gui.drawString(this.font, value,
+                                bar[0] + (bar[2] - this.font.width(value)) / 2,
+                                bar[1] + (bar[3] - 9) / 2, style.text());
+                    }
                 }
             }
             String cost = costText(row.definition());
@@ -1520,12 +1539,13 @@ public final class AbilityMenuScreen extends Screen {
 
     /**
      * The row's mastery bar rect: the bottom line (under the name), from
-     * the given start to the pills' edge, capped at 96 and floored at 40
-     * so a squeezed row keeps a readable meter with its value inside.
+     * the given start to the pills' edge - 150% of the original length
+     * (capped at 144) and 13 tall, an odd height so the value line sits
+     * with the same margin above and below (owner's brief).
      */
     static int[] masteryBarRect(int rowY, int startX, int limitX) {
-        int width = Math.max(40, Math.min(96, limitX - startX));
-        return new int[] {startX, rowY + menuRowHeight() - 18, width, 12};
+        int width = Math.max(40, Math.min(144, limitX - startX));
+        return new int[] {startX, rowY + menuRowHeight() - 18, width, 13};
     }
 
     /**
@@ -1964,7 +1984,8 @@ public final class AbilityMenuScreen extends Screen {
         List<String> subTypes = subTypeTags();
         if (!subTypes.isEmpty()) {
             int count = subTypes.size() + 1;
-            subStripScroll = clampSubScroll(subStripScroll, count, subViewportWidth());
+            subStripScroll = clampSubScroll(subStripScroll, count, subViewportWidth(),
+                    subPillWidth());
             if (stepSubStrip(mouseX, mouseY, true, count)
                     || stepSubStrip(mouseX, mouseY, false, count)) {
                 return true;
@@ -2168,8 +2189,8 @@ public final class AbilityMenuScreen extends Screen {
                         filterPillHeight())) {
             int subCount = subStripTypes.size() + 1;
             subStripScroll = clampSubScroll(
-                    subStripScroll + (scrollY > 0 ? -SUB_PILL_WIDTH : SUB_PILL_WIDTH),
-                    subCount, subViewportWidth());
+                    subStripScroll + (scrollY > 0 ? -subPillWidth() : subPillWidth()),
+                    subCount, subViewportWidth(), subPillWidth());
             return true;
         }
         // the detail pane owns the wheel while the pointer sits in it (its
@@ -2215,7 +2236,7 @@ public final class AbilityMenuScreen extends Screen {
             if (subStripDragging) {
                 subStripScroll = clampSubScroll(
                         subStripScrollStart - (int) (mouseX - subStripPressX),
-                        subTypeTags().size() + 1, subViewportWidth());
+                        subTypeTags().size() + 1, subViewportWidth(), subPillWidth());
             }
             return true;
         }

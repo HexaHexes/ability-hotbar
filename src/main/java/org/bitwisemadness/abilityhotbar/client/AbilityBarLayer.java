@@ -499,20 +499,28 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         // the menu's row and Costs section, localised.
     }
 
+    /** The icon's inset inside its cell - the icon and its overlays share it. */
+    private static final int ICON_PAD = 2;
+
     private static void drawIcon(GuiGraphics gui, ResourceLocation icon, int x, int y, int w, int h) {
         if (icon == null) {
             // No icon resolves: keep the neutral background (placeholder), no crash.
             return;
         }
-        int pad = 2;
-        gui.blit(icon, x + pad, y + pad, 0, 0, w - pad * 2, h - pad * 2, w - pad * 2, h - pad * 2);
+        gui.blit(icon, x + ICON_PAD, y + ICON_PAD, 0, 0,
+                w - ICON_PAD * 2, h - ICON_PAD * 2, w - ICON_PAD * 2, h - ICON_PAD * 2);
     }
 
     private static void drawCooldown(GuiGraphics gui, double progress, int x, int y, int w, int h) {
-        // Darken from the top by (1 - progress): 0 progress = fully covered, 1 = clear.
-        int covered = (int) Math.round((1.0 - progress) * h);
-        if (covered > 0) {
-            gui.fill(x, y, x + w, y + covered, COOLDOWN_COLOR);
+        // Darken the ability ICON only, from the top by (1 - progress):
+        // 0 progress = fully covered, 1 = clear. Owner: the overlay must
+        // not wash the selector texture that rings the icon.
+        int iconW = w - ICON_PAD * 2;
+        int iconH = h - ICON_PAD * 2;
+        int covered = (int) Math.round((1.0 - progress) * iconH);
+        if (iconW > 0 && iconH > 0 && covered > 0) {
+            gui.fill(x + ICON_PAD, y + ICON_PAD,
+                    x + ICON_PAD + iconW, y + ICON_PAD + covered, COOLDOWN_COLOR);
         }
     }
 }
