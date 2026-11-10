@@ -92,17 +92,18 @@ class BarLayoutTest {
                 int height = horizontal ? layout.scaledSlotSize() : layout.extent();
 
                 assertEquals((SCREEN_W - width) / 2 + offset[0], layout.originX(SCREEN_W));
-                assertEquals(SCREEN_H - height - 22 + offset[1], layout.originY(SCREEN_H));
+                // ...plus the owner's couple-of-pixels clearance over the hotbar
+                assertEquals(SCREEN_H - height - 22 - 2 + offset[1], layout.originY(SCREEN_H));
             }
         }
     }
 
     @Test
-    void aboveXpRestsOnTheExperienceBar() {
+    void aboveXpKeepsClearanceOverTheExperienceBar() {
         for (boolean horizontal : new boolean[] {true, false}) {
             BarLayout layout = anchored(BarAnchor.ABOVE_XP, horizontal);
-            assertEquals(SCREEN_H - 29, layout.originY(SCREEN_H) + barHeight(layout),
-                    "slot-grid bottom sits on the vanilla XP bar's top edge");
+            assertEquals(SCREEN_H - 29 - 2, layout.originY(SCREEN_H) + barHeight(layout),
+                    "the slot grid keeps a couple of pixels over the XP bar's top edge");
         }
     }
 
@@ -111,7 +112,7 @@ class BarLayoutTest {
         int depth = 70;
         BarLayout layout = new BarLayout(9, 20, 1, true, BarAnchor.ABOVE_STATUS, depth, 0, 0, 1.0);
 
-        assertEquals(SCREEN_H - depth, layout.originY(SCREEN_H) + layout.scaledSlotSize());
+        assertEquals(SCREEN_H - depth - 2, layout.originY(SCREEN_H) + layout.scaledSlotSize());
     }
 
     @Test
@@ -271,7 +272,7 @@ class BarLayoutTest {
         assertEquals(9 * 20, bottom[2] - bottom[0], "a full row spans nine cells");
         assertEquals(bottom[2] - bottom[0], top[2] - top[0], "both rows are nine wide");
         assertTrue(top[1] < bottom[1], "segment 1 sits above segment 0 (1 above 0)");
-        assertEquals(20, bottom[1] - top[1], "one stride apart at gap 0");
+        assertEquals(20 + 2, bottom[1] - top[1], "a stride plus the segment gap at gap 0");
 
         BarLayout column = new BarLayout(18, 20, 0, false, BarAnchor.RIGHT_EDGE,
                 StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
@@ -340,8 +341,8 @@ class BarLayoutTest {
         int[] bottom = rows.segmentClipBounds(0, 1920, 1080);
         int[] top = rows.segmentClipBounds(1, 1920, 1080);
         int seam = Math.min(bottom[3], top[3]) - Math.max(bottom[1], top[1]);
-        assertEquals(2 * rows.spriteBorder(), seam,
-                "the stacked-row seam is exactly both frames");
+        assertEquals(0, seam,
+                "the segment gap keeps the stacked-row frames meeting, never overlapping");
 
         BarLayout five = layout(5, 0, true, 0, 0, 1.0);
         int[] cell0 = five.slotRect(0, 1920, 1080);
@@ -368,7 +369,8 @@ class BarLayoutTest {
 
         BarLayout bottom = new BarLayout(18, 20, 0, true, BarAnchor.ABOVE_HOTBAR,
                 StatusCluster.BASELINE_DEPTH, 0, 0, 1.0);
-        assertArrayEquals(new int[] {0, 20}, bottom.segmentOffset(0), "bottom row first");
+        assertArrayEquals(new int[] {0, 22}, bottom.segmentOffset(0),
+                "bottom row first, a stride plus the segment gap down");
         assertArrayEquals(new int[] {0, 0}, bottom.segmentOffset(1), "1 above 0");
 
         BarLayout column = new BarLayout(18, 20, 0, false, BarAnchor.LEFT_EDGE,
@@ -421,10 +423,12 @@ class BarLayoutTest {
 
         assertTrue(cell9[1] < cell0[1], "segment 1's row sits above segment 0's");
         assertEquals(cell0[0], cell9[0], "the rows share the left column");
+        assertEquals(2, cell0[1] - (cell9[1] + cell9[3]),
+                "a couple of pixels between the two rows (owner's report)");
         assertEquals((SCREEN_W - 9 * 20) / 2, bottom.originX(SCREEN_W),
                 "the block is centred on its widest row");
-        assertEquals(SCREEN_H - 2 * 20 - 22, bottom.originY(SCREEN_H),
-                "the block's bottom rests on the hotbar");
+        assertEquals(SCREEN_H - (2 * 20 + 2) - 22 - 2, bottom.originY(SCREEN_H),
+                "the block's bottom keeps a couple of pixels over the hotbar");
     }
 
     @Test
@@ -436,7 +440,7 @@ class BarLayoutTest {
         int[] cell17 = column.slotRect(17, SCREEN_W, SCREEN_H);
 
         assertTrue(cell0[1] > cell17[1], "cell 0 sits at the bottom anchor");
-        assertEquals(SCREEN_H - 18 * 20 - 22, column.originY(SCREEN_H),
-                "the column's box is unchanged - only the cell order mirrors");
+        assertEquals(SCREEN_H - 18 * 20 - 22 - 2, column.originY(SCREEN_H),
+                "the column keeps the anchor clearance, nothing else moves");
     }
 }

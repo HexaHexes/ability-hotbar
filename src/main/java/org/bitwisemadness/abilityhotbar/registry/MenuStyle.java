@@ -51,4 +51,14 @@ public record MenuStyle(int background, int raised, int text, int muted, int acc
     public static int rgb(int argb) {
         return argb & 0xFFFFFF;
     }
+
+    /**
+     * The colour with an absent alpha byte forced opaque: palette triples
+     * carry no alpha ({@code 0x67DDED}), so a fill drawn straight from one
+     * would be fully transparent - text already treats a zero alpha as
+     * opaque, and a fill must not disagree with it.
+     */
+    public static int opaque(int rgb) {
+        return (rgb >>> 24) == 0 ? rgb | 0xFF000000 : rgb;
+    }
 }
