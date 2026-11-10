@@ -230,14 +230,16 @@ class MenuGeometryTest {
 
     @Test
     void subStripScrollClampsToItsOverflow() {
-        // fixed 64px pills: overflow = count*64 - viewport, else nothing moves
-        assertEquals(0, AbilityMenuScreen.clampSubScroll(-5, 3, 400),
+        // the pill step is the slot cell's width now (owner's brief); the
+        // clamp math is pinned with a chosen 64px step: overflow =
+        // count*step - viewport, else nothing moves
+        assertEquals(0, AbilityMenuScreen.clampSubScroll(-5, 3, 400, 64),
                 "a negative scroll never shows");
-        assertEquals(0, AbilityMenuScreen.clampSubScroll(40, 3, 400),
+        assertEquals(0, AbilityMenuScreen.clampSubScroll(40, 3, 400, 64),
                 "a strip that fits does not scroll");
-        assertEquals(96, AbilityMenuScreen.clampSubScroll(999, 4, 160),
-                "overflow clamps to count*64 - viewport");
-        assertEquals(96, AbilityMenuScreen.clampSubScroll(96, 4, 160),
+        assertEquals(96, AbilityMenuScreen.clampSubScroll(999, 4, 160, 64),
+                "overflow clamps to count*step - viewport");
+        assertEquals(96, AbilityMenuScreen.clampSubScroll(96, 4, 160, 64),
                 "the clamp is idempotent at the end");
     }
 
@@ -257,10 +259,11 @@ class MenuGeometryTest {
     @Test
     void masteryBarSitsOnTheBottomLine() {
         int[] bar = AbilityMenuScreen.masteryBarRect(100, 46, 300);
-        assertEquals(46, bar[0], "starts where the state text left off");
+        assertEquals(46, bar[0], "starts at the name's left edge");
         assertEquals(100 + 36 - 18, bar[1], "the row's bottom line");
-        assertEquals(96, bar[2], "capped width");
-        assertEquals(12, bar[3], "room for the value inside");
+        assertEquals(144, bar[2], "capped width (150% of the original 96)");
+        assertEquals(13, bar[3],
+                "an odd height, so the value line has equal margins top and bottom");
         assertEquals(40, AbilityMenuScreen.masteryBarRect(100, 46, 80)[2],
                 "a squeezed row keeps the floor");
     }
