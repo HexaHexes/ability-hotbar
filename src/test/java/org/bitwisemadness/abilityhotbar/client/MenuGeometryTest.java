@@ -303,4 +303,24 @@ class MenuGeometryTest {
                 "whole percents round the server's multiplier for the eye");
     }
 
+    @Test
+    void costValueSitsOnTheBottomLineUnderItsLabel() {
+        // the value shares the meter's value baseline: bar top + equal margins
+        int[] bar = AbilityMenuScreen.masteryBarRect(100, 46, 300);
+        assertEquals(bar[1] + 2, AbilityMenuScreen.costValueY(100),
+                "the cost value aligns with the meter's inside value");
+    }
+
+    @Test
+    void theMeterStopsBeforeTheCostValue() {
+        // the helper only runs when a cost line exists - without one the
+        // caller keeps limitX untouched (the "no squeeze" case)
+        assertEquals(174, AbilityMenuScreen.costMeterLimit(200, 20),
+                "the meter clears a short value by 6px");
+        assertEquals(154, AbilityMenuScreen.costMeterLimit(200, 40),
+                "the meter clears a 40px value by 6px");
+        assertEquals(48, AbilityMenuScreen.costMeterLimit(154, 100),
+                "a wide value squeezes the meter, never overlaps it");
+    }
+
 }

@@ -49,7 +49,7 @@
   "ability_hotbar.menu.subcategory_any": "All",
   "ability_hotbar.menu.activation_fmt": "Activation: %s",
   "ability_hotbar.menu.section.activation": "Activation",
-  "ability_hotbar.menu.section.costs": "Costs",
+  "ability_hotbar.menu.cost_label": "Cost:",
   "ability_hotbar.menu.section.stats": "Stats",
   "ability_hotbar.menu.section.status": "Status",
   "ability_hotbar.menu.section.modes": "Modes",
