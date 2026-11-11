@@ -49,4 +49,17 @@ class RepresentativeCostTest {
         assertEquals(first, RepresentativeCost.of(definition(List.of(first, second))),
                 "the overlay contract's single representative entry is the first declared cost");
     }
+
+    @Test
+    void theListOverloadLeadsTheLiveRowTheSameWay() {
+        var first = new ResourceCost("tensura:magicule", 30.0);
+        var second = new ResourceCost("tensura:aura", 7.0);
+        assertNull(RepresentativeCost.of(List.of()),
+                "an empty live list renders no cost (the row's fallback path)");
+        assertEquals(first, RepresentativeCost.of(List.of(first, second)),
+                "the live list (LiveCosts.forDisplay) leads with its first entry");
+        assertEquals(RepresentativeCost.of(definition(List.of(first))),
+                RepresentativeCost.of(List.of(first)),
+                "the definition path and the live path agree on the same costs");
+    }
 }

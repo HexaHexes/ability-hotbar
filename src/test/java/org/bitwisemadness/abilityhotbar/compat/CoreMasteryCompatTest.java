@@ -14,16 +14,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * The pane's mastery display contract (REQ-CORE-12 phase 3): the section
- * gate opens only for an answered snapshot echoing THIS client's request,
- * the level/XP reads answer SERVER truth from the snapshot's wire entries
- * (and never run the curve locally), an unanswered or foreign-echo reply
- * leaves the pane silent instead of guessing, and the throttle coalesces
- * resize re-inits into one exchange per interval.
+ * The row mastery display contract (REQ-CORE-12): the badge/bar gates
+ * open only for an answered snapshot echoing THIS client's request, the
+ * level/XP/progress reads answer SERVER truth from the snapshot's wire
+ * entries (and never run the curve locally), an unanswered or
+ * foreign-echo reply leaves the rows silent instead of guessing, and the
+ * throttle coalesces resize re-inits into one exchange per interval.
  *
  * <p>The entries are built in the exact shape core's
- * {@code MasteryQueryResponse} ships (kind/id/xp/level), so a wire-vocabulary
- * drift on either side fails here rather than blanking the pane in-game.</p>
+ * {@code MasteryQueryResponse} ships (kind/id/xp/level/progress), so a
+ * wire-vocabulary drift on either side fails here rather than blanking
+ * the rows in-game.</p>
  */
 class CoreMasteryCompatTest {
 
@@ -59,7 +60,7 @@ class CoreMasteryCompatTest {
     void foreignEchoIsDropped() {
         CoreMasteryCompat.markRequested(TARGET, 0L);
         CoreMasteryCompat.accept(new MasteryQueryResponse(
-                UUID.randomUUID().toString(), List.of(abilityEntry(ABILITY, 9.0, 1))));
+                UUID.randomUUID().toString(), List.of(abilityEntry(ABILITY, 9.0, 1, 0.9))));
         assertFalse(CoreMasteryCompat.answered(),
                 "a reply for another player must never seed the pane");
     }
@@ -68,11 +69,13 @@ class CoreMasteryCompatTest {
     void answeredOwnEchoExposesServerEntry() {
         CoreMasteryCompat.markRequested(TARGET, 0L);
         CoreMasteryCompat.accept(new MasteryQueryResponse(
-                TARGET.toString(), List.of(abilityEntry(ABILITY, 45.5, 3))));
+                TARGET.toString(), List.of(abilityEntry(ABILITY, 45.5, 3, 0.4))));
 
         assertTrue(CoreMasteryCompat.answered(), "our echo must open the gate");
         assertEquals(3, CoreMasteryCompat.levelOf(ABILITY));
         assertEquals(45.5, CoreMasteryCompat.xpOf(ABILITY));
+        assertEquals(0.4, CoreMasteryCompat.progressOf(ABILITY),
+                "the bar fill comes from the server's progress field");
     }
 
     @Test
@@ -86,6 +89,7 @@ class CoreMasteryCompatTest {
         // earned" - a true zero, not a guess
         assertEquals(0, CoreMasteryCompat.levelOf(ABILITY));
         assertEquals(0.0, CoreMasteryCompat.xpOf(ABILITY));
+        assertEquals(0.0, CoreMasteryCompat.progressOf(ABILITY));
     }
 
     @Test
@@ -107,9 +111,9 @@ class CoreMasteryCompatTest {
         }
     }
 
-    /** One ABILITY entry in core's wire vocabulary. */
+    /** One ABILITY entry in core's wire vocabulary (kind, id, xp, level, progress). */
     private static MasteryQueryResponse.Entry abilityEntry(ResourceLocation id, double xp,
-            int level) {
-        return new MasteryQueryResponse.Entry("ABILITY", id.toString(), xp, level);
+            int level, double progress) {
+        return new MasteryQueryResponse.Entry("ABILITY", id.toString(), xp, level, progress);
     }
 }

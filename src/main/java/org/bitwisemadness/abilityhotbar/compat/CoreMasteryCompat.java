@@ -10,12 +10,13 @@ import org.bitwisemadness.abilitycore.sync.MasteryQueryResponse;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Core mastery for the ability menu's detail pane (REQ-CORE-12's phase-3
- * display): the client asks for the local player's snapshot when the menu
- * opens, core answers through {@link MasteryQueryAnsweredEvent}, and the
- * pane reads level/XP from here. Solicited only - core never pushes game
- * data (docs/sync.md), and this class keeps only the last answer so the
- * pane renders instantly on reopen while a fresh exchange is in flight.
+ * Core mastery for the ability menu's ROW display (REQ-CORE-12): the
+ * client asks for the local player's snapshot when the menu opens, core
+ * answers through {@link MasteryQueryAnsweredEvent}, and the rows read
+ * level/XP/progress from here - the level badge in front of the name and
+ * the bottom-line meter. Solicited only - core never pushes game data
+ * (docs/sync.md), and this class keeps only the last answer so the rows
+ * render instantly on reopen while a fresh exchange is in flight.
  *
  * <p>Loaded only behind a {@code ModList.isLoaded} guard at registration
  * ({@code AbilityHotbar}'s CoreSyncCompat block), so when core is absent
@@ -25,8 +26,8 @@ import org.jetbrains.annotations.Nullable;
  * <p>Levels and XP come from the SERVER's answer only: the client never
  * runs the curve (a datapack {@code mastery/levels.json} lives server-side
  * and would diverge), the echoed request uuid fences out a reply for
- * another player, and an unanswered pane renders no section at all - a
- * zero appears only when the server's snapshot says "never earned".</p>
+ * another player, and an unanswered menu renders no badge and no bar -
+ * a zero appears only when the server's snapshot says "never earned".</p>
  */
 public final class CoreMasteryCompat {
 
@@ -51,7 +52,7 @@ public final class CoreMasteryCompat {
         NeoForge.EVENT_BUS.addListener(CoreMasteryCompat::onAnswered);
     }
 
-    /** Whether a snapshot has arrived (the pane section's gate). */
+    /** Whether a snapshot has arrived (the rows' badge/bar gate). */
     public static boolean answered() {
         return answered;
     }
@@ -90,16 +91,22 @@ public final class CoreMasteryCompat {
         answered = true;
     }
 
-    /** The pane's own-target level for {@code id} (server truth; 0 = none stored). */
+    /** The row's own-target level for {@code id} (server truth; 0 = none stored). */
     public static int levelOf(ResourceLocation id) {
         MasteryQueryResponse.Entry entry = entry(id);
         return entry == null ? 0 : entry.level();
     }
 
-    /** The pane's own-target XP for {@code id} (server truth; 0 = none stored). */
+    /** The row's own-target XP for {@code id} (server truth; 0 = none stored). */
     public static double xpOf(ResourceLocation id) {
         MasteryQueryResponse.Entry entry = entry(id);
         return entry == null ? 0.0 : entry.xp();
+    }
+
+    /** The row's own-target in-level fill for {@code id} (0 = none stored). */
+    public static double progressOf(ResourceLocation id) {
+        MasteryQueryResponse.Entry entry = entry(id);
+        return entry == null ? 0.0 : entry.progress();
     }
 
     /** Whether the ability participates in mastery (client-side declarations). */

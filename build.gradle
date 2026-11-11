@@ -121,7 +121,7 @@ dependencies {
     // never bundled); the JUnit suite additionally needs it at test runtime.
     // alpha.02: ModeContract's slot-scoped read (core#133) - a mode cycle
     // stores its own slot's mode; older cores have no such method.
-    def abilityCore = 'org.bitwisemadness.abilitycore:ability_core:1.0.2-alpha.03'
+    def abilityCore = 'org.bitwisemadness.abilitycore:ability_core:1.1.0-alpha.01'
     compileOnly abilityCore
     testImplementation abilityCore
 

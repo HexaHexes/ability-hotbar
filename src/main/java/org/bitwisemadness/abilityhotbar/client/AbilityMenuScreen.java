@@ -1417,6 +1417,16 @@ public final class AbilityMenuScreen extends Screen {
                     .map(AbilityPresentation::fields).orElse(List.of()).stream()
                     .filter(field -> field.kind() == PresentationField.Kind.PROGRESS)
                     .findFirst().orElse(null);
+            // REQ-CORE-12 row display: badge once declared, the meter
+            // only once XP exists (until then the presentation's meter
+            // keeps the row) - both ride the answered snapshot
+            boolean coreMastery = CoreMasteryCompat.answered()
+                    && CoreMasteryCompat.declared(row.id());
+            double coreXp = coreMastery ? CoreMasteryCompat.xpOf(row.id()) : 0.0;
+            boolean coreBar = coreMasteryBar(coreMastery, coreXp);
+            if (coreBar) {
+                mastery = null;
+            }
             // The row's mode pill: slotted multi-mode abilities cycle
             // from here (owner's brief) - the label is the current (or
             // default) mode, the click sends the slot's cycle request.
@@ -1431,17 +1441,28 @@ public final class AbilityMenuScreen extends Screen {
             // never guesses a state (core's never-guess rule).
             Optional<Boolean> learned =
                     AbilityUnlocks.isLearned(this.minecraft.player, row.id());
-            // The bottom-line meter: the presentation's progress, or a
-            // zero bar for a provably known-but-unlearned art that still
-            // presents itself (owner: known rows show the bar too)
+            // The bottom-line meter: the generic mastery bar, the
+            // presentation's progress, or a zero bar for a provably
+            // known-but-unlearned art that still presents itself
             boolean knownBar = mastery == null && learned.isPresent() && !learned.get()
                     && presentation.map(p -> !p.fields().isEmpty()).orElse(false);
-            boolean bottomBar = mastery != null || knownBar;
+            boolean bottomBar = coreBar || mastery != null || knownBar;
             // Toggleable rows, mode pills and the meter lift the name so
             // the bottom line owns its chrome (owner: no name/bar overlap).
             int textY = toggle == null && modeRect == null && !bottomBar
                     ? y + (menuRowHeight() - 9) / 2 : y + 6;
-            gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
+            int nameX = LIST_LEFT + 38;
+            if (coreMastery) {
+                // the level badge in front of the name (REQ-CORE-12) -
+                // the achievement chrome's gold, only for abilities
+                // whose snapshot has arrived (never a guessed level)
+                String badge = Component.translatable(
+                        "ability_hotbar.menu.mastery_level",
+                        CoreMasteryCompat.levelOf(row.id())).getString();
+                gui.drawString(this.font, badge, nameX, textY, style.action());
+                nameX += this.font.width(badge) + 4;
+            }
+            gui.drawString(this.font, name, nameX, textY, style.text());
             if (bottomBar) {
                 // the meter owns the bottom line's left side, clear of the
                 // mode pill and the Enable/Disable button - the old enabled
@@ -1449,15 +1470,24 @@ public final class AbilityMenuScreen extends Screen {
                 int limitX = (modeRect != null ? modeRect[0]
                         : rowToggle != null ? rowToggle[0] : LIST_LEFT + listWidth) - 4;
                 int[] bar = masteryBarRect(y, LIST_LEFT + 38, limitX);
-                float fraction = mastery != null ? mastery.progress() : 0f;
+                float fraction = coreBar
+                        ? (float) CoreMasteryCompat.progressOf(row.id())
+                        : mastery != null ? mastery.progress() : 0f;
                 int stateColor = masteryBarColor(style, learned, fraction);
                 // the track stays neutral; the fill alone carries the state
                 // colour and grows with progress (owner: the bar fills up
                 // instead of the whole bar being coloured)
                 MenuChrome.meter(gui, bar[0], bar[1], bar[2], bar[3], fraction,
                         style, stateColor);
-                if (mastery != null) {
-                    String value = this.font.plainSubstrByWidth(mastery.value(), bar[2] - 4);
+                String barValue = null;
+                if (coreBar) {
+                    barValue = Component.translatable("ability_hotbar.menu.mastery_bar",
+                            CoreMasteryCompat.formatXp(coreXp)).getString();
+                } else if (mastery != null) {
+                    barValue = mastery.value();
+                }
+                if (barValue != null) {
+                    String value = this.font.plainSubstrByWidth(barValue, bar[2] - 4);
                     if (!value.isEmpty()) {
                         // the value rides INSIDE the bar, centred with the
                         // same margin above and below (owner's brief)
@@ -1467,7 +1497,11 @@ public final class AbilityMenuScreen extends Screen {
                     }
                 }
             }
-            String cost = costText(row.definition());
+            // the row's LIVE cost answer - repriced by tensura_iron_spells
+            // through iss's projection when one is in force (hotbar#193)
+            ResourceCost liveCost = RepresentativeCost.of(
+                    LiveCosts.forDisplay(row.id(), row.definition()));
+            String cost = liveCost == null ? "" : costText(liveCost);
             if (!cost.isEmpty()) {
                 // pills own the bottom line; the cost keeps the name line
                 gui.drawString(this.font, cost,
@@ -1567,6 +1601,21 @@ public final class AbilityMenuScreen extends Screen {
         }
         return learned.orElse(false) ? style.accent() : style.muted();
     }
+
+    /**
+     * Whether the generic mastery bar owns the row's bottom line (the
+     * hybrid REQ-CORE-12 settled on): only once the answered snapshot has
+     * XP for the ability - until then the presentation's meter (tensura's
+     * learning/mastery) keeps the row, and an unanswered or undeclared
+     * ability shows neither (never a guessed fill).
+     *
+     * @param ready the ability is declared and its snapshot has arrived
+     * @param xp    the stored own-target XP from that snapshot
+     * @return true when the generic bar renders
+     */
+    static boolean coreMasteryBar(boolean ready, double xp) {
+        return ready && xp > 0.0;
+    }
     /**
      * The rightmost third (owner's brief, superseding #27's no-sidebar
      * exclusion): the ability's name, activation requirement, tags + cost
@@ -1664,18 +1713,6 @@ public final class AbilityMenuScreen extends Screen {
             for (PresentationField field : paneFields) {
                 rows.add(new PaneRow.FieldRow(field));
             }
-        }
-        // Core mastery (REQ-CORE-12 phase 3): server-truth XP/level from the
-        // answered snapshot - the gate runs first, so an unanswered pane
-        // omits the section instead of showing a guessed zero.
-        if (CoreMasteryCompat.answered() && CoreMasteryCompat.declared(id)) {
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.mastery"));
-            rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
-                    Component.translatable("ability_hotbar.menu.mastery_line",
-                            CoreMasteryCompat.levelOf(id),
-                            CoreMasteryCompat.formatXp(CoreMasteryCompat.xpOf(id)))
-                            .getString(),
-                    wrapW), style.action()));
         }
         // Available modes each get a line, with the provider's mode
         // description when it ships one under the mode key (owner's brief:
@@ -2585,11 +2622,6 @@ public final class AbilityMenuScreen extends Screen {
 
     private static boolean inside(double mouseX, double mouseY, int x, int y, int w, int h) {
         return mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
-    }
-
-    private static String costText(AbilityDefinition definition) {
-        var cost = RepresentativeCost.of(definition);
-        return cost == null ? "" : costText(cost);
     }
 
     /** One declared cost as text: whole amounts drop the decimal point,

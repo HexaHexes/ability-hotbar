@@ -1,5 +1,6 @@
 package org.bitwisemadness.abilityhotbar.client;
 
+import java.util.List;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
 import org.bitwisemadness.abilitycore.api.ResourceCost;
 
@@ -12,6 +13,11 @@ import org.bitwisemadness.abilitycore.api.ResourceCost;
  * fired for every resolvable slot, not only unknown-cost tuples). The
  * old overlay badge is gone: costs render as localised text in the menu,
  * never as a strip over the world hotbar's icons.
+ *
+ * <p>The list overload exists for the row's LIVE answer
+ * ({@code LiveCosts.forDisplay}): the pane and the row must lead with
+ * the same cost from the same list - repriced by
+ * {@code tensura_iron_spells} when a projection is in force.</p>
  */
 final class RepresentativeCost {
 
@@ -19,7 +25,11 @@ final class RepresentativeCost {
     }
 
     static ResourceCost of(AbilityDefinition definition) {
-        var costs = definition.costs();
+        return of(definition.costs());
+    }
+
+    /** The first of the given costs, or null when the list is empty. */
+    static ResourceCost of(List<ResourceCost> costs) {
         return costs.isEmpty() ? null : costs.get(0);
     }
 }

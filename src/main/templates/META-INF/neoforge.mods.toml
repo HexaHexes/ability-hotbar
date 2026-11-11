@@ -39,13 +39,14 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "ability_core"
 type = "optional"
-# alpha.01 of the 1.0.2 line is the floor: the mastery query exchange
-# (REQ-CORE-12 - MasteryQueryRequest/Response/AnsweredEvent, the pane's
-# mastery display sends it on menu open) ships there, on top of
-# 1.0.1-alpha.02's slot-scoped mode read (core#133 - this mod calls it on
-# every mode cycle). Additive payload types never bump the channel
-# version, so newer cores answer older senders unchanged.
-versionRange = "[1.0.2-alpha.01,)"
+# alpha.01 of the 1.1.0 line is the floor: the row display reads the
+# mastery query answer's progress field (REQ-CORE-12 - Entry.progress),
+# which ships with the channel v4 bump - both sides must run the same
+# channel version (a mismatched version disconnects at negotiation), so
+# the floor names the first build that speaks v4. The 1.0.2 line's query
+# exchange (request/response/answer event) and 1.0.1-alpha.02's
+# slot-scoped mode read (core#133, every mode cycle) ride along.
+versionRange = "[1.1.0-alpha.01,)"
 ordering = "AFTER"
 side = "BOTH"
 
