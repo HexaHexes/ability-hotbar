@@ -11,8 +11,9 @@ package org.bitwisemadness.abilityhotbar.registry;
  * deliberate re-sync, never an automatic coupling):
  * background {@code 0x131D2C}, raised {@code 0x22354A}, text
  * {@code 0xEAF4FF}, muted {@code 0x95ACC2}, accent {@code 0x67DDED},
- * action {@code 0xFFC679}, world dim {@code 15%}, panel opacity
- * {@code 78%}.</p>
+ * action {@code 0xFFC679}, mastery {@code 0xB48CF2} (the org's own
+ * addition for the generic-mastery chrome), world dim {@code 15%}, panel
+ * opacity {@code 78%}.</p>
  *
  * @param background     panel/glass base color
  * @param raised         hovered/raised surface color
@@ -20,15 +21,18 @@ package org.bitwisemadness.abilityhotbar.registry;
  * @param muted          secondary text
  * @param accent         the cyan interactive accent (underlines, markers)
  * @param action         the orange action/highlight color
+ * @param mastery        the violet generic-mastery color (the row's level
+ *                       badge and core bar - deliberately distinct from
+ *                       the domain presentation meters)
  * @param dimPercent     world dimming behind the screen (0..100)
  * @param opacityPercent panel glass opacity (0..100)
  */
 public record MenuStyle(int background, int raised, int text, int muted, int accent,
-        int action, int dimPercent, int opacityPercent) {
+        int action, int mastery, int dimPercent, int opacityPercent) {
 
     /** Tensura RPG System's default palette (their SAO_DARK theme). */
     public static final MenuStyle TRS_SAODARK = new MenuStyle(
-            0x131D2C, 0x22354A, 0xEAF4FF, 0x95ACC2, 0x67DDED, 0xFFC679, 15, 78);
+            0x131D2C, 0x22354A, 0xEAF4FF, 0x95ACC2, 0x67DDED, 0xFFC679, 0xB48CF2, 15, 78);
 
     /** The shipped default: the TRS-synced style. */
     public static final MenuStyle DEFAULT = TRS_SAODARK;
