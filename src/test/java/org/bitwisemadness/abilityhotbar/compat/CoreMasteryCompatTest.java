@@ -60,7 +60,8 @@ class CoreMasteryCompatTest {
     void foreignEchoIsDropped() {
         CoreMasteryCompat.markRequested(TARGET, 0L);
         CoreMasteryCompat.accept(new MasteryQueryResponse(
-                UUID.randomUUID().toString(), List.of(abilityEntry(ABILITY, 9.0, 1, 0.9))));
+                UUID.randomUUID().toString(),
+                List.of(abilityEntry(ABILITY, 9.0, 1, 0.9, List.of()))));
         assertFalse(CoreMasteryCompat.answered(),
                 "a reply for another player must never seed the pane");
     }
@@ -69,13 +70,20 @@ class CoreMasteryCompatTest {
     void answeredOwnEchoExposesServerEntry() {
         CoreMasteryCompat.markRequested(TARGET, 0L);
         CoreMasteryCompat.accept(new MasteryQueryResponse(
-                TARGET.toString(), List.of(abilityEntry(ABILITY, 45.5, 3, 0.4))));
+                TARGET.toString(),
+                List.of(abilityEntry(ABILITY, 45.5, 3, 0.4,
+                        List.of(new MasteryQueryResponse.Bonus("COST", 0.95))))));
 
         assertTrue(CoreMasteryCompat.answered(), "our echo must open the gate");
         assertEquals(3, CoreMasteryCompat.levelOf(ABILITY));
         assertEquals(45.5, CoreMasteryCompat.xpOf(ABILITY));
         assertEquals(0.4, CoreMasteryCompat.progressOf(ABILITY),
                 "the bar fill comes from the server's progress field");
+        var bonuses = CoreMasteryCompat.bonusesOf(ABILITY);
+        assertEquals(1, bonuses.size(), "the pane section reads the server's bonuses");
+        assertEquals("COST", bonuses.get(0).axis());
+        assertEquals(0.95, bonuses.get(0).multiplier(), 1e-9,
+                "the multiplier is the server's live answer, never re-derived");
     }
 
     @Test
@@ -90,6 +98,8 @@ class CoreMasteryCompatTest {
         assertEquals(0, CoreMasteryCompat.levelOf(ABILITY));
         assertEquals(0.0, CoreMasteryCompat.xpOf(ABILITY));
         assertEquals(0.0, CoreMasteryCompat.progressOf(ABILITY));
+        assertTrue(CoreMasteryCompat.bonusesOf(ABILITY).isEmpty(),
+                "no entry, no bonuses: the pane section stays hidden");
     }
 
     @Test
@@ -111,9 +121,10 @@ class CoreMasteryCompatTest {
         }
     }
 
-    /** One ABILITY entry in core's wire vocabulary (kind, id, xp, level, progress). */
+    /** One ABILITY entry in core's wire vocabulary (kind, id, xp, level, progress, bonuses). */
     private static MasteryQueryResponse.Entry abilityEntry(ResourceLocation id, double xp,
-            int level, double progress) {
-        return new MasteryQueryResponse.Entry("ABILITY", id.toString(), xp, level, progress);
+            int level, double progress, List<MasteryQueryResponse.Bonus> bonuses) {
+        return new MasteryQueryResponse.Entry("ABILITY", id.toString(), xp, level, progress,
+                bonuses);
     }
 }

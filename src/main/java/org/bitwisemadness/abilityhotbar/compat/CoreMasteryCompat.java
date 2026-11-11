@@ -1,5 +1,6 @@
 package org.bitwisemadness.abilityhotbar.compat;
 
+import java.util.List;
 import java.util.UUID;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.common.NeoForge;
@@ -107,6 +108,17 @@ public final class CoreMasteryCompat {
     public static double progressOf(ResourceLocation id) {
         MasteryQueryResponse.Entry entry = entry(id);
         return entry == null ? 0.0 : entry.progress();
+    }
+
+    /**
+     * The answered snapshot's current effect bonuses for {@code id} -
+     * one per axis the ability's spec declares (empty before the answer
+     * arrives, for undeclared abilities, and for non-participating
+     * axes: the pane shows exactly what the server would apply).
+     */
+    public static List<MasteryQueryResponse.Bonus> bonusesOf(ResourceLocation id) {
+        MasteryQueryResponse.Entry entry = entry(id);
+        return entry == null ? List.of() : entry.bonuses();
     }
 
     /** Whether the ability participates in mastery (client-side declarations). */

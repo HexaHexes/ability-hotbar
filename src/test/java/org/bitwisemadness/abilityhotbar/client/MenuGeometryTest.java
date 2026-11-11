@@ -291,4 +291,16 @@ class MenuGeometryTest {
                 "the first grant hands the bottom line to the generic bar");
     }
 
+    @Test
+    void bonusPercentReadsTheServerMultiplierAsSignedWholePercent() {
+        assertEquals("-5%", AbilityMenuScreen.bonusPercent(0.95),
+                "a cost reduction reads negative");
+        assertEquals("+5%", AbilityMenuScreen.bonusPercent(1.05),
+                "a power bonus reads positive");
+        assertEquals("0%", AbilityMenuScreen.bonusPercent(1.0),
+                "an untouched axis reads zero, never a fake sign");
+        assertEquals("-10%", AbilityMenuScreen.bonusPercent(0.9),
+                "whole percents round the server's multiplier for the eye");
+    }
+
 }

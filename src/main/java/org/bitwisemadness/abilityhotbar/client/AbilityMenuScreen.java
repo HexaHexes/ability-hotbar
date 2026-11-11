@@ -1616,6 +1616,27 @@ public final class AbilityMenuScreen extends Screen {
     static boolean coreMasteryBar(boolean ready, double xp) {
         return ready && xp > 0.0;
     }
+
+    /**
+     * The bonus as a signed whole percent ("+5%", "-10%", "0%") - the
+     * pane's honesty format: the server's multiplier, rounded for the
+     * eye, never re-derived.
+     */
+    static String bonusPercent(double multiplier) {
+        long pct = Math.round((multiplier - 1.0) * 100.0);
+        return pct > 0 ? "+" + pct + "%" : pct + "%";
+    }
+
+    /**
+     * The effect axis's label: the lang key when one ships, else the
+     * prettified enum name - never the raw key on screen.
+     */
+    static String axisLabel(String axis) {
+        String key = "ability_hotbar.menu.axis."
+                + axis.toLowerCase(java.util.Locale.ROOT);
+        return I18n.exists(key) ? Component.translatable(key).getString()
+                : MenuLabels.prettify(axis);
+    }
     /**
      * The rightmost third (owner's brief, superseding #27's no-sidebar
      * exclusion): the ability's name, activation requirement, tags + cost
@@ -1712,6 +1733,20 @@ public final class AbilityMenuScreen extends Screen {
             rows.add(new PaneRow.Header("ability_hotbar.menu.section.status"));
             for (PresentationField field : paneFields) {
                 rows.add(new PaneRow.FieldRow(field));
+            }
+        }
+        // Mastery bonuses (REQ-CORE-12): the server's current effect
+        // multipliers for this ability - only axes its spec declares, so
+        // an undeclared ability shows nothing rather than a fake x1.00
+        var bonuses = CoreMasteryCompat.bonusesOf(id);
+        if (!bonuses.isEmpty()) {
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.bonuses"));
+            for (var bonus : bonuses) {
+                rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
+                        Component.translatable("ability_hotbar.menu.bonus_line",
+                                axisLabel(bonus.axis()),
+                                bonusPercent(bonus.multiplier())).getString(),
+                        wrapW), style.mastery()));
             }
         }
         // Available modes each get a line, with the provider's mode
