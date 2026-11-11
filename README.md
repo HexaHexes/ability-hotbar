@@ -145,7 +145,9 @@ filling with the answered snapshot's server-truth progress, both in the
 style's violet `mastery` color - deliberately distinct from the domain
 presentation meters. Once XP exists that meter takes the line from the
 domain's own presentation meter (tensura's learning/mastery keeps the
-row until then). Row costs
+row until then). The detail pane lists the ability's current mastery
+bonuses - each effect axis its spec declares, with the server's live
+multiplier - and row costs
 quote the live answer (`LiveCosts`), so a repricing in force since
 registration - `tensura_iron_spells` - shows on the row, not just in
 the pane. Registered non-assignable bars are never listed - their content
