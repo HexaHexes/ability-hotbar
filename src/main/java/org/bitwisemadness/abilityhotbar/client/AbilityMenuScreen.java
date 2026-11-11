@@ -41,6 +41,7 @@ import org.bitwisemadness.abilitycore.config.ConfigDiagnostics;
 import org.bitwisemadness.abilitycore.discovery.AbilityDiscovery;
 import org.bitwisemadness.abilityhotbar.UnlockRule;
 import org.bitwisemadness.abilityhotbar.compat.CoreActivationCompat;
+import org.bitwisemadness.abilityhotbar.compat.CoreMasteryCompat;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
 import org.bitwisemadness.abilityhotbar.config.HotbarConfig;
 import org.bitwisemadness.abilityhotbar.content.ContentPlan;
@@ -292,6 +293,12 @@ public final class AbilityMenuScreen extends Screen {
         searchBox.setTextColor(style().text());
         searchBox.setTextColorUneditable(style().muted());
         addRenderableWidget(searchBox);
+        if (this.minecraft != null && this.minecraft.player != null) {
+            // The pane's mastery section (REQ-CORE-12): solicited on open,
+            // throttled against resize re-inits - core never pushes, so the
+            // section appears with the answered snapshot and never guesses.
+            CoreMasteryCompat.request(this.minecraft.player.getUUID());
+        }
     }
 
     /** The active menu style: the config id resolved through the registry. */
@@ -1657,6 +1664,18 @@ public final class AbilityMenuScreen extends Screen {
             for (PresentationField field : paneFields) {
                 rows.add(new PaneRow.FieldRow(field));
             }
+        }
+        // Core mastery (REQ-CORE-12 phase 3): server-truth XP/level from the
+        // answered snapshot - the gate runs first, so an unanswered pane
+        // omits the section instead of showing a guessed zero.
+        if (CoreMasteryCompat.answered() && CoreMasteryCompat.declared(id)) {
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.mastery"));
+            rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
+                    Component.translatable("ability_hotbar.menu.mastery_line",
+                            CoreMasteryCompat.levelOf(id),
+                            CoreMasteryCompat.formatXp(CoreMasteryCompat.xpOf(id)))
+                            .getString(),
+                    wrapW), style.action()));
         }
         // Available modes each get a line, with the provider's mode
         // description when it ships one under the mode key (owner's brief:

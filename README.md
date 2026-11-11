@@ -139,7 +139,11 @@ press) among them - and the category/tag chips agree with the rows.
 Among what lists, abilities the player has provably not unlocked wear
 the unavailable tint and cannot be slotted (per core's unlock contract);
 *unknown* answers neither hide nor block - the menu never guesses
-(REQ-HOT-08). Registered non-assignable bars are never listed - their content
+(REQ-HOT-08). The detail pane (rightmost third) also reports core
+mastery - level and XP for the shown ability, read from the snapshot the
+menu solicits when it opens (REQ-CORE-12): server truth only, never a
+locally computed level, and no section at all before the answer arrives.
+Registered non-assignable bars are never listed - their content
 belongs to the owner (ADR-012). The on-screen pass lives in
 `docs/menu-checklist.md`.
 

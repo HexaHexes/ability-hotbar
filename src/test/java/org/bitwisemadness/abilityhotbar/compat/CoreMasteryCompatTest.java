@@ -1,0 +1,115 @@
+package org.bitwisemadness.abilityhotbar.compat;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.UUID;
+import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilitycore.api.MasteryDeclarations;
+import org.bitwisemadness.abilitycore.api.MasterySpec;
+import org.bitwisemadness.abilitycore.sync.MasteryQueryResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+/**
+ * The pane's mastery display contract (REQ-CORE-12 phase 3): the section
+ * gate opens only for an answered snapshot echoing THIS client's request,
+ * the level/XP reads answer SERVER truth from the snapshot's wire entries
+ * (and never run the curve locally), an unanswered or foreign-echo reply
+ * leaves the pane silent instead of guessing, and the throttle coalesces
+ * resize re-inits into one exchange per interval.
+ *
+ * <p>The entries are built in the exact shape core's
+ * {@code MasteryQueryResponse} ships (kind/id/xp/level), so a wire-vocabulary
+ * drift on either side fails here rather than blanking the pane in-game.</p>
+ */
+class CoreMasteryCompatTest {
+
+    private static final ResourceLocation ABILITY =
+            ResourceLocation.fromNamespaceAndPath("test", "mastery_display");
+    private static final UUID TARGET = UUID.fromString(
+            "0b7f4e3a-1f2c-4d5e-9a8b-7c6d5e4f3a2b");
+
+    @BeforeEach
+    void cleanExchange() {
+        CoreMasteryCompat.reset();
+    }
+
+    @Test
+    void unansweredPaneOpensNoSection() {
+        assertFalse(CoreMasteryCompat.answered(),
+                "before any answer the pane must omit the section");
+    }
+
+    @Test
+    void throttleCoalescesBurstsIntoOneExchange() {
+        assertTrue(CoreMasteryCompat.shouldRequest(1_000L), "first request is due");
+        CoreMasteryCompat.markRequested(TARGET, 1_000L);
+        assertFalse(CoreMasteryCompat.shouldRequest(
+                        1_000L + CoreMasteryCompat.REQUEST_INTERVAL_MS - 1L),
+                "resize re-inits inside the interval must coalesce");
+        assertTrue(CoreMasteryCompat.shouldRequest(
+                        1_000L + CoreMasteryCompat.REQUEST_INTERVAL_MS),
+                "the next open after the interval may ask again");
+    }
+
+    @Test
+    void foreignEchoIsDropped() {
+        CoreMasteryCompat.markRequested(TARGET, 0L);
+        CoreMasteryCompat.accept(new MasteryQueryResponse(
+                UUID.randomUUID().toString(), List.of(abilityEntry(ABILITY, 9.0, 1))));
+        assertFalse(CoreMasteryCompat.answered(),
+                "a reply for another player must never seed the pane");
+    }
+
+    @Test
+    void answeredOwnEchoExposesServerEntry() {
+        CoreMasteryCompat.markRequested(TARGET, 0L);
+        CoreMasteryCompat.accept(new MasteryQueryResponse(
+                TARGET.toString(), List.of(abilityEntry(ABILITY, 45.5, 3))));
+
+        assertTrue(CoreMasteryCompat.answered(), "our echo must open the gate");
+        assertEquals(3, CoreMasteryCompat.levelOf(ABILITY));
+        assertEquals(45.5, CoreMasteryCompat.xpOf(ABILITY));
+    }
+
+    @Test
+    void answeredSnapshotWithoutTheAbilityReadsZero() {
+        CoreMasteryCompat.markRequested(TARGET, 0L);
+        CoreMasteryCompat.accept(new MasteryQueryResponse(
+                TARGET.toString(), List.of()));
+        assertTrue(CoreMasteryCompat.answered());
+
+        // absence in an ANSWERED snapshot is the server saying "never
+        // earned" - a true zero, not a guess
+        assertEquals(0, CoreMasteryCompat.levelOf(ABILITY));
+        assertEquals(0.0, CoreMasteryCompat.xpOf(ABILITY));
+    }
+
+    @Test
+    void xpTextKeepsOnlyRealFractions() {
+        assertEquals("45", CoreMasteryCompat.formatXp(45.0));
+        assertEquals("0", CoreMasteryCompat.formatXp(0.0));
+        assertEquals("45.5", CoreMasteryCompat.formatXp(45.5));
+    }
+
+    @Test
+    void declaredGatesOnCoreDeclarations() {
+        assertFalse(CoreMasteryCompat.declared(ABILITY),
+                "undeclared abilities never render the section");
+        MasteryDeclarations.declare(ABILITY, MasterySpec.gained(1.0));
+        try {
+            assertTrue(CoreMasteryCompat.declared(ABILITY));
+        } finally {
+            MasteryDeclarations.remove(ABILITY);
+        }
+    }
+
+    /** One ABILITY entry in core's wire vocabulary. */
+    private static MasteryQueryResponse.Entry abilityEntry(ResourceLocation id, double xp,
+            int level) {
+        return new MasteryQueryResponse.Entry("ABILITY", id.toString(), xp, level);
+    }
+}

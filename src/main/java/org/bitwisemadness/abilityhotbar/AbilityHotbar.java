@@ -9,6 +9,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLEnvironment;
 import org.bitwisemadness.abilityhotbar.client.ClientConfigScreen;
+import org.bitwisemadness.abilityhotbar.compat.CoreMasteryCompat;
 import org.bitwisemadness.abilityhotbar.compat.CoreScopeCompat;
 import org.bitwisemadness.abilityhotbar.compat.CoreSyncCompat;
 import org.bitwisemadness.abilityhotbar.config.HotbarClientConfig;
@@ -37,12 +38,13 @@ public final class AbilityHotbar {
         }
         // Per-player bar state attachment (REQ-HOT-14, ADR-004)
         BarStateAttachments.register(modBus);
-        // CoreSyncCompat and the #90 scope guard register only when core is
-        // present, so their core references never resolve on a core-less
-        // runtime - the optional-runtime invariant.
+        // CoreSyncCompat, the #90 scope guard and the pane's mastery display
+        // (CoreMasteryCompat, REQ-CORE-12) register only when core is present:
+        // their core references must never resolve on a core-less runtime.
         if (ModList.get().isLoaded("ability_core")) {
             CoreSyncCompat.register();
             CoreScopeCompat.register();
+            CoreMasteryCompat.register();
         }
         LOGGER.info("Ability Hotbar initialized");
     }
