@@ -1,6 +1,7 @@
 package org.bitwisemadness.abilityhotbar.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
@@ -278,6 +279,16 @@ class MenuGeometryTest {
                 "an odd height, so the value line has equal margins top and bottom");
         assertEquals(40, AbilityMenuScreen.masteryBarRect(100, 46, 80)[2],
                 "a squeezed row keeps the floor");
+    }
+
+    @Test
+    void coreMasteryBarNeedsAnAnsweredSnapshotWithXp() {
+        assertFalse(AbilityMenuScreen.coreMasteryBar(false, 45.0),
+                "an unanswered snapshot shows no generic bar");
+        assertFalse(AbilityMenuScreen.coreMasteryBar(true, 0.0),
+                "declared but unearned keeps the presentation's meter on the row");
+        assertTrue(AbilityMenuScreen.coreMasteryBar(true, 0.5),
+                "the first grant hands the bottom line to the generic bar");
     }
 
 }
