@@ -1447,9 +1447,20 @@ public final class AbilityMenuScreen extends Screen {
             boolean knownBar = mastery == null && learned.isPresent() && !learned.get()
                     && presentation.map(p -> !p.fields().isEmpty()).orElse(false);
             boolean bottomBar = coreBar || mastery != null || knownBar;
-            // Toggleable rows, mode pills and the meter lift the name so
-            // the bottom line owns its chrome (owner: no name/bar overlap).
-            int textY = toggle == null && modeRect == null && !bottomBar
+            // the row's LIVE cost answer - repriced by tensura_iron_spells
+            // through iss's projection when one is in force (hotbar#193);
+            // the label rides the name line, the value the bottom line
+            ResourceCost liveCost = RepresentativeCost.of(
+                    LiveCosts.forDisplay(row.id(), row.definition()));
+            String cost = liveCost == null ? "" : costText(liveCost);
+            boolean costLine = !cost.isEmpty();
+            // pills own the bottom line's right edge - the Cost: label and
+            // its value align there, and the meter stops before the value
+            int limitX = (modeRect != null ? modeRect[0]
+                    : rowToggle != null ? rowToggle[0] : LIST_LEFT + listWidth) - 4;
+            // Toggleable rows, mode pills, the meter and the cost line lift
+            // the name so the bottom line owns its chrome (no overlap).
+            int textY = toggle == null && modeRect == null && !bottomBar && !costLine
                     ? y + (menuRowHeight() - 9) / 2 : y + 6;
             gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
             if (coreMastery) {
@@ -1462,51 +1473,56 @@ public final class AbilityMenuScreen extends Screen {
                 gui.drawString(this.font, badge,
                         LIST_LEFT + 38 + this.font.width(name) + 4, textY, style.mastery());
             }
-            if (bottomBar) {
-                // the meter owns the bottom line's left side, clear of the
-                // mode pill and the Enable/Disable button - the old enabled
-                // text is gone, the button already says the state (owner)
-                int limitX = (modeRect != null ? modeRect[0]
-                        : rowToggle != null ? rowToggle[0] : LIST_LEFT + listWidth) - 4;
-                int[] bar = masteryBarRect(y, LIST_LEFT + 38, limitX);
-                float fraction = coreBar
-                        ? (float) CoreMasteryCompat.progressOf(row.id())
-                        : mastery != null ? mastery.progress() : 0f;
-                // the generic bar wears the mastery color (deliberately
-                // distinct from the domain meter's state colours); the
-                // presentation meter keeps its state colour as before
-                int stateColor = coreBar ? style.mastery()
-                        : masteryBarColor(style, learned, fraction);
-                MenuChrome.meter(gui, bar[0], bar[1], bar[2], bar[3], fraction,
-                        style, stateColor);
-                String barValue = null;
-                if (coreBar) {
-                    barValue = Component.translatable("ability_hotbar.menu.mastery_bar",
-                            CoreMasteryCompat.formatXp(coreXp)).getString();
-                } else if (mastery != null) {
-                    barValue = mastery.value();
-                }
-                if (barValue != null) {
-                    String value = this.font.plainSubstrByWidth(barValue, bar[2] - 4);
-                    if (!value.isEmpty()) {
-                        // the value rides INSIDE the bar, centred with the
-                        // same margin above and below (owner's brief)
-                        gui.drawString(this.font, value,
-                                bar[0] + (bar[2] - this.font.width(value)) / 2,
-                                bar[1] + (bar[3] - 9) / 2, style.text());
+            if (costLine) {
+                // the Cost: label right-aligned on the name line; the
+                // value follows below it (owner: both right-aligned)
+                String label = Component.translatable(
+                        "ability_hotbar.menu.cost_label").getString();
+                gui.drawString(this.font, label,
+                        limitX - this.font.width(label), textY, style.muted());
+            }
+            if (bottomBar || costLine) {
+                int meterLimit = costLine
+                        ? costMeterLimit(limitX, this.font.width(cost)) : limitX;
+                if (bottomBar) {
+                    // the meter owns the bottom line's left side, clear of
+                    // the pills, the Enable/Disable button and the cost
+                    int[] bar = masteryBarRect(y, LIST_LEFT + 38, meterLimit);
+                    float fraction = coreBar
+                            ? (float) CoreMasteryCompat.progressOf(row.id())
+                            : mastery != null ? mastery.progress() : 0f;
+                    // the generic bar wears the mastery color (deliberately
+                    // distinct from the domain meter's state colours); the
+                    // presentation meter keeps its state colour as before
+                    int stateColor = coreBar ? style.mastery()
+                            : masteryBarColor(style, learned, fraction);
+                    MenuChrome.meter(gui, bar[0], bar[1], bar[2], bar[3], fraction,
+                            style, stateColor);
+                    String barValue = null;
+                    if (coreBar) {
+                        barValue = Component.translatable("ability_hotbar.menu.mastery_bar",
+                                CoreMasteryCompat.formatXp(coreXp)).getString();
+                    } else if (mastery != null) {
+                        barValue = mastery.value();
+                    }
+                    if (barValue != null) {
+                        String value = this.font.plainSubstrByWidth(barValue, bar[2] - 4);
+                        if (!value.isEmpty()) {
+                            // the value rides INSIDE the bar, centred with the
+                            // same margin above and below (owner's brief)
+                            gui.drawString(this.font, value,
+                                    bar[0] + (bar[2] - this.font.width(value)) / 2,
+                                    bar[1] + (bar[3] - 9) / 2, style.text());
+                        }
                     }
                 }
-            }
-            // the row's LIVE cost answer - repriced by tensura_iron_spells
-            // through iss's projection when one is in force (hotbar#193)
-            ResourceCost liveCost = RepresentativeCost.of(
-                    LiveCosts.forDisplay(row.id(), row.definition()));
-            String cost = liveCost == null ? "" : costText(liveCost);
-            if (!cost.isEmpty()) {
-                // pills own the bottom line; the cost keeps the name line
-                gui.drawString(this.font, cost,
-                        LIST_LEFT + listWidth - this.font.width(cost), textY,
-                        style.action());
+                if (costLine) {
+                    // the value right-aligned on the bottom line, under its
+                    // label, at the pills' edge (owner: both right-aligned)
+                    gui.drawString(this.font, cost,
+                            limitX - this.font.width(cost), costValueY(y),
+                            style.action());
+                }
             }
             if (modeRect != null) {
                 boolean modeHover = inside(mouseX, mouseY,
@@ -1637,13 +1653,27 @@ public final class AbilityMenuScreen extends Screen {
         return I18n.exists(key) ? Component.translatable(key).getString()
                 : MenuLabels.prettify(axis);
     }
+
+    /** The cost value's baseline on the bottom line (meter-value aligned). */
+    static int costValueY(int rowY) {
+        return rowY + menuRowHeight() - 16;
+    }
+
+    /**
+     * The meter's right edge when the cost value shares the line: the
+     * meter stops 6px before the value (owner: the value keeps its
+     * right-aligned column).
+     */
+    static int costMeterLimit(int limitX, int costWidth) {
+        return Math.min(limitX, limitX - costWidth - 6);
+    }
     /**
      * The rightmost third (owner's brief, superseding #27's no-sidebar
-     * exclusion): the ability's name, activation requirement, tags + cost
+     * exclusion): the ability's name, activation requirement, tags
      * (categories are gone from tooltips), declared stats, live
-     * presentation fields and the FULL description - wrapped and
-     * wheel-scrolled inside the pane (the toggle state and its button
-     * live in the list row now - owner's brief). Sticky: the last hovered
+     * presentation fields, the mastery bonuses and the FULL description -
+     * wrapped and wheel-scrolled inside the pane (the toggle state and its
+     * button live in the list row now - owner's brief). Sticky: the last hovered
      * ability stays when the pointer leaves the list; before any hover the
      * selected slot's ability shows. Drawn last in render(), so nothing
      * can paint over it (owner's layering brief).
@@ -1698,18 +1728,6 @@ public final class AbilityMenuScreen extends Screen {
         if (!tags.isEmpty()) {
             rows.add(new PaneRow.Line(
                     this.font.plainSubstrByWidth(tags, wrapW), style.muted()));
-        }
-        // every declared cost shows, not just the first - and the LIVE
-        // answer when the provider reprices after registration (the
-        // tensura_iron_spells mixin), else the baked list
-        List<ResourceCost> shownCosts = LiveCosts.forDisplay(id, definition);
-        if (!shownCosts.isEmpty()) {
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.costs"));
-            String costs = shownCosts.stream()
-                    .map(cost -> costText(cost))
-                    .collect(Collectors.joining("   "));
-            rows.add(new PaneRow.Line(
-                    this.font.plainSubstrByWidth(costs, wrapW), style.action()));
         }
         if (!definition.stats().isEmpty()) {
             // issue #119: declared stats in declaration order, labels
@@ -1909,8 +1927,9 @@ public final class AbilityMenuScreen extends Screen {
      * player as "Unique" - properly capitalised (brief #8).
      */
     /**
-     * The tags line (the Costs subsection owns costs now - owner's brief:
-     * every declared cost shows, not just the representative one).
+     * The tags line: the subcategory tag reads as its label, the rest
+     * comma-joined (brief #8) - costs live on the row now (owner's
+     * right-aligned Cost: label + value).
      */
     private static String metaText(AbilityDefinition definition) {
         if (definition.tags().isEmpty()) {

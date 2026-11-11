@@ -147,12 +147,12 @@ presentation meters. Once XP exists that meter takes the line from the
 domain's own presentation meter (tensura's learning/mastery keeps the
 row until then). The detail pane lists the ability's current mastery
 bonuses - each effect axis its spec declares, with the server's live
-multiplier - and row costs
-quote the live answer (`LiveCosts`), so a repricing in force since
-registration - `tensura_iron_spells` - shows on the row, not just in
-the pane. Registered non-assignable bars are never listed - their content
-belongs to the owner (ADR-012). The on-screen pass lives in
-`docs/menu-checklist.md`.
+multiplier - while the price lives on the row: a right-aligned `Cost:`
+label with its value on the line below, quoting the live answer
+(`LiveCosts`), so a repricing in force since registration -
+`tensura_iron_spells` - shows there. Registered non-assignable bars are
+never listed - their content belongs to the owner (ADR-012). The
+on-screen pass lives in `docs/menu-checklist.md`.
 
 Screenshots: _placeholder_.
 
