@@ -54,6 +54,8 @@
   "ability_hotbar.menu.section.status": "Status",
   "ability_hotbar.menu.section.modes": "Modes",
   "ability_hotbar.menu.section.description": "Description",
+  "ability_hotbar.menu.section.mastery": "Mastery",
+  "ability_hotbar.menu.mastery_line": "Level %s · %s XP",
   "ability_hotbar.menu.detail_hint": "Hover an ability to inspect it.",
   "ability_hotbar.menu.tab_all": "All",
   "ability_hotbar.menu.style_default": "Style: Default",
