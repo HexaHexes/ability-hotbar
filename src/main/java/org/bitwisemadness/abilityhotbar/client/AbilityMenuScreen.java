@@ -1451,18 +1451,17 @@ public final class AbilityMenuScreen extends Screen {
             // the bottom line owns its chrome (owner: no name/bar overlap).
             int textY = toggle == null && modeRect == null && !bottomBar
                     ? y + (menuRowHeight() - 9) / 2 : y + 6;
-            int nameX = LIST_LEFT + 38;
+            gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
             if (coreMastery) {
-                // the level badge in front of the name (REQ-CORE-12) -
-                // the achievement chrome's gold, only for abilities
-                // whose snapshot has arrived (never a guessed level)
+                // the level badge AFTER the name (REQ-CORE-12), in the
+                // mastery color - only for abilities whose snapshot has
+                // arrived (never a guessed level)
                 String badge = Component.translatable(
                         "ability_hotbar.menu.mastery_level",
                         CoreMasteryCompat.levelOf(row.id())).getString();
-                gui.drawString(this.font, badge, nameX, textY, style.action());
-                nameX += this.font.width(badge) + 4;
+                gui.drawString(this.font, badge,
+                        LIST_LEFT + 38 + this.font.width(name) + 4, textY, style.mastery());
             }
-            gui.drawString(this.font, name, nameX, textY, style.text());
             if (bottomBar) {
                 // the meter owns the bottom line's left side, clear of the
                 // mode pill and the Enable/Disable button - the old enabled
@@ -1473,10 +1472,11 @@ public final class AbilityMenuScreen extends Screen {
                 float fraction = coreBar
                         ? (float) CoreMasteryCompat.progressOf(row.id())
                         : mastery != null ? mastery.progress() : 0f;
-                int stateColor = masteryBarColor(style, learned, fraction);
-                // the track stays neutral; the fill alone carries the state
-                // colour and grows with progress (owner: the bar fills up
-                // instead of the whole bar being coloured)
+                // the generic bar wears the mastery color (deliberately
+                // distinct from the domain meter's state colours); the
+                // presentation meter keeps its state colour as before
+                int stateColor = coreBar ? style.mastery()
+                        : masteryBarColor(style, learned, fraction);
                 MenuChrome.meter(gui, bar[0], bar[1], bar[2], bar[3], fraction,
                         style, stateColor);
                 String barValue = null;

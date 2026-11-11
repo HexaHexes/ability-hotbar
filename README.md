@@ -140,10 +140,12 @@ Among what lists, abilities the player has provably not unlocked wear
 the unavailable tint and cannot be slotted (per core's unlock contract);
 *unknown* answers neither hide nor block - the menu never guesses
 (REQ-HOT-08). Abilities that declare core mastery carry it on the row
-itself: the level badge in front of the name and the bottom-line meter
-filling with the answered snapshot's server-truth progress - once XP
-exists, that meter takes the line from the domain's own presentation
-meter (tensura's learning/mastery keeps the row until then). Row costs
+itself: the level badge after the name and the bottom-line meter
+filling with the answered snapshot's server-truth progress, both in the
+style's violet `mastery` color - deliberately distinct from the domain
+presentation meters. Once XP exists that meter takes the line from the
+domain's own presentation meter (tensura's learning/mastery keeps the
+row until then). Row costs
 quote the live answer (`LiveCosts`), so a repricing in force since
 registration - `tensura_iron_spells` - shows on the row, not just in
 the pane. Registered non-assignable bars are never listed - their content
