@@ -327,4 +327,27 @@ class MenuGeometryTest {
                 "a wide value squeezes the meter, never overlaps it");
     }
 
+    @Test
+    void descriptionTextDistinguishesKeysFromProse() {
+        // the pane's contract: a dotted space-less value is a translation
+        // key (untranslated answers null - a raw key never reaches the
+        // player); everything else is prose, "Wololo!" included
+        assertTrue(
+                AbilityMenuScreen.keyShaped("spell.irons_spellbooks.wololo"));
+        assertTrue(
+                AbilityMenuScreen.keyShaped("tensura.skill.fireball.description"));
+        assertTrue(
+                AbilityMenuScreen.keyShaped("foo:bar.baz"), "namespaced keys count");
+        assertFalse(
+                AbilityMenuScreen.keyShaped("Wololo!"), "single-token prose renders");
+        assertFalse(
+                AbilityMenuScreen.keyShaped("fireball"), "a bare word is prose");
+        assertFalse(AbilityMenuScreen.keyShaped(
+                "Manifest and throw a ball of fire, exploding on impact."));
+        assertFalse(
+                AbilityMenuScreen.keyShaped("Has Space.key"), "spaces make it prose");
+        assertFalse(
+                AbilityMenuScreen.keyShaped(".leadingdot"), "a leading dot is no key");
+    }
+
 }

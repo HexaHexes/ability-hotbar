@@ -1957,17 +1957,29 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The pane's description text: a translated key when one exists
-     * (ARR-style providers ship {@code <displayNameKey>.description}
-     * keys), plain prose as-is, and nothing for an untranslated key - a
-     * raw key never reaches the player.
+     * The pane's description text: a translated key when the value is
+     * key-shaped (ARR-style providers ship {@code <displayNameKey>.description}
+     * keys - dotted, space-less), plain prose as-is otherwise (a single
+     * word like "Wololo!" reads as prose, never a key), and nothing for
+     * an untranslated key - a raw key never reaches the player.
      */
     @Nullable
     private static Component descriptionComponent(String description) {
-        if (description.indexOf(' ') < 0) { // key-like: no spaces
+        if (keyShaped(description)) {
             return I18n.exists(description) ? Component.translatable(description) : null;
         }
         return Component.literal(description);
+    }
+
+    /**
+     * Whether a description value is a translation key rather than
+     * prose: dotted (not leading) and space-less - every real key is
+     * dotted, while prose carries spaces or stands alone as a word, so
+     * single-token prose like "Wololo!" renders literally instead of
+     * being swallowed by the key path. Package-private for the fixture.
+     */
+    static boolean keyShaped(String description) {
+        return description.indexOf('.') > 0 && description.indexOf(' ') < 0;
     }
 
     /** The hint line, bottom-left (their hint-line pattern). */
