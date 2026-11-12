@@ -31,6 +31,10 @@ the input.
 - [ ] Slot pills are the **same size on every bar** - the assignable nine, a
       shorter bar and a provider strip (e.g. the ISS Spells tab) all share
       one cell width; the strip just ends earlier on a shorter bar.
+- [ ] The slot strip shows `min(bar slots, display.slotsPerBar)` cells -
+      the same count the HUD draws (the client setting is respected in the
+      menu too); the header meter still reports the bar's true used/total,
+      and the mode preview still finds an ability in any slot.
 - [ ] A provider pill whose provider ships a **name** (the ISS spellbook
       strip) shows it beside the icon, wrapped to two lines max; a provider
       without the hook stays icon-only exactly as before.

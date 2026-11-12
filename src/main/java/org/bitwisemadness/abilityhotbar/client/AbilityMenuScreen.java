@@ -549,7 +549,7 @@ public final class AbilityMenuScreen extends Screen {
     private int subPillWidth() {
         BarState state = ClientBarState.get();
         Bar target = state == null ? null : targetBar(state);
-        int slotCount = target == null ? 0 : target.slotCount();
+        int slotCount = visibleSlotCount(target);
         int width = slotWidth(slotCount, this.width, clusterWidth());
         return width > 0 ? width : slotWidth(MAX_ROW_SLOTS, this.width, clusterWidth());
     }
@@ -918,6 +918,20 @@ public final class AbilityMenuScreen extends Screen {
     private ContentPlan stripPlan;
 
     /**
+     * The assignable strip's visible cell count (owner's brief: the menu
+     * respects the client's slot setting too): the bar's slots clamped by
+     * {@code display.slotsPerBar} through HotbarConfig - the SAME rule
+     * the HUD renderer and the Ctrl+wheel use, so the menu can never
+     * show (or hit) a slot the HUD does not draw. The header meter and
+     * the mode preview keep the bar's raw count: they describe the bar's
+     * truth, not the edit window.
+     */
+    private static int visibleSlotCount(@Nullable Bar target) {
+        return target == null ? 0
+                : HotbarConfig.effectiveRenderCount(target.slotCount());
+    }
+
+    /**
      * The strip's cell count: the selected tab's provider bar when it
      * declares one (the owner's ISS directive), else the target bar's.
      * Every strip-derived layout (the strip itself, the list's bottom
@@ -926,7 +940,7 @@ public final class AbilityMenuScreen extends Screen {
      */
     private int stripSlotCount(@Nullable Bar target) {
         return stripPlan != null ? stripPlan.slotCount()
-                : target == null ? 0 : target.slotCount();
+                : visibleSlotCount(target);
     }
 
     /**
@@ -1359,7 +1373,7 @@ public final class AbilityMenuScreen extends Screen {
             return; // an editable-bar tool: absent while a provider strip shows
         }
         MenuStyle style = style();
-        int[] clear = clearRect(target.slotCount());
+        int[] clear = clearRect(visibleSlotCount(target));
         boolean hovered = inside(mouseX, mouseY, clear[0], clear[1], clear[2], clear[3]);
         MenuChrome.glass(gui, clear[0], clear[1], clear[2], clear[3], style, hovered);
         Component clearLabel = Component.translatable("ability_hotbar.menu.clear");
@@ -2005,7 +2019,7 @@ public final class AbilityMenuScreen extends Screen {
             return; // the chip edits the assignable bar: hidden on a provider strip
         }
         MenuStyle style = style();
-        int[] chip = barChipRect(target == null ? 0 : target.slotCount());
+        int[] chip = barChipRect(visibleSlotCount(target));
         boolean chipHover = inside(mouseX, mouseY, chip[0], chip[1], chip[2], chip[3]);
         MenuChrome.glass(gui, chip[0], chip[1], chip[2], chip[3], style, chipHover);
         gui.drawString(this.font, barChipLabel(), chip[0] + 6, chip[1] + 3,
@@ -2153,7 +2167,7 @@ public final class AbilityMenuScreen extends Screen {
         // slot cells (bottom stack; two rows beyond nine - owner's brief):
         // a provider strip is a preview - it never retargets the bar, and
         // the editable-bar tools below are hidden while it shows
-        int slotCount = target == null ? 0 : target.slotCount();
+        int slotCount = visibleSlotCount(target);
         int cellWidth = slotWidth(slotCount, this.width, clusterWidth());
         int rowSlots = Math.min(slotCount, MAX_ROW_SLOTS);
         int y = slotY(slotCount);
@@ -2181,7 +2195,7 @@ public final class AbilityMenuScreen extends Screen {
         }
         // clear button (below the bar chip, owner's brief)
         if (target != null && stripPlan == null) {
-            int[] clear = clearRect(target.slotCount());
+            int[] clear = clearRect(visibleSlotCount(target));
             if (inside(mouseX, mouseY, clear[0], clear[1], clear[2], clear[3])) {
                 sendAssignment("");
                 return true;
@@ -2191,7 +2205,7 @@ public final class AbilityMenuScreen extends Screen {
         // the prev/next buttons below it step (owner's nine-point brief)
         List<ResourceLocation> navBars = manageableBars();
         if (!navBars.isEmpty() && stripPlan == null) {
-            int[] chip = barChipRect(target == null ? 0 : target.slotCount());
+            int[] chip = barChipRect(visibleSlotCount(target));
             if (inside(mouseX, mouseY, chip[0], chip[1], chip[2], chip[3])) {
                 cycleBar();
                 return true;
@@ -2488,7 +2502,7 @@ public final class AbilityMenuScreen extends Screen {
         if (target == null || selectedBar == null) {
             return;
         }
-        int slot = slotCellAt(mouseX, mouseY, target.slotCount(),
+        int slot = slotCellAt(mouseX, mouseY, visibleSlotCount(target),
                 this.width, clusterWidth(), this.height);
         if (slot >= 0) {
             PacketDistributor.sendToServer(
@@ -2508,7 +2522,7 @@ public final class AbilityMenuScreen extends Screen {
         if (target == null || selectedBar == null) {
             return;
         }
-        int to = slotCellAt(mouseX, mouseY, target.slotCount(),
+        int to = slotCellAt(mouseX, mouseY, visibleSlotCount(target),
                 this.width, clusterWidth(), this.height);
         if (to >= 0 && to != from) {
             PacketDistributor.sendToServer(
