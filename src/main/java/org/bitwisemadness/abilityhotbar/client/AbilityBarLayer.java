@@ -175,7 +175,8 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
         List<SlotRender> slots = SlotRender.resolveAll(
                 state,
                 id -> AvailabilityProviders.availabilityFor(mc.player, id),
-                AbilityDiscovery::get);
+                AbilityDiscovery::get,
+                mc.player);
 
         // Vanilla wraps its hotbar draw in enableBlend/disableBlend: a pack-
         // replaced selection centre renders opaque without it. display.opacity
@@ -295,7 +296,8 @@ public final class AbilityBarLayer implements LayeredDraw.Layer {
             // once-per-bar diagnostics live in ContentPlan.cellAvailability)
             var chosen = ContentPlan.cellAvailability(barId, provider, mc.player, i,
                     AvailabilityProviders.availabilityFor(mc.player, id));
-            SlotRender decision = SlotRender.resolve(assignment, false, chosen, AbilityDiscovery.get(id));
+            SlotRender decision = SlotRender.resolve(assignment, false, chosen,
+                    AbilityDiscovery.get(id), mc.player);
             int[] rect = layout.slotRect(i, screenW, screenH);
             drawOverlays(gui, decision, rect[0], rect[1], rect[2], rect[3]);
         }

@@ -16,6 +16,7 @@ import org.bitwisemadness.abilitycore.api.ActivationType;
 import org.bitwisemadness.abilitycore.api.AmountResolvers;
 import org.bitwisemadness.abilitycore.api.AvailabilityState;
 import org.bitwisemadness.abilitycore.api.ConsumptionStrategies;
+import org.bitwisemadness.abilitycore.api.IconProviders;
 import org.bitwisemadness.abilitycore.api.Metric;
 import org.bitwisemadness.abilitycore.api.ResourceCost;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
@@ -93,6 +94,34 @@ class SlotRenderTest {
         assertTrue(slot.assigned());
         assertFalse(slot.inert());
         assertEquals(ICON, slot.iconId(), "resolved icon is drawn");
+    }
+
+    @Test
+    void providerIconWinsOverStaticAndNullFallsThrough() {
+        // hotbar#217: the documented order (core#62) - a declared provider's
+        // answer wins; a provider answering null falls to the static icon.
+        ResourceLocation provided =
+                ResourceLocation.fromNamespaceAndPath("tensura", "textures/icons/provided.png");
+        AbilityDefinition def = definition(ICON, null);
+        BarState state = BarState.empty(1).withAssignment(0, FIREBALL);
+
+        IconProviders.declare(FIREBALL, (player, id) -> provided);
+        try {
+            SlotRender slot = SlotRender.resolveAll(state, id -> Optional.empty(),
+                    id -> Optional.of(def)).get(0);
+            assertEquals(provided, slot.iconId(), "the provider's answer wins");
+        } finally {
+            IconProviders.remove(FIREBALL);
+        }
+
+        IconProviders.declare(FIREBALL, (player, id) -> null);
+        try {
+            SlotRender slot = SlotRender.resolveAll(state, id -> Optional.empty(),
+                    id -> Optional.of(def)).get(0);
+            assertEquals(ICON, slot.iconId(), "null falls through to the static icon");
+        } finally {
+            IconProviders.remove(FIREBALL);
+        }
     }
 
     @Test
