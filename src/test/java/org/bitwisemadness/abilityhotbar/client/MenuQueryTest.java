@@ -19,6 +19,7 @@ import org.bitwisemadness.abilitycore.api.VisibilityHandlers;
 import org.bitwisemadness.abilityhotbar.registry.AbilityBarScopes;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.bitwisemadness.abilityhotbar.registry.MenuTabs;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -93,6 +94,35 @@ class MenuQueryTest {
         entries.put(RAGNAROK, def("tensura.skill.ragnarok", SKILL,
                 Set.of("active", "type:unique")));
         return entries;
+    }
+
+    @Test
+    void emptyTabsAreDroppedFromTheStrip() {
+        // owner's brief: empty tabs are not displayed - a tab survives
+        // only when its pool holds an entry its membership accepts, and
+        // the registration order is the strip's order
+        try {
+            MenuTabs.register(SKILL, "tensura.tab.skills", (id, definition) -> true);
+            MenuTabs.register(MAGIC, "tensura.tab.magic", (id, definition) -> false);
+            Map<ResourceLocation, AbilityDefinition> full = pool();
+            List<MenuTabs.MenuTab> withEntries = MenuQuery.nonEmptyTabs(MenuTabs.all(),
+                    tab -> tab.id().equals(SKILL) ? full : Map.of());
+            assertEquals(List.of(SKILL),
+                    withEntries.stream().map(tab -> tab.id()).toList(),
+                    "a tab with entries survives, in strip order");
+
+            List<MenuTabs.MenuTab> acceptsNothing = MenuQuery.nonEmptyTabs(MenuTabs.all(),
+                    tab -> full);
+            assertEquals(1, acceptsNothing.size(),
+                    "membership decides: accepts-nothing drops even a full pool");
+            assertEquals(SKILL, acceptsNothing.get(0).id(),
+                    "the accepting tab is the survivor");
+            assertTrue(MenuQuery.nonEmptyTabs(List.of(), tab -> full).isEmpty(),
+                    "no tabs, no strip");
+        } finally {
+            MenuTabs.remove(SKILL);
+            MenuTabs.remove(MAGIC);
+        }
     }
 
     @Test
