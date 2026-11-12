@@ -17,6 +17,7 @@ import org.bitwisemadness.abilitycore.api.VisibilityHandlers;
 import org.bitwisemadness.abilityhotbar.registry.AbilityBarScopes;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistration;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
+import org.bitwisemadness.abilityhotbar.registry.MenuTabs;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -127,6 +128,34 @@ public final class MenuQuery {
             }
         }
         return ordered;
+    }
+
+    /**
+     * The registered tabs whose own list would show at least one entry
+     * (owner's brief: empty tabs are not displayed): the screen supplies
+     * each tab's pool (content + visibility) and this applies the tab's
+     * membership - a tab survives when one pool entry passes. Order is
+     * the registration order; an empty result hides the strip whole (the
+     * screen's permanent All tab hides with it, every tab pool being a
+     * subset of the global one).
+     *
+     * @param tabs   the registered tabs, in strip order
+     * @param poolOf builds one tab's inherent pool (no search, no bar)
+     * @return the tabs that currently list something
+     */
+    public static List<MenuTabs.MenuTab> nonEmptyTabs(List<MenuTabs.MenuTab> tabs,
+            Function<MenuTabs.MenuTab, Map<ResourceLocation, AbilityDefinition>> poolOf) {
+        List<MenuTabs.MenuTab> out = new ArrayList<>(tabs.size());
+        for (MenuTabs.MenuTab tab : tabs) {
+            for (Map.Entry<ResourceLocation, AbilityDefinition> entry
+                    : poolOf.apply(tab).entrySet()) {
+                if (tab.accepts().test(entry.getKey(), entry.getValue())) {
+                    out.add(tab);
+                    break;
+                }
+            }
+        }
+        return List.copyOf(out);
     }
 
     /**

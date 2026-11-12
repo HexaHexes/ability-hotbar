@@ -17,11 +17,17 @@ the input.
 
 ## Bars and slots (AC7/AC8/AC9)
 
-- [ ] Tabs appear for the built-in window plus every registered
-      **assignable** bar; a registered non-assignable bar (e.g. a curios bar)
-      is never listed; empty bars are never hidden (no skip-empty here).
-- [ ] Selecting a tab shows that bar's slots with their current contents;
-      selecting a slot marks it as the assignment target.
+- [ ] The header strip shows the permanent All tab plus every registered
+      tab **whose own list has at least one entry**; a tab that would list
+      nothing is never drawn and never stays selected (it falls back to
+      All). No registrations, no strip. The bar cycle keeps listing every
+      assignable bar - empty ones included (no skip-empty there).
+- [ ] Selecting a tab shows that tab's list (and its provider bar's slot
+      strip when the tab declares one); selecting a slot marks it as the
+      assignment target.
+- [ ] Subcategory pills mirror the live list: a pill whose rows the current
+      scope/search would empty is not drawn, and an emptied active
+      subcategory clears itself to All.
 - [ ] Slot pills are the **same size on every bar** - the assignable nine, a
       shorter bar and a provider strip (e.g. the ISS Spells tab) all share
       one cell width; the strip just ends earlier on a shorter bar.

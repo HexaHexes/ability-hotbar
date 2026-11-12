@@ -240,9 +240,10 @@ public final class AbilityMenuScreen extends Screen {
         ResourceLocation active = state == null ? null : state.activeBarId();
         selectedBar = active != null && bars.contains(active) ? active
                 : bars.isEmpty() ? null : bars.get(0);
-        if (selectedTab != null && MenuTabs.get(selectedTab).isEmpty()) {
-            selectedTab = null; // a removed or unknown tab id falls back to All
-        }
+        // a removed, unknown or now-empty tab falls back to All (owner:
+        // empty tabs are not displayed - and never stay selected); the
+        // dead tab's subcategory choice is kept for its return
+        revalidateSelectedTab();
         // The pair parse runs after the tab fallback so a dead tab id can
         // never leave its filter behind on All (parseFilter posture).
         subCategoryFilter = parseSubCategory(
@@ -324,6 +325,13 @@ public final class AbilityMenuScreen extends Screen {
     @Override
     public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
         super.render(gui, mouseX, mouseY, partialTick); // backdrop + the search box
+        // owner: empty tabs and empty subcategories are not displayed -
+        // both revalidated before anything reads them, so a vanished tab
+        // falls to All and an emptied subcategory pick clears with it
+        revalidateSelectedTab();
+        if (subCategoryFilter != null && !subTypeTags().contains(subCategoryFilter)) {
+            subCategoryFilter = null;
+        }
         MenuStyle style = style();
         // title, top-left inside the frame, with the accent underline
         Component title = Component.translatable("ability_hotbar.menu.title");
@@ -584,27 +592,6 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The tab-filtered pool (what the subcategory strip keys on): the
-     * visibility pool narrowed by the selected provider tab's membership,
-     * or the whole pool under the permanent All tab.
-     */
-    private Map<ResourceLocation, AbilityDefinition> tabPool() {
-        MenuTabs.MenuTab selected = selectedTab == null ? null
-                : MenuTabs.get(selectedTab).orElse(null);
-        Map<ResourceLocation, AbilityDefinition> pool = menuPool();
-        if (selected == null) {
-            return pool;
-        }
-        Map<ResourceLocation, AbilityDefinition> out = new java.util.HashMap<>(pool.size());
-        pool.forEach((id, definition) -> {
-            if (selected.accepts().test(id, definition)) {
-                out.put(id, definition);
-            }
-        });
-        return out;
-    }
-
-    /**
      * The subcategory tags with entries under the current tab (the strip's
      * tabs), in the tab's declared order when it declared one - listed
      * tags first, the rest alphabetical (the owner's reorder brief).
@@ -612,18 +599,34 @@ public final class AbilityMenuScreen extends Screen {
     private List<String> subTypeTags() {
         List<String> order = selectedTab == null ? List.of()
                 : MenuTabs.subCategoryOrder(selectedTab);
-        return MenuQuery.subTypeTags(tabPool(), order);
+        return MenuQuery.subTypeTags(subTypeBasePool(), order);
+    }
+
+    /**
+     * What the strip counts (owner's brief: empty subcategories are not
+     * displayed): the rows after every OTHER filter - scope, search,
+     * membership - but before the subcategory pick itself, so a pill whose
+     * click would show nothing never draws, and the revalidation then
+     * clears an active pick this base no longer carries.
+     */
+    private Map<ResourceLocation, AbilityDefinition> subTypeBasePool() {
+        Map<ResourceLocation, AbilityDefinition> out = new HashMap<>();
+        for (MenuQuery.Entry row : visibleRows(null)) {
+            out.put(row.id(), row.definition());
+        }
+        return out;
     }
 
     /**
      * The header's registered-tab strip (hotbar#154): the permanent All tab
      * plus every tab a provider registered - drawn as **Icon/Item Stack +
      * Text** (the owner's identifier format), each shrinking to fit beside
-     * the style pill. A registry with no tabs draws nothing and the pool
-     * stays unfiltered.
+     * the style pill. A registry with no tabs - or none whose list has an
+     * entry (owner: empty tabs are not displayed) - draws nothing and the
+     * pool stays unfiltered.
      */
     private void drawProviderTabs(GuiGraphics gui, int mouseX, int mouseY) {
-        List<MenuTabs.MenuTab> tabs = MenuTabs.all();
+        List<MenuTabs.MenuTab> tabs = visibleTabs();
         if (tabs.isEmpty()) {
             return;
         }
@@ -2089,8 +2092,10 @@ public final class AbilityMenuScreen extends Screen {
         }
         BarState state = ClientBarState.get();
         Bar target = targetBar(state);
-        // registered tabs (header line 2, hotbar#154): All + one per registration
-        List<MenuTabs.MenuTab> tabs = MenuTabs.all();
+        // registered tabs (header line 2, hotbar#154): All + one per
+        // registration that currently lists something - an empty tab
+        // never draws, so it can never be hit either
+        List<MenuTabs.MenuTab> tabs = visibleTabs();
         if (!tabs.isEmpty()) {
             int tabWidth = providerTabWidth(tabs);
             int tabX = LIST_LEFT;
@@ -2613,8 +2618,17 @@ public final class AbilityMenuScreen extends Screen {
      * narrow on top.
      */
     private Map<ResourceLocation, AbilityDefinition> menuPool() {
-        MenuTabs.MenuTab tab = selectedTab == null ? null
-                : MenuTabs.get(selectedTab).orElse(null);
+        return menuPool(selectedTab == null ? null
+                : MenuTabs.get(selectedTab).orElse(null));
+    }
+
+    /**
+     * One tab's pool - content, then visibility - or the global pool for
+     * the All tab (null). No search, no bar: this is what the tab can
+     * <em>ever</em> list, the base both empty-checks read.
+     */
+    private Map<ResourceLocation, AbilityDefinition> menuPool(
+            @Nullable MenuTabs.MenuTab tab) {
         Player player = Minecraft.getInstance().player;
         MenuTabs.TabContent content = tab == null ? null : tab.content();
         if (content == null) {
@@ -2629,14 +2643,62 @@ public final class AbilityMenuScreen extends Screen {
         return MenuQuery.visiblePool(scoped, player);
     }
 
+    /**
+     * The registered tabs whose own list would show at least one entry
+     * (owner's brief: empty tabs are not displayed): content, visibility
+     * and membership with no search or bar - a tab vanishes only when it
+     * can <em>never</em> list. The strip's draw and its hit-testing both
+     * read this, so their boxes can never drift; an empty result hides
+     * the strip whole (the All tab hides with it - every tab pool is a
+     * subset of the global one, so an empty strip means an empty menu).
+     */
+    private List<MenuTabs.MenuTab> visibleTabs() {
+        return MenuQuery.nonEmptyTabs(MenuTabs.all(), this::menuPool);
+    }
+
+    /**
+     * A selected tab whose own list is empty drops to All before anything
+     * reads it (owner's brief: empty tabs are not displayed - and never
+     * stay selected). Its subcategory choice falls along, kept in the
+     * memory for the tab's return - the click's own stash posture.
+     */
+    private void revalidateSelectedTab() {
+        if (selectedTab == null || tabListsSomething(selectedTab)) {
+            return;
+        }
+        subFilterMemory.put(selectedTab,
+                subCategoryFilter == null ? "" : subCategoryFilter);
+        selectedTab = null;
+        subCategoryFilter = null;
+    }
+
+    /** Whether the registered tab id currently lists something. */
+    private boolean tabListsSomething(ResourceLocation id) {
+        for (MenuTabs.MenuTab tab : visibleTabs()) {
+            if (tab.id().equals(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private List<MenuQuery.Entry> visibleRows() {
+        return visibleRows(subCategoryFilter);
+    }
+
+    /**
+     * The list with an explicit subcategory pick (null = none): the
+     * subcategory strip counts this very base minus its own filter, so a
+     * pill can never advertise rows the list would not show.
+     */
+    private List<MenuQuery.Entry> visibleRows(@Nullable String subCategory) {
         // Visibility comes from core's contract via menuPool; unlock greys at
         // draw (#135); the selected tab narrows here (#154) - namespace
         // filtering moved into registered tabs, so that parameter is null.
         MenuTabs.MenuTab tab = selectedTab == null ? null
                 : MenuTabs.get(selectedTab).orElse(null);
         return MenuQuery.visibleEntries(menuPool(), selectedBar,
-                searchBox == null ? "" : searchBox.getValue(), null, subCategoryFilter,
+                searchBox == null ? "" : searchBox.getValue(), null, subCategory,
                 null, null,
                 id -> true,
                 tab == null ? null : tab.accepts(),
