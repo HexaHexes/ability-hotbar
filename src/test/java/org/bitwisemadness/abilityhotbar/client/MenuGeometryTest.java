@@ -4,7 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilitycore.api.AbilityDefinition;
+import org.bitwisemadness.abilitycore.api.ActivationType;
+import org.bitwisemadness.abilitycore.api.AmountResolvers;
+import org.bitwisemadness.abilitycore.api.ConsumptionStrategies;
 import org.bitwisemadness.abilityhotbar.registry.MenuStyle;
 import org.junit.jupiter.api.Test;
 
@@ -348,6 +355,53 @@ class MenuGeometryTest {
                 AbilityMenuScreen.keyShaped("Has Space.key"), "spaces make it prose");
         assertFalse(
                 AbilityMenuScreen.keyShaped(".leadingdot"), "a leading dot is no key");
+    }
+
+    // ---- informational gate (owner's settable brief) ----
+
+    private static AbilityDefinition definitionWith(ActivationType type) {
+        return new AbilityDefinition("tensura.skill.gate", null,
+                ResourceLocation.fromNamespaceAndPath("tensura", "skill"),
+                type, java.util.List.of(),
+                ConsumptionStrategies.ALL, AmountResolvers.STATIC, Set.of(), Map.of());
+    }
+
+    @Test
+    void informationalGateSparePassiveAndUnknownRows() {
+        // NONE (a passive mastery) and UNKNOWN slot anywhere - the owner's
+        // "settable to the hotbars" brief; the gate is never a wall for them
+        assertFalse(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.NONE), true),
+                "a NONE row slots even under an informational tab");
+        assertFalse(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.UNKNOWN), true),
+                "an UNKNOWN row slots even under an informational tab");
+    }
+
+    @Test
+    void informationalGateHoldsCastingRowsOnInfoTabs() {
+        // #154's inert-spells rule stays for every activatable type: on an
+        // informational tab the press never slots, cycles or toggles
+        assertTrue(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.INSTANT), true));
+        assertTrue(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.CHARGED), true));
+        assertTrue(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.CHANNELLED), true));
+        assertTrue(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.TOGGLE), true));
+    }
+
+    @Test
+    void informationalGateNeverAppliesOnOrdinaryTabs() {
+        // the gate is a property of the tab, not the row: an ordinary tab
+        // passes every activation type straight through to slotting
+        assertFalse(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.INSTANT), false));
+        assertFalse(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.NONE), false));
+        assertFalse(AbilityMenuScreen.informationalGateApplies(
+                definitionWith(ActivationType.UNKNOWN), false));
     }
 
 }

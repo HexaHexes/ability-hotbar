@@ -33,6 +33,7 @@ import org.bitwisemadness.abilitycore.api.AbilityPresentation;
 import org.bitwisemadness.abilitycore.api.AbilityUnlocks;
 import org.bitwisemadness.abilitycore.api.ActivationRequest;
 import org.bitwisemadness.abilitycore.api.ActivationSource;
+import org.bitwisemadness.abilitycore.api.ActivationType;
 import org.bitwisemadness.abilitycore.api.PresentationField;
 import org.bitwisemadness.abilitycore.api.PresentationProviders;
 import org.bitwisemadness.abilitycore.api.ResourceCost;
@@ -1749,12 +1750,16 @@ public final class AbilityMenuScreen extends Screen {
         // brief): build the rows once, then measure and scroll them as
         // ONE unit - a short pane can never strand a header off-screen.
         List<PaneRow> rows = new ArrayList<>();
-        rows.add(new PaneRow.Header("ability_hotbar.menu.section.activation"));
-        rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
-                Component.translatable("ability_hotbar.menu.activation_fmt",
-                        Component.literal(MenuLabels.prettify(
-                                definition.activationType().name()))).getString(),
-                wrapW), style.action()));
+        // NONE never mentions activation (owner's brief): a passive's
+        // pane carries no Activation section at all
+        if (definition.activationType() != ActivationType.NONE) {
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.activation"));
+            rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
+                    Component.translatable("ability_hotbar.menu.activation_fmt",
+                            Component.literal(MenuLabels.prettify(
+                                    definition.activationType().name()))).getString(),
+                    wrapW), style.action()));
+        }
         String tags = metaText(definition);
         if (!tags.isEmpty()) {
             rows.add(new PaneRow.Line(
@@ -2248,9 +2253,10 @@ public final class AbilityMenuScreen extends Screen {
             if (offset < rows.size()) {
                 MenuQuery.Entry row = rows.get(offset);
                 int rowY = listTop() + relative * menuRowHeight();
-                if (informationalTab()) {
+                if (informationalGateApplies(row.definition(), informationalTab())) {
                     // info-only tab (owner's directive): rows never slot,
-                    // cycle or toggle - the pane already follows the hover
+                    // cycle or toggle; NONE/UNKNOWN pass through (the
+                    // settable brief - a passive row slots wherever it lists)
                     return true;
                 }
                 // the row-end Enable/Disable owns its rect before assigning
@@ -2726,6 +2732,24 @@ public final class AbilityMenuScreen extends Screen {
     private boolean informationalTab() {
         return selectedTab != null && MenuTabs.get(selectedTab)
                 .map(MenuTabs.MenuTab::informational).orElse(false);
+    }
+
+    /**
+     * Whether the informational-tab gate applies to this row: the tab is
+     * informational AND the ability is a casting row. Owner's settable
+     * brief - {@link ActivationType.NONE} (a passive mastery) and
+     * {@link ActivationType.UNKNOWN} (undetermined, but settable) slot
+     * anywhere, so the gate spares them; #154's inert-spells rule stays
+     * for every activatable type under an informational tab. On an
+     * ordinary tab nothing is ever gated. Package-private for the fixture.
+     */
+    static boolean informationalGateApplies(AbilityDefinition definition,
+            boolean informationalTab) {
+        if (!informationalTab) {
+            return false;
+        }
+        ActivationType type = definition.activationType();
+        return type != ActivationType.NONE && type != ActivationType.UNKNOWN;
     }
 
     @Nullable
