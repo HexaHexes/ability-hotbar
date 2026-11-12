@@ -55,6 +55,9 @@ the input.
       bar; the slot updates after the server's echo (one round trip) and
       **survives relog**.
 - [ ] Clicking another ability over an occupied slot replaces it.
+- [ ] A **NONE** (passive mastery) or **UNKNOWN** ability slots even on an
+      informational tab (the owner's settable brief); every other type
+      stays inert to click, drag, toggle and cycle there.
 - [ ] **Clear slot** empties the slot and nothing else (no data loss).
 - [ ] A previously-assigned id whose provider is gone shows in **red with
       its raw id** (diagnostic), never hidden.

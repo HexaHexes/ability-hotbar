@@ -39,14 +39,18 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "ability_core"
 type = "optional"
-# alpha.02 of the 1.1.0 line is the floor: the pane reads the mastery
+# alpha.09 of the 1.1.0 line is the floor: ActivationType.NONE - the
+# pane omits the activation line for a passive and the informational
+# gate lets NONE/UNKNOWN rows slot anywhere (a pre-NONE core has no
+# constant to reference - NoSuchFieldError at the pane).
+# Under it: alpha.02 of the floor below carries the pane's mastery
 # query answer's effect-bonus list (REQ-CORE-12 - Entry.bonuses), which
 # ships with the channel v5 bump - both sides must run the same channel
 # version (a mismatched version disconnects at negotiation), so the floor
 # names the first build that speaks v5. The row display's progress field
 # (v4), the 1.0.2 line's query exchange, and 1.0.1-alpha.02's
 # slot-scoped mode read (core#133, every mode cycle) ride along.
-versionRange = "[1.1.0-alpha.02,)"
+versionRange = "[1.1.0-alpha.09,)"
 ordering = "AFTER"
 side = "BOTH"
 
