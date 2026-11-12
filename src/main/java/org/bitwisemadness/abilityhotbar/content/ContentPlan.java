@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -47,15 +48,17 @@ public final class ContentPlan {
     private final int slotCount;
     private final List<ItemStack> stacks;
     private final List<ResourceLocation> icons;
+    private final List<Component> names;
     private final int activeSlot;
     @Nullable
     private final ResourceLocation emptyTexture;
 
     private ContentPlan(int slotCount, List<ItemStack> stacks, List<ResourceLocation> icons,
-            int activeSlot, @Nullable ResourceLocation emptyTexture) {
+            List<Component> names, int activeSlot, @Nullable ResourceLocation emptyTexture) {
         this.slotCount = slotCount;
         this.stacks = stacks;
         this.icons = icons;
+        this.names = names;
         this.activeSlot = activeSlot;
         this.emptyTexture = emptyTexture;
     }
@@ -101,10 +104,12 @@ public final class ContentPlan {
             }
             List<ItemStack> cells = new ArrayList<>(count);
             List<ResourceLocation> cellIcons = new ArrayList<>(count);
+            List<Component> cellNames = new ArrayList<>(count);
             for (int i = 0; i < count; i++) {
                 ItemStack stack = provider.slotStack(i);
                 cells.add(stack == null ? ItemStack.EMPTY : stack);
                 cellIcons.add(provider.iconId(i));
+                cellNames.add(provider.slotName(i));
             }
             int fallback = defaultActiveSlot < 0 ? -1 : Math.min(defaultActiveSlot, count - 1);
             int active = provider.activeSlot();
@@ -117,9 +122,10 @@ public final class ContentPlan {
                 active = fallback;
             }
             ResourceLocation texture = provider.emptyCellTexture();
-            // unmodifiable, NOT List.copyOf: icon entries are legitimately null
+            // unmodifiable, NOT List.copyOf: icon/name entries are legitimately null
             return new ContentPlan(count, List.copyOf(cells),
-                    Collections.unmodifiableList(cellIcons), active, texture);
+                    Collections.unmodifiableList(cellIcons),
+                    Collections.unmodifiableList(cellNames), active, texture);
         } catch (Exception e) {
             report(barId, e);
             return empty();
@@ -193,7 +199,7 @@ public final class ContentPlan {
     }
 
     private static ContentPlan empty() {
-        return new ContentPlan(0, List.of(), List.of(), -1, null);
+        return new ContentPlan(0, List.of(), List.of(), List.of(), -1, null);
     }
 
     /** @return true when nothing may be drawn this frame */
@@ -224,6 +230,16 @@ public final class ContentPlan {
     @Nullable
     public ResourceLocation iconAt(int index) {
         return index >= 0 && index < icons.size() ? icons.get(index) : null;
+    }
+
+    /**
+     * @param index the cell index
+     * @return the cell's menu-pill name, or null when the provider ships
+     *         none (the icon-only pill)
+     */
+    @Nullable
+    public Component nameAt(int index) {
+        return index >= 0 && index < names.size() ? names.get(index) : null;
     }
 
     /** @return the empty-cell sprite, or null for the hotbar's own chrome */

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -309,6 +310,39 @@ class ContentPlanTest {
                 "an icon-only provider ships no stacks");
         assertEquals(ICON, plan.iconAt(0), "cell 0 renders the texture");
         assertEquals(ICON, plan.iconAt(1), "cell 1 renders the texture");
+    }
+
+    @Test
+    void namesFollowTheProviderAndDefaultToNull() {
+        // the menu pill's name hook: default = null everywhere (icon-only
+        // pills, byte-identical for existing providers); a named provider's
+        // answer rides the plan per cell and the menu splits it beside the icon
+        ContentPlan plain = ContentPlan.build(BAR, minimal(3));
+        for (int i = 0; i < plain.slotCount(); i++) {
+            assertNull(plain.nameAt(i), "no name hook -> the icon-only pill, unchanged");
+        }
+
+        HotbarContentProvider named = new HotbarContentProvider() {
+            @Override
+            public int slotCount() {
+                return 2;
+            }
+
+            @Override
+            public ItemStack slotStack(int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public Component slotName(int index) {
+                return Component.literal(index == 0 ? "Fireball" : "Blaze");
+            }
+        };
+        ContentPlan plan = ContentPlan.build(BAR, named);
+        assertFalse(plan.isEmpty());
+        assertEquals(Component.literal("Fireball"), plan.nameAt(0), "cell 0's name");
+        assertEquals(Component.literal("Blaze"), plan.nameAt(1), "cell 1's name");
+        assertNull(plan.nameAt(2), "outside the cells answers nothing");
     }
 
     @Test

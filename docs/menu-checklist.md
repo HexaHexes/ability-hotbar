@@ -22,6 +22,12 @@ the input.
       is never listed; empty bars are never hidden (no skip-empty here).
 - [ ] Selecting a tab shows that bar's slots with their current contents;
       selecting a slot marks it as the assignment target.
+- [ ] Slot pills are the **same size on every bar** - the assignable nine, a
+      shorter bar and a provider strip (e.g. the ISS Spells tab) all share
+      one cell width; the strip just ends earlier on a shorter bar.
+- [ ] A provider pill whose provider ships a **name** (the ISS spellbook
+      strip) shows it beside the icon, wrapped to two lines max; a provider
+      without the hook stays icon-only exactly as before.
 - [ ] The world does **not** pause while the menu is open.
 
 ## Search and filters (AC1)

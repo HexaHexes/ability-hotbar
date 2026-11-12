@@ -47,16 +47,20 @@ class MenuGeometryTest {
     }
 
     @Test
-    void slotWidthStretchesToFillTheRowMinusTheCluster() {
-        // owner's stretch brief: the row shares everything left of the chip
-        // cluster; the divisor caps at NINE so both 18-slot rows align
+    void slotWidthIsTheSameSizeForEveryBarIncludingProviders() {
+        // owner's uniform-pill brief: the row shares everything left of the
+        // chip cluster AND every bar divides by NINE - a short bar or a
+        // provider strip draws the same-size pills, its row just ends earlier
         assertEquals(31, AbilityMenuScreen.slotWidth(9, 400, 100),
                 "(400-16-100)/9 floored");
         assertEquals(AbilityMenuScreen.slotWidth(9, 400, 100),
                 AbilityMenuScreen.slotWidth(18, 400, 100),
                 "18 slots divide by the same nine: aligned rows");
-        assertEquals(96, AbilityMenuScreen.slotWidth(4, 400, 0),
-                "no cluster: cells stretch past the old 80px cap");
+        assertEquals(AbilityMenuScreen.slotWidth(9, 400, 100),
+                AbilityMenuScreen.slotWidth(4, 400, 100),
+                "a 4-slot provider strip draws the assignable bar's pills");
+        assertEquals(42, AbilityMenuScreen.slotWidth(4, 400, 0),
+                "no cluster: (400-16)/9");
         assertEquals(5, AbilityMenuScreen.slotWidth(9, 64, 0),
                 "narrow windows shrink cells");
         assertEquals(1, AbilityMenuScreen.slotWidth(9, 24, 0), "the 1px floor");

@@ -1021,8 +1021,10 @@ public final class AbilityMenuScreen extends Screen {
             drawSelectionRing(gui, boxX, boxY, side);
             String modeLabel = plan != null ? null : slotModeLabel(target, i);
             // owner: the name and the mode wrap INTO each other - two
-            // lines total, the overflow truncated to fit the cell
-            List<FormattedCharSequence> nameLines = plan != null ? List.of()
+            // lines total, truncated to the cell; a provider cell shows
+            // its own name when the provider ships one (ISS), else none
+            List<FormattedCharSequence> nameLines = plan != null
+                    ? providerNameLines(plan, i, nameWidth)
                     : this.font.split(slotText(target, i, modeLabel,
                             selected ? style.text() : style.muted()), nameWidth);
             // the block sits centred: its position follows how many
@@ -1036,6 +1038,17 @@ public final class AbilityMenuScreen extends Screen {
                 nameY += 9;
             }
         }
+    }
+
+    /**
+     * A provider cell's name lines for its menu pill: the provider's own
+     * name split to the cell's width, or none when it ships no name -
+     * an icon-only provider's pill stays exactly as it was.
+     */
+    private List<FormattedCharSequence> providerNameLines(ContentPlan plan, int index,
+            int nameWidth) {
+        Component name = plan.nameAt(index);
+        return name == null ? List.of() : this.font.split(name, nameWidth);
     }
 
     /**
@@ -1187,19 +1200,20 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The width of one slot cell (owner's stretch brief): a row shares
-     * everything left of the chip cluster, so cells fill the horizontal
-     * space instead of capping - nine stretched cells plus the cluster
-     * reach the right edge. Floored at 1px; the row divides by
-     * {@link #MAX_ROW_SLOTS} (or fewer slots) so both rows of an 18-slot
-     * bar align. Package-private for the geometry fixture.
+     * The width of one slot cell (owner's uniform-pill brief): a row
+     * shares everything left of the chip cluster, so cells fill the
+     * horizontal space instead of capping - and EVERY bar divides by
+     * {@link #MAX_ROW_SLOTS}, never by its own slot count: the assignable
+     * nine, a shorter bar and a provider strip (the ISS spellbook cells)
+     * all draw the same-size pills, the row just ending earlier. Floored
+     * at 1px; both rows of an 18-slot bar still align. Package-private
+     * for the geometry fixture.
      */
     static int slotWidth(int slotCount, int screenWidth, int reserved) {
         if (slotCount <= 0) {
             return 0;
         }
-        int rowSlots = Math.min(slotCount, MAX_ROW_SLOTS);
-        return Math.max(1, (screenWidth - 16 - reserved) / rowSlots);
+        return Math.max(1, (screenWidth - 16 - reserved) / MAX_ROW_SLOTS);
     }
 
     /**
