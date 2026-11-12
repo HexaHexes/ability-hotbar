@@ -1,5 +1,6 @@
 package org.bitwisemadness.abilityhotbar.content;
 
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -98,6 +99,23 @@ public interface HotbarContentProvider {
      */
     @Nullable
     default ResourceLocation iconId(int index) {
+        return null;
+    }
+
+    /**
+     * The cell's player-facing name for the menu's slot pill: the menu
+     * draws it beside the icon when present (the ISS spellbook strip
+     * shows each spell's name). {@code null} (the default) = no name -
+     * the pill stays icon-only, byte-identical for every existing
+     * provider. Read client-side like every other hook, guarded by
+     * {@code ContentPlan} (a throw fails the frame closed, logged once);
+     * the HUD ignores this hook - its cells have no name line.
+     *
+     * @param index in {@code [0, slotCount())} by contract
+     * @return the cell's name, or null for none
+     */
+    @Nullable
+    default Component slotName(int index) {
         return null;
     }
 
