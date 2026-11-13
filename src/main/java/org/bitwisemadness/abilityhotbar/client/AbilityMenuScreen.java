@@ -344,6 +344,9 @@ public final class AbilityMenuScreen extends Screen {
         }
 
         BarState state = ClientBarState.get();
+        // a stale hover never survives an early return (no state = no strip
+        // = no pill tooltip)
+        stripTooltip = null;
         if (state == null) {
             gui.drawString(this.font, Component.translatable("ability_hotbar.menu.waiting"),
                     LIST_LEFT, listTop(), style.muted());
@@ -373,6 +376,13 @@ public final class AbilityMenuScreen extends Screen {
         // the dragged ability's icon rides the cursor (owner's drag brief)
         if (dragAbilityId != null) {
             drawDragGhost(gui, mouseX, mouseY);
+        }
+        // The hovered provider pill's tooltip draws LAST (the owner's
+        // provider toolbar brief): flushed first so it sits over the
+        // detail pane and the drag ghost, never under them.
+        if (stripTooltip != null && !stripTooltip.isEmpty()) {
+            gui.flush();
+            gui.renderComponentTooltip(this.font, stripTooltip, mouseX, mouseY);
         }
     }
 
@@ -923,6 +933,25 @@ public final class AbilityMenuScreen extends Screen {
     private ContentPlan stripPlan;
 
     /**
+     * The provider the strip's plan came from (the pill tooltip seam's
+     * guarded call needs the bar id to name, and the provider itself) -
+     * set together with {@link #stripPlan} in {@link #providerPlan()}.
+     */
+    @Nullable
+    private ResourceLocation stripBarId;
+
+    @Nullable
+    private HotbarContentProvider stripProvider;
+
+    /**
+     * The hovered provider pill's tooltip lines for this frame (the
+     * owner's provider toolbar brief): captured in the strip's draw and
+     * rendered last, so nothing paints over it; null/empty = none.
+     */
+    @Nullable
+    private List<Component> stripTooltip;
+
+    /**
      * The assignable strip's visible cell count (owner's brief: the menu
      * respects the client's slot setting too): the bar's slots clamped by
      * {@code display.slotsPerBar} through HotbarConfig - the SAME rule
@@ -956,6 +985,8 @@ public final class AbilityMenuScreen extends Screen {
      */
     @Nullable
     private ContentPlan providerPlan() {
+        stripBarId = null;
+        stripProvider = null;
         ResourceLocation barId = selectedTab == null ? null
                 : MenuTabs.barForTab(selectedTab).orElse(null);
         if (barId == null) {
@@ -965,6 +996,8 @@ public final class AbilityMenuScreen extends Screen {
         if (provider == null) {
             return null;
         }
+        stripBarId = barId;
+        stripProvider = provider;
         ContentPlan plan = ContentPlan.build(barId, provider, -1);
         return plan.isEmpty() ? null : plan;
     }
@@ -972,6 +1005,7 @@ public final class AbilityMenuScreen extends Screen {
     /** The bottom stack's chamfered slot cells: click selects the target slot. */
     private void drawSlotCells(GuiGraphics gui, int mouseX, int mouseY, @Nullable Bar target) {
         ContentPlan plan = stripPlan;
+        stripTooltip = null;
         int slotCount = stripSlotCount(target);
         if (slotCount == 0) {
             return;
@@ -1041,6 +1075,14 @@ public final class AbilityMenuScreen extends Screen {
                         0, 0, iconRect[2], iconRect[2], iconRect[2], iconRect[2]);
             }
             drawSelectionRing(gui, boxX, boxY, side);
+            // The pill's hover tooltip (owner's provider toolbar brief):
+            // only on the icon box, never mid-drag - extracted lazily for
+            // this ONE cell, not 18x per frame
+            if (plan != null && dragAbilityId == null
+                    && inside(mouseX, mouseY, boxX, boxY, side, side)) {
+                stripTooltip = ContentPlan.cellTooltip(stripBarId, stripProvider,
+                        this.minecraft.player, i);
+            }
             String modeLabel = plan != null ? null : slotModeLabel(target, i);
             // owner: the name and the mode wrap INTO each other - two
             // lines total, truncated to the cell; a provider cell shows

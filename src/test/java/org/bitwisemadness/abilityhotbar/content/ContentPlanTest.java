@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Optional;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -402,6 +403,65 @@ class ContentPlanTest {
                     "still the global tuple next frame");
             assertEquals(1, reportsFor(logs, BAR),
                     "the failure is logged once per bar, not per frame: " + logs.messages());
+        }
+    }
+
+    @Test
+    void cellTooltipFollowsTheProviderAndFailsClosedToNoTooltip() {
+        // the pill hover seam (owner's provider toolbar brief): default =
+        // no tooltip (existing providers byte-identical); a provider's
+        // lines come back per cell; a throw yields none, logged once
+        assertEquals(List.of(), ContentPlan.cellTooltip(BAR, minimal(3), null, 0),
+                "no hook -> no tooltip, byte-identical for existing providers");
+
+        HotbarContentProvider told = new HotbarContentProvider() {
+            @Override
+            public int slotCount() {
+                return 2;
+            }
+
+            @Override
+            public ItemStack slotStack(int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public List<Component> slotTooltip(Player player, int index) {
+                return index == 0 ? List.of(Component.literal("Fireball")) : null;
+            }
+        };
+        assertEquals(List.of(Component.literal("Fireball")),
+                ContentPlan.cellTooltip(BAR, told, null, 0), "the hovered cell's lines");
+        assertEquals(List.of(), ContentPlan.cellTooltip(BAR, told, null, 1),
+                "null = no tooltip for that cell");
+        assertEquals(List.of(), ContentPlan.cellTooltip(BAR, told, null, 9),
+                "outside the cells answers nothing");
+
+        HotbarContentProvider boom = new HotbarContentProvider() {
+            @Override
+            public int slotCount() {
+                return 2;
+            }
+
+            @Override
+            public ItemStack slotStack(int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public List<Component> slotTooltip(Player player, int index) {
+                throw new IllegalStateException("tooltip boom");
+            }
+        };
+        try (LogCapture logs = LogCapture.forLogger(ContentPlan.class)) {
+            assertEquals(List.of(), ContentPlan.cellTooltip(BAR, boom, null, 0),
+                    "a throwing hook produces no tooltip, never a crash");
+            assertEquals(List.of(), ContentPlan.cellTooltip(BAR, boom, null, 1),
+                    "still no tooltip next hover");
+            assertEquals(1, reportsFor(logs, BAR),
+                    "the failure is logged once per bar, not per hover: " + logs.messages());
+            assertTrue(logs.messages().stream().anyMatch(m -> m.contains("tooltip boom")),
+                    "the failure must be named: " + logs.messages());
         }
     }
 }

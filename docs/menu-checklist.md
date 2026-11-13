@@ -38,6 +38,10 @@ the input.
 - [ ] A provider pill whose provider ships a **name** (the ISS spellbook
       strip) shows it beside the icon, wrapped to two lines max; a provider
       without the hook stays icon-only exactly as before.
+- [ ] Hovering a provider pill's **ability icon** shows that provider's
+      tooltip (for ISS: the matching scroll's spellbook tooltip), drawn
+      above the detail pane and the drag ghost; a provider without the
+      hook shows nothing, and the tooltip never appears mid-drag.
 - [ ] The world does **not** pause while the menu is open.
 
 ## Search and filters (AC1)
