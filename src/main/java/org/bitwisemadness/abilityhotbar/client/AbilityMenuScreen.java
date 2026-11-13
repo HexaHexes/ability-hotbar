@@ -3,12 +3,12 @@ package org.bitwisemadness.abilityhotbar.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -72,7 +72,7 @@ import org.jetbrains.annotations.Nullable;
  * the title top-left and the slot meter top-right, one collapsed filter
  * strip (search pill + subcategory tabs), the ability list narrowed to the
  * left two thirds with the <b>rightmost third reserved as the detail pane</b>
- * (name, activation, tags/cost, stats and the full description - drawn
+ * (name, description, status or mastery bonuses, activation - drawn
  * last, so list chrome can never paint over it), and a bottom stack of
  * chamfered slot cells that stretches across the width - up to nine per
  * row (18 slots split into two aligned rows), filled cells showing the
@@ -1750,14 +1750,14 @@ public final class AbilityMenuScreen extends Screen {
     }
     /**
      * The rightmost third (owner's brief, superseding #27's no-sidebar
-     * exclusion): the ability's name, activation requirement, tags
-     * (categories are gone from tooltips), declared stats, live
-     * presentation fields, the mastery bonuses and the FULL description -
-     * wrapped and wheel-scrolled inside the pane (the toggle state and its
-     * button live in the list row now - owner's brief). Sticky: the last hovered
-     * ability stays when the pointer leaves the list; before any hover the
-     * selected slot's ability shows. Drawn last in render(), so nothing
-     * can paint over it (owner's layering brief).
+     * exclusion), reading name -> description -> status (replaced by the
+     * mastery bonuses when the ability can earn core XP) -> activation:
+     * wrapped and wheel-scrolled inside the pane. The tags/cost line,
+     * Stats and Modes sections are gone (owner's drop brief), and the
+     * toggle state and its button live in the list row. Sticky: the last
+     * hovered ability stays when the pointer leaves the list; before any
+     * hover the selected slot's ability shows. Drawn last in render(), so
+     * nothing can paint over it (owner's layering brief).
      */
     private void drawDetailPane(GuiGraphics gui, @Nullable Bar target) {
         MenuStyle style = style();
@@ -1795,82 +1795,12 @@ public final class AbilityMenuScreen extends Screen {
         gui.drawString(this.font, name, textX, top + 4, style.text());
         gui.fill(textX, top + 14, textX + this.font.width(name), top + 15, style.accent());
         int lineY = top + 16;
-        // The info section splits into labelled subsections (owner's
-        // brief): build the rows once, then measure and scroll them as
-        // ONE unit - a short pane can never strand a header off-screen.
+        // The pane reads as ONE unit (owner's reorder brief): the name
+        // above, then description, status - replaced by the mastery
+        // bonuses for core-XP abilities - and activation last
         List<PaneRow> rows = new ArrayList<>();
-        // NONE never mentions activation (owner's brief): a passive's
-        // pane carries no Activation section at all
-        if (definition.activationType() != ActivationType.NONE) {
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.activation"));
-            rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
-                    Component.translatable("ability_hotbar.menu.activation_fmt",
-                            Component.literal(MenuLabels.prettify(
-                                    definition.activationType().name()))).getString(),
-                    wrapW), style.action()));
-        }
-        String tags = metaText(definition);
-        if (!tags.isEmpty()) {
-            rows.add(new PaneRow.Line(
-                    this.font.plainSubstrByWidth(tags, wrapW), style.muted()));
-        }
-        if (!definition.stats().isEmpty()) {
-            // issue #119: declared stats in declaration order, labels
-            // resolved through MenuLabels
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.stats"));
-            String stats = definition.stats().stream()
-                    .map(stat -> MenuLabels.stat(stat.labelKey()).getString()
-                            + ": " + stat.value())
-                    .collect(Collectors.joining("   "));
-            rows.add(new PaneRow.Line(
-                    this.font.plainSubstrByWidth(stats, wrapW), style.action()));
-        }
-        Optional<AbilityPresentation> presentation = presentationOf(id);
-        // Mastery meters live on the row now (owner: remove them from the
-        // description section) - the pane keeps only the text fields
-        List<PresentationField> paneFields = presentation
-                .map(AbilityPresentation::fields).orElse(List.of()).stream()
-                .filter(field -> field.kind() != PresentationField.Kind.PROGRESS)
-                .toList();
-        if (!paneFields.isEmpty()) {
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.status"));
-            for (PresentationField field : paneFields) {
-                rows.add(new PaneRow.FieldRow(field));
-            }
-        }
-        // Mastery bonuses (REQ-CORE-12): the server's current effect
-        // multipliers for this ability - only axes its spec declares, so
-        // an undeclared ability shows nothing rather than a fake x1.00
-        var bonuses = CoreMasteryCompat.bonusesOf(id);
-        if (!bonuses.isEmpty()) {
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.bonuses"));
-            for (var bonus : bonuses) {
-                rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
-                        Component.translatable("ability_hotbar.menu.bonus_line",
-                                axisLabel(bonus.axis()),
-                                bonusPercent(bonus.multiplier())).getString(),
-                        wrapW), style.mastery()));
-            }
-        }
-        // Available modes each get a line, with the provider's mode
-        // description when it ships one under the mode key (owner's brief:
-        // multi-mode arts; the button moved to the list row).
-        Optional<List<AbilityModes.Mode>> modes = AbilityModes.get(id);
-        if (modes.isPresent() && !modes.get().isEmpty()) {
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.modes"));
-            for (AbilityModes.Mode mode : modes.get()) {
-                rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
-                        MenuLabels.named(mode.nameKey()).getString(), wrapW),
-                        style.action()));
-                if (I18n.exists(mode.nameKey() + ".description")) {
-                    rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
-                            Component.translatable(mode.nameKey() + ".description")
-                                    .getString(), wrapW), style.muted()));
-                }
-            }
-        }
-        // the FULL description (brief): wrapped and clipped to the pane,
-        // scrollable with everything above it when anything overflows
+        // the FULL description first (owner's order): wrapped and clipped
+        // to the pane, scrollable with everything below it on overflow
         String description = definition.description().orElse(null);
         Component descriptionComponent = description == null ? null
                 : descriptionComponent(description);
@@ -1879,6 +1809,47 @@ public final class AbilityMenuScreen extends Screen {
                     "ability_hotbar.menu.section.description"));
             rows.add(new PaneRow.Wrapped(
                     this.font.split(descriptionComponent, wrapW)));
+        }
+        // Status, or the mastery bonuses it BECOMES for an ability that
+        // can earn core XP (owner: bonuses replace status there); the
+        // live fields stand in while the snapshot has not arrived
+        var bonuses = CoreMasteryCompat.bonusesOf(id);
+        if (CoreMasteryCompat.declared(id) && !bonuses.isEmpty()) {
+            // REQ-CORE-12: the server's current effect multipliers - only
+            // axes its spec declares, so an undeclared ability shows
+            // nothing rather than a fake x1.00
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.bonuses"));
+            for (var bonus : bonuses) {
+                rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
+                        Component.translatable("ability_hotbar.menu.bonus_line",
+                                axisLabel(bonus.axis()),
+                                bonusPercent(bonus.multiplier())).getString(),
+                        wrapW), style.mastery()));
+            }
+        } else {
+            Optional<AbilityPresentation> presentation = presentationOf(id);
+            // Mastery meters live on the row now (owner: remove them from
+            // the description section) - the pane keeps only text fields
+            List<PresentationField> paneFields = presentation
+                    .map(AbilityPresentation::fields).orElse(List.of()).stream()
+                    .filter(field -> field.kind() != PresentationField.Kind.PROGRESS)
+                    .toList();
+            if (!paneFields.isEmpty()) {
+                rows.add(new PaneRow.Header("ability_hotbar.menu.section.status"));
+                for (PresentationField field : paneFields) {
+                    rows.add(new PaneRow.FieldRow(field));
+                }
+            }
+        }
+        // NONE never mentions activation (owner's brief): a passive's
+        // pane carries no Activation section at all - and it reads last
+        if (definition.activationType() != ActivationType.NONE) {
+            rows.add(new PaneRow.Header("ability_hotbar.menu.section.activation"));
+            rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
+                    Component.translatable("ability_hotbar.menu.activation_fmt",
+                            Component.literal(MenuLabels.prettify(
+                                    definition.activationType().name()))).getString(),
+                    wrapW), style.action()));
         }
 
         int contentTop = lineY + 2;
@@ -2003,28 +1974,6 @@ public final class AbilityMenuScreen extends Screen {
     /** The live presentation for one ability (core's contract, issue #148). */
     private Optional<AbilityPresentation> presentationOf(ResourceLocation id) {
         return PresentationProviders.present(this.minecraft.player, id);
-    }
-
-    /**
-     * The tags/cost line for the detail pane: categories never render in
-     * tooltips (owner's brief #7), and subcategory tags route through
-     * {@link MenuLabels#subcategory} so {@code type:unique} reaches the
-     * player as "Unique" - properly capitalised (brief #8).
-     */
-    /**
-     * The tags line: the subcategory tag reads as its label, the rest
-     * comma-joined (brief #8) - costs live on the row now (owner's
-     * right-aligned Cost: label + value).
-     */
-    private static String metaText(AbilityDefinition definition) {
-        if (definition.tags().isEmpty()) {
-            return "";
-        }
-        return definition.tags().stream()
-                .map(tag -> tag.startsWith(MenuQuery.SUBCATEGORY_PREFIX)
-                        ? MenuLabels.subcategory(tag).getString()
-                        : MenuLabels.tag(tag).getString())
-                .collect(Collectors.joining(", "));
     }
 
     /**
@@ -2452,10 +2401,14 @@ public final class AbilityMenuScreen extends Screen {
             return true;
         }
         if (pressedRowId != null) {
-            // movement past the threshold promotes the press to a drag
+            // movement past the threshold promotes the press to a drag -
+            // the owner's gate refuses locked and NONE/UNKNOWN rows, and
+            // a refused press is consumed: only a true click still assigns
             if (Math.abs(mouseX - pressStartX) + Math.abs(mouseY - pressStartY)
                     > HotbarClientConfig.DRAG_THRESHOLD_PX.get()) {
-                dragAbilityId = pressedRowId;
+                if (mayDragToHotbar(pressedRowId)) {
+                    dragAbilityId = pressedRowId;
+                }
                 pressedRowId = null;
             }
             return true;
@@ -2692,16 +2645,18 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * One tab's pool - content, then visibility - or the global pool for
-     * the All tab (null). No search, no bar: this is what the tab can
-     * <em>ever</em> list, the base both empty-checks read.
+     * One tab's pool - content, then visibility, then the locked-mastery
+     * hide - or the global pool for the All tab (null). No search, no
+     * bar: this is what the tab can <em>ever</em> list, the base both
+     * empty-checks read.
      */
     private Map<ResourceLocation, AbilityDefinition> menuPool(
             @Nullable MenuTabs.MenuTab tab) {
         Player player = Minecraft.getInstance().player;
         MenuTabs.TabContent content = tab == null ? null : tab.content();
         if (content == null) {
-            return MenuQuery.visiblePool(AbilityDiscovery.entries(), player);
+            return withoutLockedMasteries(
+                    MenuQuery.visiblePool(AbilityDiscovery.entries(), player), player);
         }
         Map<ResourceLocation, AbilityDefinition> scoped = new HashMap<>();
         for (ResourceLocation id : content.entries(player)) {
@@ -2709,7 +2664,37 @@ public final class AbilityMenuScreen extends Screen {
                 AbilityDiscovery.get(id).ifPresent(definition -> scoped.put(id, definition));
             }
         }
-        return MenuQuery.visiblePool(scoped, player);
+        return withoutLockedMasteries(MenuQuery.visiblePool(scoped, player), player);
+    }
+
+    /**
+     * The owner's hide brief: a greyed PASSIVE MASTERY row (NONE and
+     * provably unlearned) is a locked mastery and never lists - the
+     * cast-to-unlock rows appear only once unlocked. Unknown unlock state
+     * stays (never-guess) and every other row keeps its grey; visibility,
+     * tabs, counts and the list all read the same filtered pool, so they
+     * can never disagree about a hidden row.
+     */
+    private static Map<ResourceLocation, AbilityDefinition> withoutLockedMasteries(
+            Map<ResourceLocation, AbilityDefinition> pool, @Nullable Player player) {
+        Map<ResourceLocation, AbilityDefinition> out = new LinkedHashMap<>(pool.size());
+        pool.forEach((id, definition) -> {
+            if (!hiddenLockedMastery(id, definition, player)) {
+                out.put(id, definition);
+            }
+        });
+        return out;
+    }
+
+    /**
+     * Whether one row hides: only a PASSIVE MASTERY (NONE) can hide, and
+     * only when the unlock read proves it unlearned - unknown never hides
+     * (REQ-HOT-08's never-guess). Package-private for the fixture.
+     */
+    static boolean hiddenLockedMastery(ResourceLocation id, AbilityDefinition definition,
+            @Nullable Player player) {
+        return definition.activationType() == ActivationType.NONE
+                && UnlockRule.provenUnlearned(AbilityUnlocks.isLearned(player, id));
     }
 
     /**
@@ -2795,6 +2780,35 @@ public final class AbilityMenuScreen extends Screen {
     static boolean informationalGateApplies(AbilityDefinition definition,
             boolean informationalTab) {
         if (!informationalTab) {
+            return false;
+        }
+        ActivationType type = definition.activationType();
+        return type != ActivationType.NONE && type != ActivationType.UNKNOWN;
+    }
+
+    /**
+     * Whether a row press may promote to a hotbar drag (owner's brief): a
+     * locked ability (provably unlearned) and the passive/undetermined
+     * types (NONE/UNKNOWN) never drag to the hotbar - the press still
+     * click-assigns in place. Never-guess: unknown unlock state drags as
+     * before, and an id the registry no longer knows does not.
+     */
+    private boolean mayDragToHotbar(ResourceLocation id) {
+        AbilityDefinition definition = AbilityDiscovery.get(id).orElse(null);
+        if (definition == null) {
+            return false;
+        }
+        return dragGateAllows(definition,
+                UnlockRule.provenUnlearned(AbilityUnlocks.isLearned(this.minecraft.player, id)));
+    }
+
+    /**
+     * The pure drag gate: locked never drags, and neither does the
+     * passive/undetermined pair (NONE/UNKNOWN). Package-private for the
+     * fixture.
+     */
+    static boolean dragGateAllows(AbilityDefinition definition, boolean locked) {
+        if (locked) {
             return false;
         }
         ActivationType type = definition.activationType();
