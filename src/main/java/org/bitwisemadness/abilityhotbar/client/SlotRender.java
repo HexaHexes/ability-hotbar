@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
 import org.bitwisemadness.abilitycore.api.AbilityAvailability;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
+import org.bitwisemadness.abilitycore.api.IconProviders;
 import org.bitwisemadness.abilitycore.api.ResourceCost;
 import org.bitwisemadness.abilityhotbar.state.BarState;
 import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
@@ -76,6 +78,28 @@ public record SlotRender(
             boolean selected,
             Optional<AbilityAvailability> availability,
             Optional<AbilityDefinition> definition) {
+        return resolve(assignment, selected, availability, definition, null);
+    }
+
+    /**
+     * Resolves one slot's render decision, with the player for the icon provider chain.
+     *
+     * @param assignment      the slot's assignment (null when out of range)
+     * @param selected        whether this slot is the selected one
+     * @param availability    overlay tuple for the slot's id, or empty when none
+     * @param definition      registry definition for the slot's id, or empty when
+     *                        absent (which also makes an assigned slot inert)
+     * @param player          the player being rendered, or null (providers then
+     *                        answer with no player context - the contract's
+     *                        test/unknown case)
+     * @return the decision; inert when assigned but unresolvable
+     */
+    public static SlotRender resolve(
+            @Nullable SlotAssignment assignment,
+            boolean selected,
+            Optional<AbilityAvailability> availability,
+            Optional<AbilityDefinition> definition,
+            @Nullable Player player) {
 
         if (assignment == null || !assignment.isAssigned() || assignment.abilityId() == null) {
             // Empty slot: nothing to draw, selection still applies (a cursor can
@@ -102,12 +126,19 @@ public record SlotRender(
         // declared entry (the overlay contract's representative cost).
         ResourceCost cost = avail.cost().knownValue().orElse(RepresentativeCost.of(def));
 
-        return new SlotRender(true, false, selected, def.iconId(), cooldown,
+        // The documented icon order (core#62, hotbar#217): the ability's
+        // provider answers first, the definition's static icon is the
+        // fallback; an absent or null provider answer is no error.
+        ResourceLocation icon = IconProviders.iconFor(player, assignment.abilityId())
+                .orElse(def.iconId());
+
+        return new SlotRender(true, false, selected, icon, cooldown,
                 avail.availability(), cost);
     }
 
     /**
-     * Resolves every slot of the bar at once.
+     * Resolves every slot of the bar at once (no player context: providers
+     * answer as if unknown - the contract's test case).
      *
      * @param state         the synced bar state (null before first snapshot)
      * @param availability  lookup for a slot id's overlay tuple (may return empty)
@@ -118,6 +149,24 @@ public record SlotRender(
             @Nullable BarState state,
             Function<ResourceLocation, Optional<AbilityAvailability>> availability,
             Function<ResourceLocation, Optional<AbilityDefinition>> definition) {
+        return resolveAll(state, availability, definition, null);
+    }
+
+    /**
+     * Resolves every slot of the bar at once, passing the player to the
+     * icon provider chain.
+     *
+     * @param state         the synced bar state (null before first snapshot)
+     * @param availability  lookup for a slot id's overlay tuple (may return empty)
+     * @param definition    lookup for a slot id's registry definition
+     * @param player        the player being rendered, or null
+     * @return one decision per slot; empty list when no state has synced yet
+     */
+    public static List<SlotRender> resolveAll(
+            @Nullable BarState state,
+            Function<ResourceLocation, Optional<AbilityAvailability>> availability,
+            Function<ResourceLocation, Optional<AbilityDefinition>> definition,
+            @Nullable Player player) {
 
         if (state == null) {
             return List.of();
@@ -133,7 +182,7 @@ public record SlotRender(
                     id == null ? Optional.empty() : availability.apply(id);
             Optional<AbilityDefinition> def =
                     id == null ? Optional.empty() : definition.apply(id);
-            out.add(resolve(assignment, selected, avail, def));
+            out.add(resolve(assignment, selected, avail, def, player));
         }
         return List.copyOf(out);
     }

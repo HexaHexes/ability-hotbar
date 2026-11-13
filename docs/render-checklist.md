@@ -17,6 +17,9 @@ run before merge. Tick each item in a dev client with `ability_core` +
 - [ ] Up to nine slots render with the vanilla hotbar texture language.
 - [ ] An assigned ability shows its icon; an assigned id with **no** icon
       resolves to the neutral placeholder (no blank, no crash).
+- [ ] An assigned ability with a declared `IconProvider` shows the provider's
+      texture instead of the definition's static icon; no provider, or a
+      provider answering null, changes nothing (core#62 chain, hotbar#217).
 - [ ] An **empty** slot shows the neutral background.
 - [ ] An **inert** slot (provider removed / unknown id) renders the red
       diagnostic tint, no icon — never a wrong value.

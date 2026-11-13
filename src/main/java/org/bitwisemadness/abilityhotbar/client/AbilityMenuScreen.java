@@ -34,6 +34,7 @@ import org.bitwisemadness.abilitycore.api.AbilityUnlocks;
 import org.bitwisemadness.abilitycore.api.ActivationRequest;
 import org.bitwisemadness.abilitycore.api.ActivationSource;
 import org.bitwisemadness.abilitycore.api.ActivationType;
+import org.bitwisemadness.abilitycore.api.IconProviders;
 import org.bitwisemadness.abilitycore.api.PresentationField;
 import org.bitwisemadness.abilitycore.api.PresentationProviders;
 import org.bitwisemadness.abilitycore.api.ResourceCost;
@@ -384,7 +385,10 @@ public final class AbilityMenuScreen extends Screen {
         if (found.isEmpty()) {
             return;
         }
-        ResourceLocation icon = found.get().iconId();
+        // The documented icon order (core#62, hotbar#217): the provider's
+        // answer wins, the definition's static icon is the fallback.
+        ResourceLocation icon = IconProviders.iconFor(this.minecraft.player, dragAbilityId)
+                .orElse(found.get().iconId());
         if (icon == null) {
             return;
         }
@@ -1433,7 +1437,10 @@ public final class AbilityMenuScreen extends Screen {
                 // the active row's left-bar marker (their list selection)
                 gui.fill(LIST_LEFT, y, LIST_LEFT + 2, y + menuRowHeight() - 2, style.accent());
             }
-            ResourceLocation icon = row.definition().iconId();
+            // The documented icon order (core#62, hotbar#217): the provider's
+            // answer wins, the static icon is the fallback, null draws nothing.
+            ResourceLocation icon = IconProviders.iconFor(this.minecraft.player, row.id())
+                    .orElse(row.definition().iconId());
             if (icon != null && HotbarClientConfig.SHOW_ICONS.get()) {
                 // The brief's doubled size: the whole texture squeezed into
                 // the one doubled box, exactly the bar-icons technique.
