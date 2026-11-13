@@ -110,6 +110,22 @@ class CoreMasteryCompatTest {
     }
 
     @Test
+    void xpTextClampsToTwoDecimals() {
+        // owner's brief: the live pool's tail stops at the eye's
+        // precision - rounded, never padded, never locale-shaped
+        assertEquals("45.57", CoreMasteryCompat.formatXp(45.567),
+                "two decimals, rounded");
+        assertEquals("45.56", CoreMasteryCompat.formatXp(45.564),
+                "never past two decimals");
+        assertEquals("45.2", CoreMasteryCompat.formatXp(45.2),
+                "a zero second decimal never pads the tail");
+        assertEquals("46", CoreMasteryCompat.formatXp(45.999),
+                "a rounding whole reads whole");
+        assertEquals("-45.57", CoreMasteryCompat.formatXp(-45.567),
+                "negatives clamp the same way");
+    }
+
+    @Test
     void declaredGatesOnCoreDeclarations() {
         assertFalse(CoreMasteryCompat.declared(ABILITY),
                 "undeclared abilities never render the section");

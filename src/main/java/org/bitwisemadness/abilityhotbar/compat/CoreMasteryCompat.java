@@ -126,12 +126,26 @@ public final class CoreMasteryCompat {
         return MasteryDeclarations.has(id);
     }
 
-    /** Honest XP text: whole pools lose the decimal, fractions keep it. */
+    /**
+     * Honest XP text: whole pools lose the decimal, fractions keep it -
+     * clamped to two decimals (owner's brief), so a live pool never
+     * prints a longer tail than the eye needs, and the number stays
+     * locale-free data (ROOT), never a localised string.
+     */
     public static String formatXp(double xp) {
-        if (Double.isFinite(xp) && Math.abs(xp - Math.rint(xp)) < 1.0e-9) {
+        if (!Double.isFinite(xp)) {
+            return String.valueOf(xp);
+        }
+        if (Math.abs(xp - Math.rint(xp)) < 1.0e-9) {
             return Long.toString((long) Math.rint(xp));
         }
-        return String.valueOf(xp);
+        // clamp to two decimals, then let the tail breathe: 45.50 reads
+        // 45.5 and a rounding whole (45.999) reads 46
+        String text = String.format(java.util.Locale.ROOT, "%.2f", xp);
+        if (text.indexOf('.') >= 0) {
+            text = text.replaceAll("0+$", "").replaceAll("\\.$", "");
+        }
+        return text;
     }
 
     /** The answered snapshot's ABILITY entry for one id, or null - never guessed. */
