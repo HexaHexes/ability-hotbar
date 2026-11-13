@@ -72,7 +72,7 @@ class CoreMasteryCompatTest {
         CoreMasteryCompat.accept(new MasteryQueryResponse(
                 TARGET.toString(),
                 List.of(abilityEntry(ABILITY, 45.5, 3, 0.4,
-                        List.of(new MasteryQueryResponse.Bonus("COST", 0.95))))));
+                        List.of(new MasteryQueryResponse.Bonus("COST", 0.95, 0.02))))));
 
         assertTrue(CoreMasteryCompat.answered(), "our echo must open the gate");
         assertEquals(3, CoreMasteryCompat.levelOf(ABILITY));
@@ -82,6 +82,8 @@ class CoreMasteryCompatTest {
         var bonuses = CoreMasteryCompat.bonusesOf(ABILITY);
         assertEquals(1, bonuses.size(), "the pane section reads the server's bonuses");
         assertEquals("COST", bonuses.get(0).axis());
+        assertEquals(0.02, bonuses.get(0).masteryBonus(),
+                "the mastery slice rides the snapshot to the pane");
         assertEquals(0.95, bonuses.get(0).multiplier(), 1e-9,
                 "the multiplier is the server's live answer, never re-derived");
     }
