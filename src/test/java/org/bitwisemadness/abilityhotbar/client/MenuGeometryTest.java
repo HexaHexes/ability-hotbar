@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import net.minecraft.resources.ResourceLocation;
 import org.bitwisemadness.abilitycore.api.AbilityDefinition;
+import org.bitwisemadness.abilitycore.api.AbilityUnlocks;
 import org.bitwisemadness.abilitycore.api.ActivationType;
 import org.bitwisemadness.abilitycore.api.AmountResolvers;
 import org.bitwisemadness.abilitycore.api.ConsumptionStrategies;
@@ -402,6 +403,65 @@ class MenuGeometryTest {
                 definitionWith(ActivationType.NONE), false));
         assertFalse(AbilityMenuScreen.informationalGateApplies(
                 definitionWith(ActivationType.UNKNOWN), false));
+    }
+
+    // ---- the owner's drag gate and locked-mastery hide ----
+
+    @Test
+    void dragGateRefusesLockedAndPassiveRows() {
+        // owner's brief: locked abilities and NONE/UNKNOWN never drag to
+        // the hotbar; the press still click-assigns in place
+        assertFalse(AbilityMenuScreen.dragGateAllows(
+                definitionWith(ActivationType.INSTANT), true),
+                "a locked row never drags");
+        assertFalse(AbilityMenuScreen.dragGateAllows(
+                definitionWith(ActivationType.NONE), false),
+                "a passive mastery never drags");
+        assertFalse(AbilityMenuScreen.dragGateAllows(
+                definitionWith(ActivationType.UNKNOWN), false),
+                "undetermined never drags");
+        assertTrue(AbilityMenuScreen.dragGateAllows(
+                definitionWith(ActivationType.INSTANT), false),
+                "an unlocked caster drags as before");
+        assertTrue(AbilityMenuScreen.dragGateAllows(
+                definitionWith(ActivationType.CHARGED), false),
+                "charging rows drag as before");
+    }
+
+    @Test
+    void lockedPassiveMasteryRowsHideAndNothingElseDoes() {
+        // owner's hide brief: only a greyed NONE row (a locked passive
+        // mastery) hides; unknown unlock state never does (never-guess)
+        ResourceLocation mastery = ResourceLocation.fromNamespaceAndPath(
+                "tensura", "hide_fixture_mastery");
+        ResourceLocation caster = ResourceLocation.fromNamespaceAndPath(
+                "tensura", "hide_fixture_caster");
+        AbilityUnlocks.declare(mastery, (player, id) -> Optional.of(Boolean.FALSE));
+        AbilityUnlocks.declare(caster, (player, id) -> Optional.of(Boolean.FALSE));
+        try {
+            assertTrue(AbilityMenuScreen.hiddenLockedMastery(mastery,
+                    definitionWith(ActivationType.NONE), null),
+                    "a greyed passive mastery hides");
+            assertFalse(AbilityMenuScreen.hiddenLockedMastery(caster,
+                    definitionWith(ActivationType.INSTANT), null),
+                    "a locked caster stays listed (grey only)");
+        } finally {
+            AbilityUnlocks.remove(mastery);
+            AbilityUnlocks.remove(caster);
+        }
+
+        AbilityUnlocks.declare(mastery, (player, id) -> Optional.of(Boolean.TRUE));
+        try {
+            assertFalse(AbilityMenuScreen.hiddenLockedMastery(mastery,
+                    definitionWith(ActivationType.NONE), null),
+                    "an unlocked mastery lists");
+        } finally {
+            AbilityUnlocks.remove(mastery);
+        }
+        assertFalse(AbilityMenuScreen.hiddenLockedMastery(
+                ResourceLocation.fromNamespaceAndPath("tensura", "hide_fixture_unknown"),
+                definitionWith(ActivationType.NONE), null),
+                "unknown unlock state never hides - never guess");
     }
 
 }

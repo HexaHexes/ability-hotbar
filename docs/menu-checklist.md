@@ -43,6 +43,16 @@ the input.
       above the detail pane and the drag ghost; a provider without the
       hook shows nothing, and the tooltip never appears mid-drag.
 - [ ] The world does **not** pause while the menu is open.
+- [ ] A **greyed passive mastery** row (activation `NONE`, provably
+      unlearned - e.g. a locked ISS school mastery) never lists at all;
+      unknown unlock state and every other row keep their grey.
+
+## Detail pane
+
+- [ ] The pane reads **name -> description -> status -> activation**:
+      the Mastery Bonuses section **replaces** Status for an ability that
+      can earn core XP, a passive never shows Activation, and the
+      tags/cost line, Stats and Modes sections are gone.
 
 ## Search and filters (AC1)
 
@@ -67,6 +77,10 @@ the input.
       its raw id** (diagnostic), never hidden.
 - [ ] A stale or tampered request is rejected server-side and the slots
       repaint from the echoed snapshot - the screen shows server truth.
+- [ ] A **locked** ability and an ability whose activation is `NONE` or
+      `UNKNOWN` never start a **drag** to the hotbar (the press past the
+      threshold is consumed); a plain click still assigns, and ordinary
+      rows drag exactly as before.
 
 ## Regression
 

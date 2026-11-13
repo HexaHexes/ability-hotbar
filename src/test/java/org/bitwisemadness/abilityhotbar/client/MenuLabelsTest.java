@@ -88,10 +88,6 @@ class MenuLabelsTest {
         String text = Files.readString(source);
         assertTrue(text.contains("MenuLabels.subcategory(typeTag)"),
                 "the subcategory tabs label through MenuLabels");
-        assertTrue(text.contains("MenuLabels.subcategory(tag)"),
-                "the pane's subcategory tags read capitalised through MenuLabels");
-        assertTrue(text.contains("MenuLabels.tag(tag)"),
-                "the pane labels tags through MenuLabels");
         assertFalse(text.contains("MenuLabels.category("),
                 "categories never render in tooltips (owner's brief)");
         assertFalse(text.contains("meta.append(definition.category())"),
