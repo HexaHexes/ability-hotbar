@@ -1724,6 +1724,16 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
+     * The mastery-ability slice as a signed whole percent ("+2%",
+     * "-3%") - a DELTA from 1.0 rather than a multiplier, so it rounds
+     * and signs directly for the pane's parenthetical.
+     */
+    static String masterySlicePercent(double slice) {
+        long pct = Math.round(slice * 100.0);
+        return pct > 0 ? "+" + pct + "%" : pct + "%";
+    }
+
+    /**
      * The effect axis's label: the lang key when one ships, else the
      * prettified enum name - never the raw key on screen.
      */
@@ -1818,10 +1828,17 @@ public final class AbilityMenuScreen extends Screen {
             // nothing rather than a fake x1.00
             addSection(rows, "ability_hotbar.menu.section.bonuses");
             for (var bonus : bonuses) {
+                // the owner's parenthetical: the slice owed to the
+                // mastery abilities feeding this one; a slice rounding
+                // to zero keeps the plain line, byte-identical to before
+                boolean sliced = Math.round(bonus.masteryBonus() * 100.0) != 0L;
                 rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
-                        Component.translatable("ability_hotbar.menu.bonus_line",
+                        Component.translatable(sliced
+                                ? "ability_hotbar.menu.bonus_line_mastery"
+                                : "ability_hotbar.menu.bonus_line",
                                 axisLabel(bonus.axis()),
-                                bonusPercent(bonus.multiplier())).getString(),
+                                bonusPercent(bonus.multiplier()),
+                                masterySlicePercent(bonus.masteryBonus())).getString(),
                         wrapW), style.mastery()));
             }
         } else {

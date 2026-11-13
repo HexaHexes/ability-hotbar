@@ -123,7 +123,7 @@ dependencies {
     // stores its own slot's mode; older cores have no such method.
     // alpha.09: ActivationType.NONE - the pane omits activation for a
     // passive and the informational gate lets it slot anywhere.
-    def abilityCore = 'org.bitwisemadness.abilitycore:ability_core:1.1.0-alpha.09'
+    def abilityCore = 'org.bitwisemadness.abilitycore:ability_core:1.1.0-alpha.10'
     compileOnly abilityCore
     testImplementation abilityCore
 

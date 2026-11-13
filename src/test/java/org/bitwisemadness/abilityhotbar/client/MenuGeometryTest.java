@@ -316,6 +316,19 @@ class MenuGeometryTest {
     }
 
     @Test
+    void masterySlicePercentReadsTheDeltaAsSignedWholePercent() {
+        // the pane's parenthetical is a DELTA from 1.0, not a multiplier
+        assertEquals("+2%", AbilityMenuScreen.masterySlicePercent(0.02),
+                "a positive slice reads with its sign");
+        assertEquals("-3%", AbilityMenuScreen.masterySlicePercent(-0.03),
+                "a COST reduction slice reads negative");
+        assertEquals("0%", AbilityMenuScreen.masterySlicePercent(0.0),
+                "no share contributes nothing, never a fake sign");
+        assertEquals("+1%", AbilityMenuScreen.masterySlicePercent(0.006),
+                "whole percents round the slice for the eye");
+    }
+
+    @Test
     void costValueSitsOnTheBottomLineUnderItsLabel() {
         // the value shares the meter's value baseline: bar top + equal margins
         int[] bar = AbilityMenuScreen.masteryBarRect(100, 46, 300);

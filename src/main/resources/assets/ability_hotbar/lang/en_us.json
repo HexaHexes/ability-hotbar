@@ -56,6 +56,7 @@
   "ability_hotbar.menu.mastery_bar": "%s XP",
   "ability_hotbar.menu.section.bonuses": "Mastery Bonuses:",
   "ability_hotbar.menu.bonus_line": "%s %s",
+  "ability_hotbar.menu.bonus_line_mastery": "%s %s (%s)",
   "ability_hotbar.menu.axis.cost": "Cost",
   "ability_hotbar.menu.axis.cast_time": "Cast time",
   "ability_hotbar.menu.axis.power": "Power",

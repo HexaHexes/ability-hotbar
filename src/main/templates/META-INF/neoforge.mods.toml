@@ -39,18 +39,20 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "ability_core"
 type = "optional"
-# alpha.09 of the 1.1.0 line is the floor: ActivationType.NONE - the
-# pane omits the activation line for a passive and the informational
-# gate lets NONE/UNKNOWN rows slot anywhere (a pre-NONE core has no
-# constant to reference - NoSuchFieldError at the pane).
-# Under it: alpha.02 of the floor below carries the pane's mastery
-# query answer's effect-bonus list (REQ-CORE-12 - Entry.bonuses), which
-# ships with the channel v5 bump - both sides must run the same channel
-# version (a mismatched version disconnects at negotiation), so the floor
-# names the first build that speaks v5. The row display's progress field
-# (v4), the 1.0.2 line's query exchange, and 1.0.1-alpha.02's
-# slot-scoped mode read (core#133, every mode cycle) ride along.
-versionRange = "[1.1.0-alpha.09,)"
+# alpha.10 of the 1.1.0 line is the floor: it carries each bonus's
+# mastery-ability slice (Bonus.masteryBonus, channel v6) - the pane's
+# parenthetical reads it, so under it the accessor cannot bind and the
+# channel would skew at negotiation (both sides must speak the same
+# version; a mismatched version disconnects). alpha.09 adds
+# ActivationType.NONE - the pane omits the activation line for a
+# passive (a pre-NONE core has no constant to reference) and NONE/
+# UNKNOWN rows pass the informational gate (their toggle and cycle
+# survive; hotbar's assignment gate owns slotting). alpha.02 carries
+# the effect-bonus list itself (REQ-CORE-12 - Entry.bonuses, channel
+# v5), the row display's progress field (v4), the 1.0.2 line's query
+# exchange, and 1.0.1-alpha.02's slot-scoped mode read (core#133,
+# every mode cycle).
+versionRange = "[1.1.0-alpha.10,)"
 ordering = "AFTER"
 side = "BOTH"
 

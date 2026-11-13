@@ -54,6 +54,10 @@ the input.
       can earn core XP, a passive never shows Activation, and the
       tags/cost line, Stats and Modes sections are gone. Sections are
       separated by a **blank line** (the first follows the name tight).
+- [ ] Each Mastery Bonuses line carries the **mastery-ability slice in
+      parentheses** - `Power +5% (+2%)` - the part owed to the share-fed
+      masteries; no shares (or a slice that rounds to zero) shows the
+      plain line exactly as before.
 - [ ] The row's mastery bar shows XP clamped to **two decimals**
       (`45.57`, never `45.567891`); whole pools stay whole (`45`), a
       short fraction keeps its shape (`45.5`), and the number never
