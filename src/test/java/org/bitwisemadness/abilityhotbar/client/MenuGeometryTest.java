@@ -408,24 +408,24 @@ class MenuGeometryTest {
     // ---- the owner's drag gate and locked-mastery hide ----
 
     @Test
-    void dragGateRefusesLockedAndPassiveRows() {
-        // owner's brief: locked abilities and NONE/UNKNOWN never drag to
-        // the hotbar; the press still click-assigns in place
-        assertFalse(AbilityMenuScreen.dragGateAllows(
+    void assignmentGateRefusesLockedAndPassiveRows() {
+        // owner's brief: locked abilities and NONE/UNKNOWN never reach a
+        // hotbar slot - neither click nor drag; the press is consumed
+        assertFalse(AbilityMenuScreen.assignmentGateAllows(
                 definitionWith(ActivationType.INSTANT), true),
-                "a locked row never drags");
-        assertFalse(AbilityMenuScreen.dragGateAllows(
+                "a locked row never reaches a slot");
+        assertFalse(AbilityMenuScreen.assignmentGateAllows(
                 definitionWith(ActivationType.NONE), false),
-                "a passive mastery never drags");
-        assertFalse(AbilityMenuScreen.dragGateAllows(
+                "a passive mastery never reaches a slot");
+        assertFalse(AbilityMenuScreen.assignmentGateAllows(
                 definitionWith(ActivationType.UNKNOWN), false),
-                "undetermined never drags");
-        assertTrue(AbilityMenuScreen.dragGateAllows(
+                "undetermined never reaches a slot");
+        assertTrue(AbilityMenuScreen.assignmentGateAllows(
                 definitionWith(ActivationType.INSTANT), false),
-                "an unlocked caster drags as before");
-        assertTrue(AbilityMenuScreen.dragGateAllows(
+                "an unlocked caster click- and drag-assigns as before");
+        assertTrue(AbilityMenuScreen.assignmentGateAllows(
                 definitionWith(ActivationType.CHARGED), false),
-                "charging rows drag as before");
+                "charging rows assign exactly as before");
     }
 
     @Test

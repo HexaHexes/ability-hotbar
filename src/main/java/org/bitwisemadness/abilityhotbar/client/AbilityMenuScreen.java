@@ -2253,8 +2253,8 @@ public final class AbilityMenuScreen extends Screen {
                 int rowY = listTop() + relative * menuRowHeight();
                 if (informationalGateApplies(row.definition(), informationalTab())) {
                     // info-only tab (owner's directive): rows never slot,
-                    // cycle or toggle; NONE/UNKNOWN pass through (the
-                    // settable brief - a passive row slots wherever it lists)
+                    // cycle or toggle; NONE/UNKNOWN pass through to their
+                    // toggle and cycle - the assignment gate owns slotting
                     return true;
                 }
                 // the row-end Enable/Disable owns its rect before assigning
@@ -2292,8 +2292,12 @@ public final class AbilityMenuScreen extends Screen {
                 // threshold it becomes a slot-cell drag (owner's brief) -
                 // with drag-to-assign off, the press assigns directly
                 if (!HotbarClientConfig.DRAG_TO_ASSIGN.get()) {
-                    selectedRowId = row.id();
-                    sendAssignment(row.id().toString());
+                    // the direct press-assign obeys the same gate (owner:
+                    // locked/NONE/UNKNOWN neither click nor drag)
+                    if (mayAssignToHotbar(row.id())) {
+                        selectedRowId = row.id();
+                        sendAssignment(row.id().toString());
+                    }
                     return true;
                 }
                 pressedRowId = row.id();
@@ -2402,11 +2406,11 @@ public final class AbilityMenuScreen extends Screen {
         }
         if (pressedRowId != null) {
             // movement past the threshold promotes the press to a drag -
-            // the owner's gate refuses locked and NONE/UNKNOWN rows, and
-            // a refused press is consumed: only a true click still assigns
+            // the owner's gate refuses locked and NONE/UNKNOWN rows either
+            // way, and the refused press is consumed (no drag, no assign)
             if (Math.abs(mouseX - pressStartX) + Math.abs(mouseY - pressStartY)
                     > HotbarClientConfig.DRAG_THRESHOLD_PX.get()) {
-                if (mayDragToHotbar(pressedRowId)) {
+                if (mayAssignToHotbar(pressedRowId)) {
                     dragAbilityId = pressedRowId;
                 }
                 pressedRowId = null;
@@ -2489,10 +2493,13 @@ public final class AbilityMenuScreen extends Screen {
             return true;
         }
         if (pressed != null) {
-            // press + release in place: the old click-assign to the
-            // selected slot (the row keeps the lit treatment)
-            selectedRowId = pressed;
-            sendAssignment(pressed.toString());
+            // press + release in place: the click-assign to the selected
+            // slot (the row keeps the lit treatment) - the owner's gate
+            // refuses locked and NONE/UNKNOWN rows here too
+            if (mayAssignToHotbar(pressed)) {
+                selectedRowId = pressed;
+                sendAssignment(pressed.toString());
+            }
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
@@ -2772,10 +2779,11 @@ public final class AbilityMenuScreen extends Screen {
      * Whether the informational-tab gate applies to this row: the tab is
      * informational AND the ability is a casting row. Owner's settable
      * brief - {@link ActivationType.NONE} (a passive mastery) and
-     * {@link ActivationType.UNKNOWN} (undetermined, but settable) slot
-     * anywhere, so the gate spares them; #154's inert-spells rule stays
-     * for every activatable type under an informational tab. On an
-     * ordinary tab nothing is ever gated. Package-private for the fixture.
+     * {@link ActivationType.UNKNOWN} are spared so their toggle and
+     * cycle still work (whether they slot at all is the assignment
+     * gate's answer); #154's inert-spells rule stays for every
+     * activatable type under an informational tab. On an ordinary tab
+     * nothing is ever gated. Package-private for the fixture.
      */
     static boolean informationalGateApplies(AbilityDefinition definition,
             boolean informationalTab) {
@@ -2787,27 +2795,29 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * Whether a row press may promote to a hotbar drag (owner's brief): a
-     * locked ability (provably unlearned) and the passive/undetermined
-     * types (NONE/UNKNOWN) never drag to the hotbar - the press still
-     * click-assigns in place. Never-guess: unknown unlock state drags as
-     * before, and an id the registry no longer knows does not.
+     * Whether a row may reach a hotbar slot by click or drag (owner's
+     * brief): a locked ability (provably unlearned) and the
+     * passive/undetermined types (NONE/UNKNOWN) neither click-assign nor
+     * drag - a refused press is consumed, so it can never fall through to
+     * an assign on release. Never-guess: unknown unlock state assigns as
+     * before, and an id the registry no longer knows does not. The
+     * clear-slot path never passes this gate (it sends an empty id).
      */
-    private boolean mayDragToHotbar(ResourceLocation id) {
+    private boolean mayAssignToHotbar(ResourceLocation id) {
         AbilityDefinition definition = AbilityDiscovery.get(id).orElse(null);
         if (definition == null) {
             return false;
         }
-        return dragGateAllows(definition,
+        return assignmentGateAllows(definition,
                 UnlockRule.provenUnlearned(AbilityUnlocks.isLearned(this.minecraft.player, id)));
     }
 
     /**
-     * The pure drag gate: locked never drags, and neither does the
-     * passive/undetermined pair (NONE/UNKNOWN). Package-private for the
-     * fixture.
+     * The pure assignment gate: locked never reaches a slot, and neither
+     * does the passive/undetermined pair (NONE/UNKNOWN). Package-private
+     * for the fixture.
      */
-    static boolean dragGateAllows(AbilityDefinition definition, boolean locked) {
+    static boolean assignmentGateAllows(AbilityDefinition definition, boolean locked) {
         if (locked) {
             return false;
         }

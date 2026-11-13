@@ -69,18 +69,19 @@ the input.
       bar; the slot updates after the server's echo (one round trip) and
       **survives relog**.
 - [ ] Clicking another ability over an occupied slot replaces it.
-- [ ] A **NONE** (passive mastery) or **UNKNOWN** ability slots even on an
-      informational tab (the owner's settable brief); every other type
-      stays inert to click, drag, toggle and cycle there.
+- [ ] A **locked** ability, a **NONE** (passive mastery) or an **UNKNOWN**
+      ability never reaches a hotbar slot - neither click nor drag (the
+      owner's gate); on an informational tab every other type stays inert
+      to click, drag, toggle and cycle there.
 - [ ] **Clear slot** empties the slot and nothing else (no data loss).
 - [ ] A previously-assigned id whose provider is gone shows in **red with
       its raw id** (diagnostic), never hidden.
 - [ ] A stale or tampered request is rejected server-side and the slots
       repaint from the echoed snapshot - the screen shows server truth.
 - [ ] A **locked** ability and an ability whose activation is `NONE` or
-      `UNKNOWN` never start a **drag** to the hotbar (the press past the
-      threshold is consumed); a plain click still assigns, and ordinary
-      rows drag exactly as before.
+      `UNKNOWN` never reaches a hotbar slot: the drag press is consumed
+      and the click assigns nothing. Ordinary rows still click- and
+      drag-assign exactly as before.
 
 ## Regression
 
