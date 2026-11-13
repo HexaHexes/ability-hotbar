@@ -1,5 +1,6 @@
 package org.bitwisemadness.abilityhotbar.content;
 
+import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Player;
@@ -116,6 +117,25 @@ public interface HotbarContentProvider {
      */
     @Nullable
     default Component slotName(int index) {
+        return null;
+    }
+
+    /**
+     * The menu pill's hover tooltip (the owner's provider toolbar brief):
+     * the lines drawn when the cursor rests on the pill's ability icon in
+     * the menu's slot strip. {@code null} (the default) = no tooltip - the
+     * pill reads exactly as before, byte-identical for every existing
+     * provider. Read client-side like every other hook and extracted
+     * lazily for the one hovered cell by {@link ContentPlan#cellTooltip}:
+     * a throw produces no tooltip, logged once with the bar id. The HUD
+     * never calls this - it has no cursor.
+     *
+     * @param player the player being rendered (may be null only in tests)
+     * @param index  the hovered cell, in {@code [0, slotCount())} by contract
+     * @return the tooltip lines, or null for none
+     */
+    @Nullable
+    default List<Component> slotTooltip(@Nullable Player player, int index) {
         return null;
     }
 

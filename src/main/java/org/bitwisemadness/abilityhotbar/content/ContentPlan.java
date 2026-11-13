@@ -169,6 +169,34 @@ public final class ContentPlan {
         }
     }
 
+    /**
+     * One pill's hover tooltip (the owner's provider toolbar brief): the
+     * provider's own lines when it opts in, empty otherwise - with the
+     * same guarded, once-per-bar diagnostics as every other provider call
+     * (a throw produces no tooltip, never a crash). Extracted lazily for
+     * the single cell under the cursor, never once per frame for every
+     * cell.
+     *
+     * @param barId    the bar the provider belongs to (named in diagnostics)
+     * @param provider the bar's content provider
+     * @param player   the player being rendered (nullable for tests)
+     * @param index    the hovered cell
+     * @return the lines to draw, empty when the provider offers none
+     */
+    public static List<Component> cellTooltip(ResourceLocation barId,
+            HotbarContentProvider provider, @Nullable Player player, int index) {
+        if (barId == null || provider == null) {
+            return List.of();
+        }
+        try {
+            List<Component> tooltip = provider.slotTooltip(player, index);
+            return tooltip == null || tooltip.isEmpty() ? List.of() : tooltip;
+        } catch (Exception e) {
+            report(barId, e);
+            return List.of();
+        }
+    }
+
     public static boolean hasContent(ResourceLocation barId, HotbarContentProvider provider) {
         if (barId == null || provider == null) {
             return false;
