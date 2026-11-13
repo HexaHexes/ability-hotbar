@@ -1804,8 +1804,7 @@ public final class AbilityMenuScreen extends Screen {
         Component descriptionComponent = description == null ? null
                 : descriptionComponent(description);
         if (descriptionComponent != null) {
-            rows.add(new PaneRow.Header(
-                    "ability_hotbar.menu.section.description"));
+            addSection(rows, "ability_hotbar.menu.section.description");
             rows.add(new PaneRow.Wrapped(
                     this.font.split(descriptionComponent, wrapW)));
         }
@@ -1817,7 +1816,7 @@ public final class AbilityMenuScreen extends Screen {
             // REQ-CORE-12: the server's current effect multipliers - only
             // axes its spec declares, so an undeclared ability shows
             // nothing rather than a fake x1.00
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.bonuses"));
+            addSection(rows, "ability_hotbar.menu.section.bonuses");
             for (var bonus : bonuses) {
                 rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
                         Component.translatable("ability_hotbar.menu.bonus_line",
@@ -1834,7 +1833,7 @@ public final class AbilityMenuScreen extends Screen {
                     .filter(field -> field.kind() != PresentationField.Kind.PROGRESS)
                     .toList();
             if (!paneFields.isEmpty()) {
-                rows.add(new PaneRow.Header("ability_hotbar.menu.section.status"));
+                addSection(rows, "ability_hotbar.menu.section.status");
                 for (PresentationField field : paneFields) {
                     rows.add(new PaneRow.FieldRow(field));
                 }
@@ -1843,7 +1842,7 @@ public final class AbilityMenuScreen extends Screen {
         // NONE never mentions activation (owner's brief): a passive's
         // pane carries no Activation section at all - and it reads last
         if (definition.activationType() != ActivationType.NONE) {
-            rows.add(new PaneRow.Header("ability_hotbar.menu.section.activation"));
+            addSection(rows, "ability_hotbar.menu.section.activation");
             rows.add(new PaneRow.Line(this.font.plainSubstrByWidth(
                     Component.translatable("ability_hotbar.menu.activation_fmt",
                             Component.literal(MenuLabels.prettify(
@@ -1871,6 +1870,17 @@ public final class AbilityMenuScreen extends Screen {
         }
     }
 
+    /**
+     * A section header preceded by the owner's blank line between two
+     * sections: the first section follows the name with no extra gap.
+     */
+    private static void addSection(List<PaneRow> rows, String headerKey) {
+        if (!rows.isEmpty()) {
+            rows.add(new PaneRow.Gap());
+        }
+        rows.add(new PaneRow.Header(headerKey));
+    }
+
     /** One pane row drawn at its scrolled y inside the scissor. */
     private void drawPaneRow(GuiGraphics gui, PaneRow row, int y, int textX,
             int wrapW, MenuStyle style) {
@@ -1892,9 +1902,10 @@ public final class AbilityMenuScreen extends Screen {
 
     /**
      * A pane content row for the subsectioned info section (owner's
-     * brief): a header, a single clipped line, a wrapped text block, or a
-     * live presentation field - each carrying its own height so the
-     * measure pass and the draw pass can never disagree.
+     * brief): a header, the blank line between sections, a single
+     * clipped line, a wrapped text block, or a live presentation field -
+     * each carrying its own height so the measure pass and the draw
+     * pass can never disagree.
      */
     private sealed interface PaneRow {
 
@@ -1905,6 +1916,14 @@ public final class AbilityMenuScreen extends Screen {
             @Override
             public int height() {
                 return 16;
+            }
+        }
+
+        /** The owner's blank line between two sections (draws nothing). */
+        record Gap() implements PaneRow {
+            @Override
+            public int height() {
+                return 6;
             }
         }
 
