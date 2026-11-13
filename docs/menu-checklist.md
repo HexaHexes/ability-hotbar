@@ -58,6 +58,9 @@ the input.
       parentheses** - `Power +5% (+2%)` - the part owed to the share-fed
       masteries; no shares (or a slice that rounds to zero) shows the
       plain line exactly as before.
+- [ ] A mastery bonus that rounds to **0%** is omitted from the pane
+      entirely; when every declared axis reads 0%, no Mastery Bonuses
+      section shows at all (the live Status fields stand in).
 - [ ] The row's mastery bar shows XP clamped to **two decimals**
       (`45.57`, never `45.567891`); whole pools stay whole (`45`), a
       short fraction keeps its shape (`45.5`), and the number never

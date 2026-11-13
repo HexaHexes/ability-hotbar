@@ -329,6 +329,19 @@ class MenuGeometryTest {
     }
 
     @Test
+    void zeroPercentBonusesOmitTheirLine() {
+        // owner's brief: 0% is noise in the description - the line goes
+        assertTrue(AbilityMenuScreen.bonusShows(1.05), "a real bonus shows");
+        assertTrue(AbilityMenuScreen.bonusShows(0.95), "a real reduction shows");
+        assertFalse(AbilityMenuScreen.bonusShows(1.0),
+                "an untouched axis omits its line");
+        assertFalse(AbilityMenuScreen.bonusShows(1.004),
+                "under half a percent rounds away too");
+        assertTrue(AbilityMenuScreen.bonusShows(1.006),
+                "over half a percent still shows");
+    }
+
+    @Test
     void costValueSitsOnTheBottomLineUnderItsLabel() {
         // the value shares the meter's value baseline: bar top + equal margins
         int[] bar = AbilityMenuScreen.masteryBarRect(100, 46, 300);
