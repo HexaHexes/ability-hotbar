@@ -3,6 +3,7 @@ package org.bitwisemadness.abilityhotbar.client;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import org.bitwisemadness.abilityhotbar.TextLabels;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -67,13 +68,9 @@ final class MenuLabels {
         return "ability_hotbar.provider." + namespace;
     }
 
-    /** Player-facing fallback: separators to spaces, first letter capitalised. */
+    /** Player-facing fallback: the shared separator normalisation, first letter capitalised. */
     static String prettify(String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return "";
-        }
-        String words = raw.replace('/', ' ').replace(':', ' ').replace('_', ' ');
-        return Character.toUpperCase(words.charAt(0)) + words.substring(1);
+        return TextLabels.sentence(raw);
     }
 
     /** A localised category name: the convention key when translated, else the prettified path. */
