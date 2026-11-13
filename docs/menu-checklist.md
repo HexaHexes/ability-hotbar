@@ -63,6 +63,21 @@ the input.
       restart** (CLIENT config `menu.lastCategory` / `menu.lastTag`).
 - [ ] A scoped ability (e.g. `press`) never appears on any listed bar.
 
+## Row costs (owner's all-costs brief, #222)
+
+- [ ] A row whose ability declares several costs shows **every** non-zero
+      one on the value line under the `Cost:` label, in declaration order,
+      comma-joined (Technomagy's duo spells read e.g. `Cost: 1 Water,
+      2 Light`) - never only the first entry.
+- [ ] A declared **zero** amount never renders, and an ability whose costs
+      are empty or all zero shows **no** cost line at all (label and value
+      both absent; the meter keeps its full width).
+- [ ] The value stays right-aligned with the meter stopping 6px before it;
+      a long multi-cost value squeezes the meter without overlapping it and
+      is never truncated.
+- [ ] With an ISS repricing projection in force, every entry quotes the
+      live price - not only the first.
+
 ## Assign / replace / remove (AC2/AC3/AC6)
 
 - [ ] Clicking an ability assigns it to the selected slot of the selected

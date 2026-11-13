@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -1528,12 +1529,10 @@ public final class AbilityMenuScreen extends Screen {
             boolean knownBar = mastery == null && learned.isPresent() && !learned.get()
                     && presentation.map(p -> !p.fields().isEmpty()).orElse(false);
             boolean bottomBar = coreBar || mastery != null || knownBar;
-            // the row's LIVE cost answer - repriced by tensura_iron_spells
-            // through iss's projection when one is in force (hotbar#193);
-            // the label rides the name line, the value the bottom line
-            ResourceCost liveCost = RepresentativeCost.of(
-                    LiveCosts.forDisplay(row.id(), row.definition()));
-            String cost = liveCost == null ? "" : costText(liveCost);
+            // the row's LIVE cost line: every non-zero declared entry, repriced
+            // by tensura_iron_spells through iss's projection when in force
+            // (hotbar#193); the label rides the name line, the value the bottom
+            String cost = costText(LiveCosts.forDisplay(row.id(), row.definition()));
             boolean costLine = !cost.isEmpty();
             // pills own the bottom line's right edge - the Cost: label and
             // its value align there, and the meter stops before the value
@@ -2885,6 +2884,20 @@ public final class AbilityMenuScreen extends Screen {
         String formatted = amount == Math.floor(amount) ? String.valueOf((long) amount)
                 : String.valueOf(amount);
         return formatted + " " + MenuLabels.resource(cost.resourceId()).getString();
+    }
+
+    /**
+     * The row's whole cost line: every declared entry that costs something,
+     * in declaration order, joined by ", " (issue #222: all of a spell's
+     * prices show, not only the first - a zero amount declares no cost).
+     * Empty when nothing is payable, which is exactly when the row draws
+     * no cost line at all.
+     */
+    static String costText(List<ResourceCost> costs) {
+        return costs.stream()
+                .filter(cost -> cost.amount() != 0)
+                .map(AbilityMenuScreen::costText)
+                .collect(Collectors.joining(", "));
     }
 
     @Nullable

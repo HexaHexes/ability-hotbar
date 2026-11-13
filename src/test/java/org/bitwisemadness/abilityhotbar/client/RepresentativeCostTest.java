@@ -51,15 +51,15 @@ class RepresentativeCostTest {
     }
 
     @Test
-    void theListOverloadLeadsTheLiveRowTheSameWay() {
+    void theListOverloadLeadsWithTheFirstDeclaredEntry() {
         var first = new ResourceCost("tensura:magicule", 30.0);
         var second = new ResourceCost("tensura:aura", 7.0);
         assertNull(RepresentativeCost.of(List.of()),
-                "an empty live list renders no cost (the row's fallback path)");
+                "an empty list names no cost");
         assertEquals(first, RepresentativeCost.of(List.of(first, second)),
-                "the live list (LiveCosts.forDisplay) leads with its first entry");
+                "the first declared entry represents the list");
         assertEquals(RepresentativeCost.of(definition(List.of(first))),
                 RepresentativeCost.of(List.of(first)),
-                "the definition path and the live path agree on the same costs");
+                "the definition path and the list path agree on the same costs");
     }
 }
