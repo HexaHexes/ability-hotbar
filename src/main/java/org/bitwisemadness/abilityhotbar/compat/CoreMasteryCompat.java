@@ -29,6 +29,11 @@ import org.jetbrains.annotations.Nullable;
  * and would diverge), the echoed request uuid fences out a reply for
  * another player, and an unanswered menu renders no badge and no bar -
  * a zero appears only when the server's snapshot says "never earned".</p>
+ *
+ * <p>The exchange is cleared on client logout ({@link #reset()}, wired
+ * from {@code ClientHotbarEvents}) so a world's snapshot never answers
+ * for the next world - no stale cross-world unlock verdicts or levels.
+ * </p>
  */
 public final class CoreMasteryCompat {
 
@@ -167,8 +172,15 @@ public final class CoreMasteryCompat {
         accept(event.response());
     }
 
-    /** Test seam: each test starts from a clean exchange (JUnit has no order). */
-    static void reset() {
+    /**
+     * Clears the exchange: the answered flag, the snapshot, the pending
+     * target and the throttle stamp. Client logout calls it so a world's
+     * mastery snapshot never outlives its session, and test suites call
+     * it to start from a clean exchange (JUnit has no order; GameTests
+     * share one JVM, so a suite that seeds an answer must clear it
+     * before the next test reads the unanswered state).
+     */
+    public static void reset() {
         lastRequestAt = 0L;
         pendingTarget = null;
         answered = false;
