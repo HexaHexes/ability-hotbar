@@ -1734,6 +1734,15 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
+     * The owner's 0%-omission: a bonus that rounds to zero percent is
+     * noise in the description - its line never renders, and a section
+     * that would hold only such lines never renders either.
+     */
+    static boolean bonusShows(double multiplier) {
+        return Math.round((multiplier - 1.0) * 100.0) != 0L;
+    }
+
+    /**
      * The effect axis's label: the lang key when one ships, else the
      * prettified enum name - never the raw key on screen.
      */
@@ -1818,10 +1827,12 @@ public final class AbilityMenuScreen extends Screen {
             rows.add(new PaneRow.Wrapped(
                     this.font.split(descriptionComponent, wrapW)));
         }
-        // Status, or the mastery bonuses it BECOMES for an ability that
-        // can earn core XP (owner: bonuses replace status there); the
-        // live fields stand in while the snapshot has not arrived
-        var bonuses = CoreMasteryCompat.bonusesOf(id);
+        // Status, or the mastery bonuses it BECOMES (owner: bonuses
+        // replace status for core-XP abilities); 0%-rounding lines are
+        // omitted first, so all-zero falls back to the live fields
+        var bonuses = CoreMasteryCompat.bonusesOf(id).stream()
+                .filter(bonus -> bonusShows(bonus.multiplier()))
+                .toList();
         if (CoreMasteryCompat.declared(id) && !bonuses.isEmpty()) {
             // REQ-CORE-12: the server's current effect multipliers - only
             // axes its spec declares, so an undeclared ability shows
