@@ -105,6 +105,22 @@ class CoreMasteryCompatTest {
     }
 
     @Test
+    void resetClearsAnAnsweredExchange() {
+        CoreMasteryCompat.markRequested(TARGET, 0L);
+        CoreMasteryCompat.accept(new MasteryQueryResponse(
+                TARGET.toString(), List.of(abilityEntry(ABILITY, 45.5, 3, 0.4, List.of()))));
+        assertTrue(CoreMasteryCompat.answered(), "the seed answer opens the gate");
+
+        CoreMasteryCompat.reset();
+
+        assertFalse(CoreMasteryCompat.answered(),
+                "a cleared exchange must never answer from the old world's snapshot");
+        assertEquals(0, CoreMasteryCompat.levelOf(ABILITY),
+                "the cleared snapshot reads as no entry, never the stale level");
+        assertEquals(0.0, CoreMasteryCompat.progressOf(ABILITY));
+    }
+
+    @Test
     void xpTextKeepsOnlyRealFractions() {
         assertEquals("45", CoreMasteryCompat.formatXp(45.0));
         assertEquals("0", CoreMasteryCompat.formatXp(0.0));
