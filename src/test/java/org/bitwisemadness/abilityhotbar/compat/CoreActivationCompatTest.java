@@ -97,4 +97,45 @@ class CoreActivationCompatTest {
         assertEquals(null, ActivateAbilityPayload.toRequest(none).modeContext(),
                 "no mode stays no mode - byte-identical to pre-#29 activations");
     }
+
+    @Test
+    void releasePayloadIsThePressShapeWithoutATarget() {
+        // core#159: the key-up mirrors the press (id/source/slot/mode) minus
+        // the hint - a stop must never fail on a moved crosshair
+        var payload = CoreActivationCompat.releasePayload(
+                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, "fire");
+
+        var request = org.bitwisemadness.abilitycore.sync.ReleaseAbilityPayload.toRequest(payload);
+        assertNotNull(request, "core must parse the hotbar's release wire form");
+        assertEquals(ActivationRequest.fromWire(
+                        FIREBALL.toString(), "direct_slot", 3, 12345L).withMode("fire"),
+                request, "the release builds the press's request, target aside");
+        assertEquals("fire", request.modeContext());
+        assertEquals(ActivationSource.DIRECT_SLOT, request.source());
+    }
+
+    @Test
+    void releaseNullModeWritesTheNoModeWireForm() {
+        var payload = CoreActivationCompat.releasePayload(
+                FIREBALL, ActivationSource.SELECTED_SLOT, -1, 0L, null);
+        assertEquals("", payload.mode(), "null writes core's no-mode wire form");
+        var request = org.bitwisemadness.abilitycore.sync.ReleaseAbilityPayload.toRequest(payload);
+        assertNotNull(request);
+        assertEquals(null, request.modeContext(),
+                "no mode stays no mode on the release half too");
+    }
+
+    @Test
+    void releasePayloadSurvivesTheWireCodec() {
+        var original = CoreActivationCompat.releasePayload(
+                FIREBALL, ActivationSource.DIRECT_SLOT, 3, 12345L, "burst");
+        var buf = io.netty.buffer.Unpooled.buffer();
+        try {
+            var codec = org.bitwisemadness.abilitycore.sync.ReleaseAbilityPayload.STREAM_CODEC;
+            codec.encode(buf, original);
+            assertEquals(original, codec.decode(buf));
+        } finally {
+            buf.release();
+        }
+    }
 }

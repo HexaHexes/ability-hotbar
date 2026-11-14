@@ -45,12 +45,106 @@ import org.bitwisemadness.abilityhotbar.state.BarSwitching;
  * without a round trip) and the server's echo reconciles it - see
  * {@link #switchBar}.</p>
  *
+ * <p><b>Press and release travel together</b> (core#159): every press
+ * records the hold its key carries, and the falling edge of
+ * {@code KeyMapping.isDown()} sends the matching release through core -
+ * the key-up scan runs <em>before and regardless of</em> {@link InputGate},
+ * because an up-edge arriving while a screen opens must still end the hold
+ * (a missed key-up would strand it server-side until ARR's max-held-time).
+ * Native ARR keys release through the same isDown edge, so the pair timing
+ * is native parity; stateless presses (empty slots, no core) record nothing
+ * and release nothing.</p>
+ *
  * <p>Registered for the physical client only.</p>
  */
 @EventBusSubscriber(modid = AbilityHotbar.MOD_ID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
 public final class HotbarInputHandler {
 
     private HotbarInputHandler() {
+    }
+
+    /**
+     * One in-flight hold: exactly what a key's press sent, so its key-up
+     * can mirror the same intent back (core#159). The record equals its
+     * own fields, so fixtures can pin the flush semantics directly.
+     */
+    record HeldActivation(ResourceLocation abilityId, ActivationSource source, int slot,
+            String mode) {
+    }
+
+    /** Pseudo-key index for {@link HotbarKeybinds#ACTIVATE_SELECTED}. */
+    static final int SELECTED_KEY = HotbarKeybinds.ACTIVATE_SLOT.length;
+
+    /** One hold record per activation key; null = nothing in flight. */
+    private static final HeldActivation[] HOLDS =
+            new HeldActivation[SELECTED_KEY + 1];
+
+    /**
+     * Records the hold behind a press and returns any hold the same key
+     * still carried. A second press drained in the same tick (a multi-tap
+     * that queued two clicks) therefore flushes the displaced one as a
+     * release first, so press/release pairs stay 1:1 on the wire exactly
+     * as native ARR's key edges produce them.
+     *
+     * @param key        the activation key index ({@link #SELECTED_KEY} for G)
+     * @param activation what this press sent
+     * @return the displaced prior hold to release first, or null
+     */
+    static HeldActivation recordHold(int key, HeldActivation activation) {
+        HeldActivation displaced = HOLDS[key];
+        HOLDS[key] = activation;
+        return displaced;
+    }
+
+    /**
+     * Claims a key's hold for release: exactly-once (the second read finds
+     * none), so a duplicated key-up never sends a second release.
+     */
+    static HeldActivation claimHold(int key) {
+        HeldActivation held = HOLDS[key];
+        HOLDS[key] = null;
+        return held;
+    }
+
+    /** Drops every hold without sending (no connection to notify). */
+    static void clearHolds() {
+        java.util.Arrays.fill(HOLDS, null);
+    }
+
+    /**
+     * Falling-edge release: for every recorded hold whose key is no longer
+     * down, send the mirror-image release through core. Runs first and
+     * ungated in {@link #onClientTick} - the up-edge is valid even with a
+     * screen open (chat mid-hold), and a lost key-up is a stranded hold.
+     * With no player there is nobody to notify (the server clears its own
+     * holds on quit), so the records simply drop.
+     */
+    private static void releaseHeldKeys() {
+        if (Minecraft.getInstance().player == null) {
+            clearHolds();
+            return;
+        }
+        for (int key = 0; key < HOLDS.length; key++) {
+            HeldActivation held = HOLDS[key];
+            if (held == null || keyStillDown(key)) {
+                continue;
+            }
+            sendRelease(claimHold(key));
+        }
+    }
+
+    /** The key currently down for a hold index (the G key is its own index). */
+    private static boolean keyStillDown(int key) {
+        return key == SELECTED_KEY
+                ? HotbarKeybinds.ACTIVATE_SELECTED.isDown()
+                : HotbarKeybinds.ACTIVATE_SLOT[key].isDown();
+    }
+
+    /** One release through core, gated exactly like its press. */
+    private static void sendRelease(HeldActivation held) {
+        if (held != null && CoreActivationCompat.isPresent()) {
+            CoreActivationCompat.release(held.abilityId(), held.source(), held.slot(), held.mode());
+        }
     }
 
     /**
@@ -128,9 +222,13 @@ public final class HotbarInputHandler {
         target.ifPresent(id -> switchBar(state, id));
     }
 
-    /** Rising-edge key dispatch: one consumeClick() per tap. */
+    /** Rising-edge dispatch, falling-edge release (one tap = press + one key-up). */
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        // The key-up half first, ungated: an up-edge with a screen open
+        // (chat opened mid-hold) must still end the hold - see
+        // releaseHeldKeys. REQ-HOT-18's gate applies to presses only.
+        releaseHeldKeys();
         // REQ-HOT-18: keys only act with no screen open (chat/inventory/GUI). Vanilla
         // normally suppresses in-game keybinds while a screen is up, but the invariant
         // is ours to state explicitly - a screen must never see an intercepted key.
@@ -148,7 +246,7 @@ public final class HotbarInputHandler {
                 // its slot too - two independent intents over one key press
                 digitSelection(i, state.selectedSlot(), drawn)
                         .ifPresent(payload -> PacketDistributor.sendToServer(payload));
-                activate(state, i, ActivationSource.DIRECT_SLOT);
+                activate(state, i, ActivationSource.DIRECT_SLOT, i);
             }
         }
         // Alt+1..9/0: direct bar selection. Beyond the cycle set the request
@@ -160,7 +258,7 @@ public final class HotbarInputHandler {
             }
         }
         while (HotbarKeybinds.ACTIVATE_SELECTED.consumeClick()) {
-            activate(state, state.selectedSlot(), ActivationSource.SELECTED_SLOT);
+            activate(state, state.selectedSlot(), ActivationSource.SELECTED_SLOT, SELECTED_KEY);
         }
         while (HotbarKeybinds.OPEN_MENU.consumeClick()) {
             AbilityMenu.open();
@@ -220,17 +318,25 @@ public final class HotbarInputHandler {
 
     /**
      * Resolves the slot and sends the intent through core; empty slots send
-     * nothing. The crosshair hint rides along only for {@code targeted}
-     * abilities (hotbar#94) - {@link TargetHints} reads the client's crosshair
-     * and fails closed to no-hint for anything else.
+     * nothing and record no hold (stateless presses release nothing). The
+     * crosshair hint rides along only for {@code targeted} abilities
+     * (hotbar#94) - {@link TargetHints} reads the client's crosshair and
+     * fails closed to no-hint for anything else. A resolved press records
+     * its hold under {@code holdKey} so the key-up can mirror it back
+     * (core#159); a displaced record (multi-tap drained in one tick) is
+     * released first to keep the wire 1:1.
      */
-    private static void activate(BarState state, int slot, ActivationSource source) {
+    private static void activate(BarState state, int slot, ActivationSource source, int holdKey) {
         if (!CoreActivationCompat.isPresent()) {
             return;
         }
-        ActivationResolver.resolve(state, slot, source)
-                .ifPresent(a -> CoreActivationCompat.activate(
-                        a.abilityId(), a.source(), a.slot(),
-                        TargetHints.forActivation(a.abilityId()), a.mode()));
+        ActivationResolver.resolve(state, slot, source).ifPresent(a -> {
+            CoreActivationCompat.activate(
+                    a.abilityId(), a.source(), a.slot(),
+                    TargetHints.forActivation(a.abilityId()), a.mode());
+            HeldActivation displaced = recordHold(holdKey,
+                    new HeldActivation(a.abilityId(), a.source(), a.slot(), a.mode()));
+            sendRelease(displaced);
+        });
     }
 }
