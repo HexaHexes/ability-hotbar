@@ -65,6 +65,9 @@ the input.
       (`45.57`, never `45.567891`); whole pools stay whole (`45`), a
       short fraction keeps its shape (`45.5`), and the number never
       carries locale punctuation.
+- [ ] The row's **Lv badge** counts Tensura's states on top of core's
+      level - **Learned +1, Mastered +2**, Known/unlearned +0 - and ids
+      with no declaration show the plain core level.
 
 ## Search and filters (AC1)
 
