@@ -82,8 +82,18 @@ public final class CoreMasteryCompat {
         return now - lastRequestAt >= REQUEST_INTERVAL_MS;
     }
 
-    /** Records the pending echo + timestamp (the send's stateful half). */
-    static void markRequested(UUID target, long now) {
+    /**
+     * Records the pending echo + timestamp (the send's stateful half).
+     * Public as the suite seam for headless GameTests: they have no client
+     * connection to send the request through, so they record the echo here
+     * and post {@link MasteryQueryAnsweredEvent} themselves -
+     * {@link #request(UUID)} stays the production path, and
+     * {@link #reset()} clears the exchange again after the suite.
+     *
+     * @param target the player whose answer this exchange accepts
+     * @param now    the request timestamp (throttle bookkeeping)
+     */
+    public static void markRequested(UUID target, long now) {
         lastRequestAt = now;
         pendingTarget = target.toString();
     }
