@@ -39,7 +39,12 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "ability_core"
 type = "optional"
-# alpha.10 of the 1.1.0 line is the floor: it carries each bonus's
+# alpha.17 of the 1.1.0 line is the floor: it carries the release
+# channel (ReleaseAbilityPayload + ActivationHandler.release, core#159)
+# - this mod sends that payload on every key-up of a held activation,
+# so under it the payload type is missing at negotiation and the
+# channel would skew (both sides must speak the same version; a
+# mismatched version disconnects). alpha.10 carries each bonus's
 # mastery-ability slice (Bonus.masteryBonus, channel v6) - the pane's
 # parenthetical reads it, so under it the accessor cannot bind and the
 # channel would skew at negotiation (both sides must speak the same
@@ -52,7 +57,7 @@ type = "optional"
 # v5), the row display's progress field (v4), the 1.0.2 line's query
 # exchange, and 1.0.1-alpha.02's slot-scoped mode read (core#133,
 # every mode cycle).
-versionRange = "[1.1.0-alpha.10,)"
+versionRange = "[1.1.0-alpha.17,)"
 ordering = "AFTER"
 side = "BOTH"
 
