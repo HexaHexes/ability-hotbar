@@ -1545,11 +1545,13 @@ public final class AbilityMenuScreen extends Screen {
             gui.drawString(this.font, name, LIST_LEFT + 38, textY, style.text());
             if (coreMastery) {
                 // the level badge AFTER the name (REQ-CORE-12), in the
-                // mastery color - only for abilities whose snapshot has
-                // arrived (never a guessed level)
+                // mastery color - answered snapshots only; the declared
+                // state bonus adds on top (owner: learned +1, mastered +2)
                 String badge = Component.translatable(
                         "ability_hotbar.menu.mastery_level",
-                        CoreMasteryCompat.levelOf(row.id())).getString();
+                        CoreMasteryCompat.levelOf(row.id())
+                                + MasteryLevelBonus.bonusFor(this.minecraft.player,
+                                        row.id())).getString();
                 gui.drawString(this.font, badge,
                         LIST_LEFT + 38 + this.font.width(name) + 4, textY, style.mastery());
             }
