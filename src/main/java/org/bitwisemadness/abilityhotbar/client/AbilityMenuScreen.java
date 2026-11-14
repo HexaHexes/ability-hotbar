@@ -661,13 +661,15 @@ public final class AbilityMenuScreen extends Screen {
                 gui.fill(x, STYLE_PILL_Y, x + tabWidth - 2, STYLE_PILL_Y + 14,
                         MenuStyle.alpha(style.raised(), 55));
             }
-            int textX = x + 3;
+            // owner: the strip's content sits at +4, matching the
+            // subcategory pill icons' margin (the +3 left it 1px proud)
+            int textX = x + 4;
             if (all) {
                 // owner: the All category wears a Nether Star
                 textX = drawIdentifier(gui, null, new ItemStack(Items.NETHER_STAR),
-                        x + 3, STYLE_PILL_Y + 1, TAB_ICON);
+                        x + 4, STYLE_PILL_Y + 1, TAB_ICON);
             } else if (tab.hasIcon()) {
-                textX = drawTabIcon(gui, tab, x + 3, STYLE_PILL_Y + 1);
+                textX = drawTabIcon(gui, tab, x + 4, STYLE_PILL_Y + 1);
             }
             Component label = all
                     ? Component.translatable("ability_hotbar.menu.tab_all")

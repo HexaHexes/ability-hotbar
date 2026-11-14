@@ -22,6 +22,11 @@ the input.
       nothing is never drawn and never stays selected (it falls back to
       All). No registrations, no strip. The bar cycle keeps listing every
       assignable bar - empty ones included (no skip-empty there).
+- [ ] Every category tab's icon and text sit **4px** in from the tab's
+      left edge - the same margin as the subcategory pill icons below
+      (they were 1px proud of them); text-only tabs (no resolvable
+      icon) indent the same way, and labels still truncate inside the
+      tab instead of running under the style pill.
 - [ ] Selecting a tab shows that tab's list (and its provider bar's slot
       strip when the tab declares one); selecting a slot marks it as the
       assignment target.
