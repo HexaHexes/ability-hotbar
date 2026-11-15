@@ -1,6 +1,7 @@
 package org.bitwisemadness.abilityhotbar.network;
 
 import io.netty.buffer.ByteBuf;
+import java.util.Optional;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -50,6 +51,38 @@ public record CycleModePayload(ResourceLocation barId, int slot)
     @Override
     public Type<? extends CycleModePayload> type() {
         return TYPE;
+    }
+
+    /**
+     * The bar-scoped cycle request for one slot, or empty - the shared
+     * client-side knowledge both cycle surfaces build through: the state
+     * must carry the named bar with an assigned ability that has a
+     * registered mode-change adapter (the server re-checks everything;
+     * this only avoids a pointless round trip - the {@code digitSelection}
+     * shape). The keybind passes the active bar, the menu pill the bar
+     * its tab shows (they may differ - the payload carries the bar for
+     * exactly that reason).
+     *
+     * @param state the client's synced bar state (nullable)
+     * @param barId the bar whose slot cycles (nullable)
+     * @param slot  the slot index on that bar
+     * @return the request, or empty for a no-op
+     */
+    public static Optional<CycleModePayload> request(@Nullable BarState state,
+            @Nullable ResourceLocation barId, int slot) {
+        if (state == null || barId == null || slot < 0) {
+            return Optional.empty();
+        }
+        SlotAssignment[] row = state.assignmentsOf(barId);
+        if (row == null || slot >= row.length) {
+            return Optional.empty();
+        }
+        SlotAssignment assignment = row[slot];
+        if (assignment == null || assignment.abilityId() == null
+                || !ModeChangeHandlers.has(assignment.abilityId())) {
+            return Optional.empty();
+        }
+        return Optional.of(new CycleModePayload(barId, slot));
     }
 
     /** Server handler: resolve from server state, run one cycle, echo. */

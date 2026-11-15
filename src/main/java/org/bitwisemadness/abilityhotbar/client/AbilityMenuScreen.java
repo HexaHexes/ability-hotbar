@@ -51,6 +51,7 @@ import org.bitwisemadness.abilityhotbar.content.ContentPlan;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProvider;
 import org.bitwisemadness.abilityhotbar.content.HotbarContentProviders;
 import org.bitwisemadness.abilityhotbar.network.AssignAbilityPayload;
+import org.bitwisemadness.abilityhotbar.network.CycleModePayload;
 import org.bitwisemadness.abilityhotbar.network.ReorderSlotsPayload;
 import org.bitwisemadness.abilityhotbar.registry.HotbarRegistry;
 import org.bitwisemadness.abilityhotbar.registry.HotbarStyle;
@@ -224,9 +225,6 @@ public final class AbilityMenuScreen extends Screen {
     private double subStripPressX;
     private int subStripScrollStart;
     private int pressedSubPill = -1;
-    // The row's mode preview (owner: the row's mode button never writes
-    // a hotbar slot) - a menu-local cycle, scoped to this screen's life
-    private final Map<ResourceLocation, String> rowModePreview = new HashMap<>();
     // Slot drag-reorder (owner: drag one slot onto another): a press on a
     // filled slot arms it, the threshold promotes it to a drag whose ghost
     // rides the cursor, and the release asks the server to swap the cells
@@ -1516,8 +1514,7 @@ public final class AbilityMenuScreen extends Screen {
             // default) mode, the click sends the slot's cycle request.
             int modeSlot = modeSlotFor(stripBar, row.id());
             String modeLabel = modeSlot < 0 ? null
-                    : modePillLabel(row.id(), rowModePreview.getOrDefault(row.id(),
-                            storedModeAt(stripBar, modeSlot)));
+                    : modePillLabel(row.id(), storedModeAt(stripBar, modeSlot));
             int[] rowToggle = toggle == null ? null : rowToggleButtonRect(y, listWidth);
             int[] modeRect = modeLabel == null ? null
                     : modePillRect(y, listWidth, modeLabel, rowToggle);
@@ -2319,22 +2316,22 @@ public final class AbilityMenuScreen extends Screen {
                         return true;
                     }
                 }
-                // the mode pill steps the ROW's own preview (owner: it
-                // never writes a hotbar slot - the wire path stays on
-                // the keybind, this is menu-local display state)
+                // The pill commits through the keybind's server-validated
+                // cycle (owner 2026-11-15: selection must reach the cast);
+                // the echoed label stays truthful on an ARR refusal
                 int modeSlot = selectedBar == null ? -1
                         : modeSlotFor(target, row.id());
                 if (modeSlot >= 0) {
                     String modeLabel = modePillLabel(row.id(),
-                            rowModePreview.getOrDefault(row.id(),
-                                    storedModeAt(target, modeSlot)));
+                            storedModeAt(target, modeSlot));
                     int[] toggleRect = toggle == null ? null
                             : rowToggleButtonRect(rowY, listWidth());
                     int[] modeRect = modeLabel == null ? null
                             : modePillRect(rowY, listWidth(), modeLabel, toggleRect);
                     if (modeRect != null && inside(mouseX, mouseY, modeRect[0],
                             modeRect[1], modeRect[2], modeRect[3])) {
-                        cycleRowPreview(row.id(), target, modeSlot);
+                        CycleModePayload.request(ClientBarState.get(), target.id(), modeSlot)
+                                .ifPresent(PacketDistributor::sendToServer);
                         return true;
                     }
                 }
@@ -2357,29 +2354,6 @@ public final class AbilityMenuScreen extends Screen {
             }
         }
         return false;
-    }
-
-    /**
-     * Steps the row's menu-local mode preview to the next declared mode
-     * (owner: clicking the row's mode button must not change a hotbar
-     * slot's mode - only what this menu row shows). The preview starts
-     * from what the row already displays: the slot's stored mode, or the
-     * declared default the pill falls back to.
-     */
-    private void cycleRowPreview(ResourceLocation id, Bar target, int modeSlot) {
-        List<AbilityModes.Mode> modes = AbilityModes.get(id).orElse(List.of());
-        if (modes.isEmpty()) {
-            return;
-        }
-        String shown = rowModePreview.getOrDefault(id, storedModeAt(target, modeSlot));
-        int index = 0; // the pill's fallback: the first declared mode
-        for (int i = 0; i < modes.size(); i++) {
-            if (modes.get(i).id().equals(shown)) {
-                index = i;
-                break;
-            }
-        }
-        rowModePreview.put(id, modes.get((index + 1) % modes.size()).id());
     }
 
     /** The panel's Enable/Disable button: a MENU-source activation, no slot (#148). */

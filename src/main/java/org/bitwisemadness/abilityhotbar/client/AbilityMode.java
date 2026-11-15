@@ -3,10 +3,8 @@ package org.bitwisemadness.abilityhotbar.client;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.network.PacketDistributor;
-import org.bitwisemadness.abilitycore.api.ModeChangeHandlers;
 import org.bitwisemadness.abilityhotbar.network.CycleModePayload;
 import org.bitwisemadness.abilityhotbar.state.BarState;
-import org.bitwisemadness.abilityhotbar.state.SlotAssignment;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -35,8 +33,9 @@ public final class AbilityMode {
      * mode-change adapter for that ability (iss/curios ids are not
      * cycleable - the client's same-construction knowledge avoids a
      * pointless round trip). The keybind acts on the <b>active</b> bar's
-     * cursor, so it names that bar explicitly (the menu's pill sends the
-     * bar its tab shows).
+     * cursor, so it names that bar explicitly (the menu's pill names the
+     * bar its tab shows - both build through
+     * {@link CycleModePayload#request}).
      *
      * @param state the client's synced bar state (nullable)
      * @return the bar-scoped request, or empty for a no-op press
@@ -45,15 +44,7 @@ public final class AbilityMode {
         if (state == null || state.activeBarId() == null) {
             return Optional.empty();
         }
-        int slot = state.selectedSlot();
-        SlotAssignment assignment = state.assignment(slot);
-        if (assignment == null || assignment.abilityId() == null) {
-            return Optional.empty();
-        }
-        if (!ModeChangeHandlers.has(assignment.abilityId())) {
-            return Optional.empty();
-        }
-        return Optional.of(new CycleModePayload(state.activeBarId(), slot));
+        return CycleModePayload.request(state, state.activeBarId(), state.selectedSlot());
     }
 
     /** Toggles ability mode: one press, one server-validated cycle (REQ-HOT-16). */
