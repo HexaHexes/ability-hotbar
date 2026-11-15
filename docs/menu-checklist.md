@@ -119,6 +119,11 @@ the input.
       gate on freeze's `frost_walk` mode) leaves the label on the stored
       mode with ARR's red reason line - never a label the cast would
       ignore.
+- [ ] Row bottom line reads **`[mastery bar] [Enable/Disable] ... [cost]
+      [mode pill]`** (owner 2026-11-15): the button hugs the bar's right
+      edge with a 4px gap, the pill owns the row's right edge, and the
+      meter + button never reach the right cluster (barless rows keep
+      the old right-end button with the pill to its left).
 - [ ] A **locked** ability and an ability whose activation is `NONE` or
       `UNKNOWN` never reaches a hotbar slot: the drag press is consumed
       and the click assigns nothing. Ordinary rows still click- and
