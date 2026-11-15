@@ -1232,18 +1232,6 @@ public final class AbilityMenuScreen extends Screen {
         return assignment == null ? null : assignment.mode();
     }
 
-    /**
-     * The mode pill's rect for a row (draw and the click share it): left
-     * of the Enable/Disable pill when present, else the row's right end,
-     * on the bottom line beside the state text.
-     */
-    private int[] modePillRect(int rowY, int listWidth, String modeLabel,
-            @Nullable int[] toggleRect) {
-        int modeWidth = Math.max(28, this.font.width(modeLabel) + 10);
-        int rightEdge = toggleRect == null ? LIST_LEFT + listWidth - 4 : toggleRect[0] - 4;
-        return new int[] {rightEdge - modeWidth, rowY + menuRowHeight() - 18, modeWidth, 12};
-    }
-
     /** The filled cell's display name (the raw inert id when its provider is gone). */
     private String slotName(Bar target, int slot) {
         var assignment = target.assignment(slot);
@@ -1515,28 +1503,27 @@ public final class AbilityMenuScreen extends Screen {
             int modeSlot = modeSlotFor(stripBar, row.id());
             String modeLabel = modeSlot < 0 ? null
                     : modePillLabel(row.id(), storedModeAt(stripBar, modeSlot));
-            int[] rowToggle = toggle == null ? null : rowToggleButtonRect(y, listWidth);
-            int[] modeRect = modeLabel == null ? null
-                    : modePillRect(y, listWidth, modeLabel, rowToggle);
             // The unlock read drives the meter's state colour; unknown
             // never guesses a state (core's never-guess rule).
             Optional<Boolean> learned =
                     AbilityUnlocks.isLearned(this.minecraft.player, row.id());
-            // The bottom-line meter: the generic mastery bar, the
-            // presentation's progress, or a zero bar for a provably
-            // known-but-unlearned art that still presents itself
-            boolean knownBar = mastery == null && learned.isPresent() && !learned.get()
-                    && presentation.map(p -> !p.fields().isEmpty()).orElse(false);
-            boolean bottomBar = coreBar || mastery != null || knownBar;
+            // The bottom-line meter decision - shared with the click's
+            // hit tests (rowShowsBottomBar), so draw and click agree
+            boolean bottomBar = rowShowsBottomBar(row);
             // the row's LIVE cost line: every non-zero declared entry, repriced
             // by tensura_iron_spells through iss's projection when in force
             // (hotbar#193); the label rides the name line, the value the bottom
-            String cost = costText(LiveCosts.forDisplay(row.id(), row.definition()));
+            String cost = rowCostText(row);
             boolean costLine = !cost.isEmpty();
-            // pills own the bottom line's right edge - the Cost: label and
-            // its value align there, and the meter stops before the value
-            int limitX = (modeRect != null ? modeRect[0]
-                    : rowToggle != null ? rowToggle[0] : LIST_LEFT + listWidth) - 4;
+            // One geometry for draw AND hit tests (owner 2026-11-15):
+            // [bar] [Enable] ... [cost] [pill] - see bottomLine(...)
+            BottomLine line = bottomLine(y, LIST_LEFT + 38, LIST_LEFT + listWidth,
+                    modeWidthFor(modeLabel), costLine ? this.font.width(cost) : 0,
+                    bottomBar, toggle != null);
+            int[] rowToggle = line.toggle();
+            int[] modeRect = line.pill();
+            int[] bar = line.bar();
+            int limitX = line.limitX();
             // Toggleable rows, mode pills, the meter and the cost line lift
             // the name so the bottom line owns its chrome (no overlap).
             int textY = toggle == null && modeRect == null && !bottomBar && !costLine
@@ -1563,12 +1550,9 @@ public final class AbilityMenuScreen extends Screen {
                         limitX - this.font.width(label), textY, style.muted());
             }
             if (bottomBar || costLine) {
-                int meterLimit = costLine
-                        ? costMeterLimit(limitX, this.font.width(cost)) : limitX;
                 if (bottomBar) {
-                    // the meter owns the bottom line's left side, clear of
-                    // the pills, the Enable/Disable button and the cost
-                    int[] bar = masteryBarRect(y, LIST_LEFT + 38, meterLimit);
+                    // the meter owns the bottom line's left side; the
+                    // button reserve keeps it clear of Enable/cost/pill
                     float fraction = coreBar
                             ? (float) CoreMasteryCompat.progressOf(row.id())
                             : mastery != null ? mastery.progress() : 0f;
@@ -1668,19 +1652,98 @@ public final class AbilityMenuScreen extends Screen {
     }
 
     /**
-     * The row-end Enable/Disable rect (owner's brief: the button lives in
-     * the list now, on the bottom line beside the state text). Draw and
-     * the click's hit test share it.
+     * The row's bottom-line chrome as ONE geometry (owner 2026-11-15):
+     * {@code [bar] [Enable] ... [cost] [mode pill]} - the button sits
+     * right after the drawn bar, pills own the row's right edge, and the
+     * meter clears both through the button's 60px reserve. A row without
+     * a bar keeps the old right-end button with the pill to its left
+     * (there is no bar to follow). Draw and the click's hit tests both
+     * call this, so they can never disagree.
+     *
+     * @param rowY       row top
+     * @param startX     the bar's left edge (the name's left)
+     * @param rowRight   the row's right edge
+     * @param modeWidth  the pill's width, or 0 for no pill
+     * @param costWidth  the bottom-line cost value's width, or 0
+     * @param hasBar     the row draws a bottom-line meter
+     * @param hasToggle  the row has an Enable/Disable presentation
      */
-    static int[] rowToggleButtonRect(int rowY, int listWidth) {
-        return new int[] {LIST_LEFT + listWidth - 58, rowY + menuRowHeight() - 18, 56, 12};
+    static BottomLine bottomLine(int rowY, int startX, int rowRight, int modeWidth,
+            int costWidth, boolean hasBar, boolean hasToggle) {
+        int lineY = rowY + menuRowHeight() - 18;
+        int[] bar = null;
+        int[] toggle = null;
+        int[] pill;
+        int limitX;
+        if (hasBar) {
+            pill = modeWidth <= 0 ? null
+                    : new int[] {rowRight - 4 - modeWidth, lineY, modeWidth, 12};
+            limitX = (pill != null ? pill[0] : rowRight) - 4;
+            int meterLimit = costWidth > 0 ? costMeterLimit(limitX, costWidth) : limitX;
+            bar = masteryBarRect(rowY, startX, hasToggle ? meterLimit - 60 : meterLimit);
+            if (hasToggle) {
+                toggle = new int[] {Math.min(bar[0] + bar[2] + 4, rowRight - 58), lineY, 56, 12};
+            }
+        } else {
+            if (hasToggle) {
+                toggle = new int[] {rowRight - 58, lineY, 56, 12};
+            }
+            pill = modeWidth <= 0 ? null : new int[] {
+                    (toggle != null ? toggle[0] : rowRight) - 4 - modeWidth, lineY, modeWidth, 12};
+            limitX = (pill != null ? pill[0] : toggle != null ? toggle[0] : rowRight) - 4;
+        }
+        return new BottomLine(bar, toggle, pill, limitX);
+    }
+
+    /** The bottom-line rects: nullable bar/toggle/pill plus the right-cluster edge. */
+    record BottomLine(@Nullable int[] bar, @Nullable int[] toggle, @Nullable int[] pill,
+            int limitX) {
+    }
+
+    /** The pill's measured width for a label (0 for none). */
+    private int modeWidthFor(@Nullable String modeLabel) {
+        return modeLabel == null ? 0 : Math.max(28, this.font.width(modeLabel) + 10);
+    }
+
+    /** The row's live cost text (draw and the hit tests share the read). */
+    private String rowCostText(MenuQuery.Entry row) {
+        String text = costText(LiveCosts.forDisplay(row.id(), row.definition()));
+        return text == null ? "" : text;
+    }
+
+    /**
+     * Whether the row's bottom line carries a meter - the flag
+     * {@link #bottomLine} and the draw share so they can never disagree:
+     * the generic bar once the answered snapshot has XP, else the
+     * presentation's progress meter, else a zero bar for a provably
+     * known-but-unlearned art that still presents itself (REQ-CORE-12
+     * hybrid; unknown never guesses a fill).
+     */
+    private boolean rowShowsBottomBar(MenuQuery.Entry row) {
+        Optional<AbilityPresentation> presentation = presentationOf(row.id());
+        PresentationField progress = presentation.map(AbilityPresentation::fields)
+                .orElse(List.of()).stream()
+                .filter(field -> field.kind() == PresentationField.Kind.PROGRESS)
+                .findFirst().orElse(null);
+        boolean coreMastery = CoreMasteryCompat.answered()
+                && CoreMasteryCompat.declared(row.id());
+        if (coreMasteryBar(coreMastery, coreMastery ? CoreMasteryCompat.xpOf(row.id()) : 0.0)) {
+            return true;
+        }
+        if (progress != null) {
+            return true;
+        }
+        Optional<Boolean> learned = AbilityUnlocks.isLearned(this.minecraft.player, row.id());
+        return learned.isPresent() && !learned.get()
+                && presentation.map(p -> !p.fields().isEmpty()).orElse(false);
     }
 
     /**
      * The row's mastery bar rect: the bottom line (under the name), from
-     * the given start to the pills' edge - 150% of the original length
+     * the given start to the given limit - 150% of the original length
      * (capped at 144) and 13 tall, an odd height so the value line sits
-     * with the same margin above and below (owner's brief).
+     * with the same margin above and below (owner's brief). The limit
+     * already carries the button reserve when a toggle follows the bar.
      */
     static int[] masteryBarRect(int rowY, int startX, int limitX) {
         int width = Math.max(40, Math.min(144, limitX - startX));
@@ -2304,31 +2367,33 @@ public final class AbilityMenuScreen extends Screen {
                     // toggle and cycle - the assignment gate owns slotting
                     return true;
                 }
-                // the row-end Enable/Disable owns its rect before assigning
-                // (owner's brief: #148's button moved into the row)
+                // The row's chrome owns its rects before assigning (the
+                // #148 button; owner 2026-11-15: right after the bar) -
+                // one geometry with the draw, so hit tests never drift
                 Toggle toggle = presentationOf(row.id())
                         .map(AbilityPresentation::toggle).orElse(null);
-                if (toggle != null) {
-                    int[] toggleRect = rowToggleButtonRect(rowY, listWidth());
-                    if (inside(mouseX, mouseY, toggleRect[0], toggleRect[1],
-                            toggleRect[2], toggleRect[3])) {
-                        sendToggle(row.id());
-                        return true;
-                    }
+                int modeSlot = selectedBar == null ? -1
+                        : modeSlotFor(target, row.id());
+                String modeLabel = modeSlot < 0 ? null
+                        : modePillLabel(row.id(), storedModeAt(target, modeSlot));
+                String clickCost = rowCostText(row);
+                BottomLine line = bottomLine(rowY, LIST_LEFT + 38, LIST_LEFT + listWidth(),
+                        modeWidthFor(modeLabel),
+                        clickCost.isEmpty() ? 0 : this.font.width(clickCost),
+                        rowShowsBottomBar(row), toggle != null);
+                int[] clickToggle = line.toggle();
+                if (clickToggle != null && inside(mouseX, mouseY,
+                        clickToggle[0], clickToggle[1], clickToggle[2], clickToggle[3])) {
+                    sendToggle(row.id());
+                    return true;
                 }
                 // The pill commits through the keybind's server-validated
                 // cycle (owner 2026-11-15: selection must reach the cast);
                 // the echoed label stays truthful on an ARR refusal
-                int modeSlot = selectedBar == null ? -1
-                        : modeSlotFor(target, row.id());
-                if (modeSlot >= 0) {
-                    String modeLabel = modePillLabel(row.id(),
-                            storedModeAt(target, modeSlot));
-                    int[] toggleRect = toggle == null ? null
-                            : rowToggleButtonRect(rowY, listWidth());
-                    int[] modeRect = modeLabel == null ? null
-                            : modePillRect(rowY, listWidth(), modeLabel, toggleRect);
-                    if (modeRect != null && inside(mouseX, mouseY, modeRect[0],
+                int[] clickPill = line.pill();
+                if (modeSlot >= 0 && clickPill != null) {
+                    int[] modeRect = clickPill;
+                    if (inside(mouseX, mouseY, modeRect[0],
                             modeRect[1], modeRect[2], modeRect[3])) {
                         CycleModePayload.request(ClientBarState.get(), target.id(), modeSlot)
                                 .ifPresent(PacketDistributor::sendToServer);

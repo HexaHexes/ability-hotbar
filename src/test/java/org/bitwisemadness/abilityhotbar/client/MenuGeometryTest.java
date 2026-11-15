@@ -2,6 +2,8 @@ package org.bitwisemadness.abilityhotbar.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
@@ -101,14 +103,39 @@ class MenuGeometryTest {
     }
 
     @Test
-    void rowToggleButtonsSitAtTheRowsRightEnd() {
-        // owner's brief: #148's button moved from the pane into the row,
-        // onto the bottom line beside the state text (with the mode pill)
-        int[] button = AbilityMenuScreen.rowToggleButtonRect(58, 300);
-        assertEquals(8 + 300 - 58, button[0], "hugs the row's right end");
-        assertEquals(58 + 36 - 18, button[1], "bottom line of the 36px row");
-        assertEquals(56, button[2], "button width");
-        assertEquals(12, button[3], "button height");
+    void bottomLinePutsTheButtonRightAfterTheBar() {
+        // owner directive 2026-11-15: [bar][Enable] ... [cost][pill]
+        // wide bar row, no pill/cost: the bar caps at 144 and the
+        // button follows it with a 4px gap
+        var line = AbilityMenuScreen.bottomLine(58, 46, 308, 0, 0, true, true);
+        assertNotNull(line.bar(), "a bar row draws its bar");
+        assertEquals(144, line.bar()[2], "the bar keeps its 144 cap");
+        assertEquals(line.bar()[0] + line.bar()[2] + 4, line.toggle()[0],
+                "the button hugs the bar's right edge");
+        assertEquals(56, line.toggle()[2], "button width");
+        assertEquals(12, line.toggle()[3], "button height");
+        assertNull(line.pill(), "no pill when the row stores no mode");
+        // the button clears the right cluster: never past the row's edge
+        assertTrue(line.toggle()[0] + line.toggle()[2] <= 308 - 58 + 56,
+                "the clamp keeps the button inside the row");
+    }
+
+    @Test
+    void bottomLineKeepsPillAndCostAtTheRightEdge() {
+        // with a pill: the pill owns the right edge, limitX stops before it
+        var withPill = AbilityMenuScreen.bottomLine(58, 46, 308, 70, 0, true, true);
+        assertNotNull(withPill.pill(), "a stored mode draws the pill");
+        assertEquals(308 - 4 - 70, withPill.pill()[0], "the pill owns the row's right edge");
+        assertEquals(withPill.pill()[0] - 4, withPill.limitX(),
+                "the cost/label cluster stops before the pill");
+        assertTrue(withPill.toggle()[0] + withPill.toggle()[2] <= withPill.limitX(),
+                "the button never reaches the right cluster");
+        // no bar: the old arrangement stands - right-end button, pill left of it
+        var noBar = AbilityMenuScreen.bottomLine(58, 46, 308, 70, 0, false, true);
+        assertNull(noBar.bar(), "a barless row draws no bar");
+        assertEquals(308 - 58, noBar.toggle()[0], "barless rows keep the right-end button");
+        assertEquals(noBar.toggle()[0] - 4 - 70, noBar.pill()[0],
+                "barless rows keep the pill left of the button");
     }
 
     @Test
