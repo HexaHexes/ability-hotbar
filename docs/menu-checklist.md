@@ -113,6 +113,12 @@ the input.
       its raw id** (diagnostic), never hidden.
 - [ ] A stale or tampered request is rejected server-side and the slots
       repaint from the echoed snapshot - the screen shows server truth.
+- [ ] The row's **mode pill** commits a server-validated cycle (one
+      round trip like assignment, owner directive 2026-11-15): the label
+      follows the echoed snapshot, and a refusal (e.g. ARR's mastery
+      gate on freeze's `frost_walk` mode) leaves the label on the stored
+      mode with ARR's red reason line - never a label the cast would
+      ignore.
 - [ ] A **locked** ability and an ability whose activation is `NONE` or
       `UNKNOWN` never reaches a hotbar slot: the drag press is consumed
       and the click assigns nothing. Ordinary rows still click- and
