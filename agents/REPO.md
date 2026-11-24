@@ -6,8 +6,8 @@ and pulled in verbatim - **never hand-edit it.** Everything in this file is this
 repo's own and is edited freely; keep it aligned with the org rules rather than
 restating them.
 
-**Repo:** `HexaHexes/ability-hotbar` - **Mod ID:** `ability_hotbar` - **Branch:** `main`
-**Platform:** Minecraft 1.21.1 / NeoForge 21.1.259 / JDK 21 - **Jar:** `build/libs/ability_hotbar-<version>.jar`
+**Repo:** `HexaHexes/ability-hotbar` · **Mod ID:** `ability_hotbar` · **Branch:** `neoforge-1.21.1` (the loader line; this is the default branch - no `main`)
+**Platform:** Minecraft 1.21.1 / NeoForge 21.1.259 / JDK 21 · **Jar:** `build/libs/ability_hotbar-neoforge-1.21.1-<version>.jar`
 
 A configurable nine-slot ability hotbar for the Tensura RPG pack: vanilla-style
 slots and textures with dynamic icons, cooldown and resource overlays, direct
